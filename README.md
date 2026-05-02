@@ -46,6 +46,9 @@
   # 2. 환경변수 설정 (.env.example 참고)
   cp .env.example .env
 
+  # 2. DB 제네레이트
+  npm run prisma:generate
+
   # 3. DB 마이그레이션
   npm run prisma:migrate:dev
 
