@@ -1,0 +1,66 @@
+# Dependencies / build cache
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Env / editor
+.env*
+!.env.example
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Project-local assistant/config files
+.ai-rules
+AGENTS.md
+.claude/
+
+# Prisma generated client
+src/generated/
+
+# Certificates / local test files
+*.pem
+test-session.ts
+
+# Executable / binary artifacts
+*.exe
+*.dll
+*.so
+*.dylib
+*.bin
+*.elf
+*.out
+*.app
+*.msi
+
+# Suspicious malware dropper patterns
+let
+let;*
+*;chmod*
+*;curl*
+*;wget*
+*;bash*
+*;sh*
+
+# Archives usually should not be committed unless intentional
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+
+# Local documents
+세부설계서.pdf
+작업지침.md
+폴더구조.md
+A작업.md
+MVP_3차안_세부설계서.md
+injeuri_api_abcd_v1.pdf

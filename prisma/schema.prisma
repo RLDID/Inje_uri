@@ -1,0 +1,542 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum user_status {
+  active
+  inactive
+  banned
+  withdrawn
+}
+
+enum email_verification_status {
+  pending
+  verified
+  expired
+}
+
+enum interest_status {
+  pending
+  accepted
+  declined
+  expired
+}
+
+enum chat_room_status {
+  active
+  expired
+  blocked
+  closed
+}
+
+enum message_type {
+  text
+  image
+  system
+}
+
+enum feed_status {
+  active
+  expired
+  deleted
+  hidden
+}
+
+enum report_status {
+  pending
+  reviewed
+  actioned
+  dismissed
+}
+
+enum job_status {
+  running
+  success
+  failed
+}
+
+enum chat_room_source_type {
+  interest
+  comment
+}
+
+model User {
+  id                         Int                       @id @default(autoincrement())
+  login_id                   String?                   @unique @db.VarChar(100)
+  real_name                  String                    @db.VarChar(255)
+  age                        Int?
+  email                      String                    @unique @db.VarChar(255)
+  password_hash              String                    @db.VarChar(255)
+  birth                      String?                   @db.VarChar(6)
+  birth_hash                 String?                   @db.VarChar(255)
+  nickname                   String                    @unique @db.VarChar(50)
+  gender                     String                    @db.VarChar(50)
+  phone_number               String?                   @unique @db.VarChar(30)
+  nationality                String                    @default("KR") @db.VarChar(10)
+  university                 String                    @db.VarChar(100)
+  department                 String                    @db.VarChar(100)
+  student_year               Int
+  student_number             String?                   @db.VarChar(30)
+  bio                        String?                   @db.VarChar(500)
+  onboarding_completed       Boolean                   @default(false)
+  status                     user_status               @default(active)
+  created_at                 DateTime                  @default(now()) @db.Timestamptz(6)
+  last_active_at             DateTime?                 @db.Timestamptz(6)
+  deleted_at                 DateTime?                 @db.Timestamptz(6)
+  authSessions               AuthSession[]
+  emailVerifications         EmailVerification[]
+  userProfileImages          UserProfileImage[]
+  userKeywordSelections      UserKeywordSelection[]
+  recommendationSetting      RecommendationSetting?
+  dailyRecommendations       DailyRecommendation[]     @relation("daily_recommendations_user_idTousers")
+  selectedRecommendations    DailyRecommendation[]     @relation("daily_recommendations_selected_candidate_user_idTousers")
+  dailyRecommendationItems   DailyRecommendationItem[] @relation("daily_recommendation_items_candidate_user_idTousers")
+  sentInterests              Interest[]                @relation("interests_from_user_idTousers")
+  receivedInterests          Interest[]                @relation("interests_to_user_idTousers")
+  recommendationDismisses    RecommendationDismiss[]   @relation("recommendation_dismisses_user_idTousers")
+  dismissedByRecommendations RecommendationDismiss[]   @relation("recommendation_dismisses_dismissed_user_idTousers")
+  createdChatRooms           ChatRoom[]                @relation("chat_rooms_created_by_user_idTousers")
+  chatRoomParticipants       ChatRoomParticipant[]
+  messages                   Message[]                 @relation("messages_sender_user_idTousers")
+  selfDateFeeds              SelfDateFeed[]
+  feedComments               FeedComment[]             @relation("feed_comments_commenter_user_idTousers")
+  feedViews                  FeedView[]                @relation("feed_views_viewer_user_idTousers")
+  blocksInitiated            Block[]                   @relation("blocks_blocker_user_idTousers")
+  blocksReceived             Block[]                   @relation("blocks_blocked_user_idTousers")
+  reports                    Report[]                  @relation("reports_reporter_user_idTousers")
+  phoneBlocks                PhoneBlock[]              @relation("phone_blocks_user_idTousers")
+  userContacts               UserContact[]             @relation("user_contacts_user_idTousers")
+  matchedContacts            UserContact[]             @relation("user_contacts_matched_user_idTousers")
+
+  @@map("users")
+}
+
+model AuthSession {
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  token_hash   String    @unique @db.VarChar(255)
+  expires_at   DateTime  @db.Timestamptz(6)
+  last_seen_at DateTime? @db.Timestamptz(6)
+  user         User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("auth_sessions")
+}
+
+model PreSignupVerification {
+  token_hash     String   @id @db.VarChar(255)
+  student_number String   @db.VarChar(30)
+  birth_hash     String   @db.VarChar(255)
+  expires_at     DateTime @db.Timestamptz(6)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([expires_at])
+  @@map("pre_signup_verifications")
+}
+
+model EmailVerification {
+  id           Int                       @id @default(autoincrement())
+  user_id      Int
+  school_email String                    @db.VarChar(255)
+  code_hash    String                    @db.VarChar(255)
+  expires_at   DateTime                  @db.Timestamptz(6)
+  verified_at  DateTime?                 @db.Timestamptz(6)
+  status       email_verification_status @default(pending)
+  user         User                      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("email_verifications")
+}
+
+model UserProfileImage {
+  id         Int     @id @default(autoincrement())
+  user_id    Int
+  image_url  String  @db.VarChar(2048)
+  sort_order Int
+  is_primary Boolean @default(false)
+  user       User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, sort_order])
+  @@map("user_profile_images")
+}
+
+model Category {
+  category_id           Int                    @id @default(autoincrement())
+  category_code         String                 @unique @db.VarChar(100)
+  name                  String                 @db.VarChar(100)
+  selection_type        String                 @db.VarChar(20)
+  max_select_count      Int                    @default(1)
+  keywords              Keyword[]
+  userKeywordSelections UserKeywordSelection[]
+
+  @@map("categories")
+}
+
+model Keyword {
+  keyword_id            Int                    @id @default(autoincrement())
+  category_id           Int
+  keyword_code          String                 @db.VarChar(100)
+  label                 String                 @db.VarChar(100)
+  sort_order            Int
+  category              Category               @relation(fields: [category_id], references: [category_id], onDelete: Cascade)
+  userKeywordSelections UserKeywordSelection[]
+
+  @@unique([category_id, keyword_code])
+  @@map("keyword")
+}
+
+model UserKeywordSelection {
+  id          Int      @id @default(autoincrement())
+  user_id     Int
+  category_id Int
+  keyword_id  Int
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category    Category @relation(fields: [category_id], references: [category_id], onDelete: Cascade)
+  keyword     Keyword  @relation(fields: [keyword_id], references: [keyword_id], onDelete: Cascade)
+
+  @@unique([user_id, keyword_id])
+  @@map("user_keyword_selections")
+}
+
+model RecommendationSetting {
+  user_id                 Int      @id
+  exclude_same_department Boolean  @default(false)
+  reduce_same_year        Boolean  @default(false)
+  preferred_age_min       Int?
+  preferred_age_max       Int?
+  updated_at              DateTime @default(now()) @db.Timestamptz(6)
+  user                    User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("recommendation_settings")
+}
+
+model DailyRecommendation {
+  id                         Int                       @id @default(autoincrement())
+  user_id                    Int
+  recommendation_date        DateTime                  @db.Date
+  selected_candidate_user_id Int?
+  selected_at                DateTime?                 @db.Timestamptz(6)
+  generated_at               DateTime                  @default(now()) @db.Timestamptz(6)
+  user                       User                      @relation("daily_recommendations_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade)
+  selected_candidate_user    User?                     @relation("daily_recommendations_selected_candidate_user_idTousers", fields: [selected_candidate_user_id], references: [id], onDelete: SetNull)
+  items                      DailyRecommendationItem[]
+  recommendationDismisses    RecommendationDismiss[]
+
+  @@unique([user_id, recommendation_date])
+  @@map("daily_recommendations")
+}
+
+model DailyRecommendationItem {
+  id                      Int                 @id @default(autoincrement())
+  daily_recommendation_id Int
+  candidate_user_id       Int
+  rank_order              Int
+  passed_at               DateTime?           @db.Timestamptz(6)
+  daily_recommendation    DailyRecommendation @relation(fields: [daily_recommendation_id], references: [id], onDelete: Cascade)
+  candidate_user          User                @relation("daily_recommendation_items_candidate_user_idTousers", fields: [candidate_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([daily_recommendation_id, candidate_user_id])
+  @@unique([daily_recommendation_id, rank_order])
+  @@map("daily_recommendation_items")
+}
+
+model Interest {
+  id              Int             @id @default(autoincrement())
+  from_user_id    Int
+  to_user_id      Int
+  status          interest_status @default(pending)
+  matched_at      DateTime?       @db.Timestamptz(6)
+  declined_at     DateTime?       @db.Timestamptz(6)
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  expires_at      DateTime?       @db.Timestamptz(6)
+  from_user       User            @relation("interests_from_user_idTousers", fields: [from_user_id], references: [id], onDelete: Cascade)
+  to_user         User            @relation("interests_to_user_idTousers", fields: [to_user_id], references: [id], onDelete: Cascade)
+  sourceChatRooms ChatRoom[]      @relation("chat_rooms_source_interest_idTointerests")
+
+  @@index([from_user_id, to_user_id, status])
+  @@index([expires_at])
+  @@map("interests")
+}
+
+model RecommendationDismiss {
+  id                      Int                  @id @default(autoincrement())
+  user_id                 Int
+  dismissed_user_id       Int
+  daily_recommendation_id Int?
+  created_at              DateTime             @default(now()) @db.Timestamptz(6)
+  expires_at              DateTime             @db.Timestamptz(6)
+  user                    User                 @relation("recommendation_dismisses_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade)
+  dismissed_user          User                 @relation("recommendation_dismisses_dismissed_user_idTousers", fields: [dismissed_user_id], references: [id], onDelete: Cascade)
+  daily_recommendation    DailyRecommendation? @relation(fields: [daily_recommendation_id], references: [id], onDelete: SetNull)
+
+  @@unique([user_id, dismissed_user_id])
+  @@index([expires_at])
+  @@index([user_id, expires_at])
+  @@map("recommendation_dismisses")
+}
+
+model ChatRoom {
+  id                 Int                       @id @default(autoincrement())
+  source_type        chat_room_source_type
+  created_by_user_id Int
+  source_interest_id Int?
+  source_comment_id  Int?
+  status             chat_room_status          @default(active)
+  created_at         DateTime                  @default(now()) @db.Timestamptz(6)
+  expires_at         DateTime                  @db.Timestamptz(6)
+  extended_once      Boolean                   @default(false)
+  blocked_by_user_id Int?
+  created_by_user    User                      @relation("chat_rooms_created_by_user_idTousers", fields: [created_by_user_id], references: [id], onDelete: Restrict)
+  source_interest    Interest?                 @relation("chat_rooms_source_interest_idTointerests", fields: [source_interest_id], references: [id], onDelete: SetNull)
+  source_comment     FeedComment?              @relation("chat_rooms_source_comment_idTofeed_comments", fields: [source_comment_id], references: [id], onDelete: SetNull)
+  participants       ChatRoomParticipant[]
+  messages           Message[]
+  placeSuggestions   ChatRoomPlaceSuggestion[]
+
+  @@index([expires_at])
+  @@map("chat_rooms")
+}
+
+model ChatRoomParticipant {
+  id                   Int       @id @default(autoincrement())
+  chat_room_id         Int
+  user_id              Int
+  joined_at            DateTime  @default(now()) @db.Timestamptz(6)
+  last_read_at         DateTime? @db.Timestamptz(6)
+  last_read_message_id Int?
+  left_at              DateTime? @db.Timestamptz(6)
+  chat_room            ChatRoom  @relation(fields: [chat_room_id], references: [id], onDelete: Cascade)
+  user                 User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  last_read_message    Message?  @relation("chat_room_participants_last_read_message_idTomessages", fields: [last_read_message_id], references: [id], onDelete: SetNull)
+
+  @@unique([chat_room_id, user_id])
+  @@index([user_id, chat_room_id])
+  @@index([left_at])
+  @@map("chat_room_participants")
+}
+
+model Message {
+  id                        Int                   @id @default(autoincrement())
+  chat_room_id              Int
+  sender_user_id            Int
+  type                      message_type          @default(text)
+  content                   String                @db.Text
+  created_at                DateTime              @default(now()) @db.Timestamptz(6)
+  deleted_at                DateTime?             @db.Timestamptz(6)
+  chat_room                 ChatRoom              @relation(fields: [chat_room_id], references: [id], onDelete: Cascade)
+  sender_user               User                  @relation("messages_sender_user_idTousers", fields: [sender_user_id], references: [id], onDelete: Cascade)
+  last_read_by_participants ChatRoomParticipant[] @relation("chat_room_participants_last_read_message_idTomessages")
+
+  @@index([chat_room_id, created_at])
+  @@map("messages")
+}
+
+model SelfDateFeed {
+  id             Int                   @id @default(autoincrement())
+  author_user_id Int
+  text           String                @db.Text
+  status         feed_status           @default(active)
+  created_at     DateTime              @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime              @default(now()) @db.Timestamptz(6)
+  expires_at     DateTime              @db.Timestamptz(6)
+  boost_score    Int                   @default(0)
+  author_user    User                  @relation(fields: [author_user_id], references: [id], onDelete: Cascade)
+  images         SelfDateFeedImage[]
+  keywords       SelfDateFeedKeyword[]
+  comments       FeedComment[]
+  views          FeedView[]
+
+  @@index([expires_at])
+  @@map("self_date_feeds")
+}
+
+model SelfDateFeedImage {
+  id         Int          @id @default(autoincrement())
+  feed_id    Int
+  image_url  String       @db.VarChar(2048)
+  sort_order Int
+  feed       SelfDateFeed @relation(fields: [feed_id], references: [id], onDelete: Cascade)
+
+  @@unique([feed_id, sort_order])
+  @@map("self_date_feed_images")
+}
+
+model FeedKeyword {
+  feed_keyword_id      Int                   @id @default(autoincrement())
+  code                 String                @unique @db.VarChar(100)
+  name                 String                @db.VarChar(100)
+  sort_order           Int
+  is_active            Boolean               @default(true)
+  self_date_feed_links SelfDateFeedKeyword[]
+
+  @@map("feed_keywords")
+}
+
+model SelfDateFeedKeyword {
+  id              Int          @id @default(autoincrement())
+  feed_id         Int
+  feed_keyword_id Int
+  feed            SelfDateFeed @relation(fields: [feed_id], references: [id], onDelete: Cascade)
+  feed_keyword    FeedKeyword  @relation(fields: [feed_keyword_id], references: [feed_keyword_id], onDelete: Cascade)
+
+  @@unique([feed_id, feed_keyword_id])
+  @@map("self_date_feed_keywords")
+}
+
+model FeedComment {
+  id                Int          @id @default(autoincrement())
+  feed_id           Int
+  commenter_user_id Int
+  content           String       @db.Text
+  created_at        DateTime     @default(now()) @db.Timestamptz(6)
+  deleted_at        DateTime?    @db.Timestamptz(6)
+  feed              SelfDateFeed @relation(fields: [feed_id], references: [id], onDelete: Cascade)
+  commenter_user    User         @relation("feed_comments_commenter_user_idTousers", fields: [commenter_user_id], references: [id], onDelete: Cascade)
+  sourceChatRooms   ChatRoom[]   @relation("chat_rooms_source_comment_idTofeed_comments")
+
+  @@unique([feed_id, commenter_user_id])
+  @@map("feed_comments")
+}
+
+model FeedView {
+  id             Int          @id @default(autoincrement())
+  feed_id        Int
+  viewer_user_id Int
+  viewed_at      DateTime     @default(now()) @db.Timestamptz(6)
+  feed           SelfDateFeed @relation(fields: [feed_id], references: [id], onDelete: Cascade)
+  viewer_user    User         @relation("feed_views_viewer_user_idTousers", fields: [viewer_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([feed_id, viewer_user_id])
+  @@map("feed_views")
+}
+
+model Block {
+  id              Int       @id @default(autoincrement())
+  blocker_user_id Int
+  blocked_user_id Int
+  reason          String?   @db.Text
+  created_at      DateTime  @default(now()) @db.Timestamptz(6)
+  unblocked_at    DateTime? @db.Timestamptz(6)
+  blocker_user    User      @relation("blocks_blocker_user_idTousers", fields: [blocker_user_id], references: [id], onDelete: Cascade)
+  blocked_user    User      @relation("blocks_blocked_user_idTousers", fields: [blocked_user_id], references: [id], onDelete: Cascade)
+
+  @@unique([blocker_user_id, blocked_user_id])
+  @@map("blocks")
+}
+
+model Report {
+  id               Int           @id @default(autoincrement())
+  reporter_user_id Int
+  target_type      String        @db.VarChar(50)
+  target_id        Int
+  reason_type      String        @db.VarChar(50)
+  description      String?       @db.Text
+  status           report_status @default(pending)
+  created_at       DateTime      @default(now()) @db.Timestamptz(6)
+  reviewed_at      DateTime?     @db.Timestamptz(6)
+  reporter_user    User          @relation("reports_reporter_user_idTousers", fields: [reporter_user_id], references: [id], onDelete: Cascade)
+
+  @@index([target_type, target_id])
+  @@map("reports")
+}
+
+model PhoneBlock {
+  id                Int       @id @default(autoincrement())
+  user_id           Int
+  phone_number_hash String    @db.VarChar(255)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  unblocked_at      DateTime? @db.Timestamptz(6)
+  user              User      @relation("phone_blocks_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, phone_number_hash])
+  @@index([phone_number_hash])
+  @@map("phone_blocks")
+}
+
+model InternalJobRun {
+  id         Int        @id @default(autoincrement())
+  job_name   String     @db.VarChar(100)
+  started_at DateTime   @db.Timestamptz(6)
+  ended_at   DateTime?  @db.Timestamptz(6)
+  status     job_status
+  summary    String?    @db.Text
+
+  @@index([job_name, started_at])
+  @@map("internal_job_runs")
+}
+
+model AppSetting {
+  key        String   @id @db.VarChar(100)
+  value      String   @db.VarChar(255)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@map("app_settings")
+}
+
+model PlaceCategory {
+  id     Int     @id @default(autoincrement())
+  code   String  @unique @db.VarChar(100)
+  name   String  @db.VarChar(100)
+  places Place[]
+
+  @@map("place_categories")
+}
+
+model Place {
+  id                          Int                       @id @default(autoincrement())
+  category_id                 Int
+  name                        String                    @db.VarChar(255)
+  address                     String                    @db.VarChar(255)
+  image_url                   String?                   @db.VarChar(2048)
+  description                 String?                   @db.Text
+  is_active                   Boolean                   @default(true)
+  category                    PlaceCategory             @relation(fields: [category_id], references: [id], onDelete: Cascade)
+  tags                        PlaceTag[]
+  chat_room_place_suggestions ChatRoomPlaceSuggestion[]
+
+  @@map("places")
+}
+
+model PlaceTag {
+  id       Int    @id @default(autoincrement())
+  place_id Int
+  tag      String @db.VarChar(100)
+  place    Place  @relation(fields: [place_id], references: [id], onDelete: Cascade)
+
+  @@unique([place_id, tag])
+  @@map("place_tags")
+}
+
+model ChatRoomPlaceSuggestion {
+  id                Int      @id @default(autoincrement())
+  chat_room_id      Int
+  place_id          Int
+  triggered_keyword String?  @db.VarChar(100)
+  status            String   @default("pending") @db.VarChar(20)
+  suggested_at      DateTime @default(now()) @db.Timestamptz(6)
+  chat_room         ChatRoom @relation(fields: [chat_room_id], references: [id], onDelete: Cascade)
+  place             Place    @relation(fields: [place_id], references: [id], onDelete: Cascade)
+
+  @@map("chat_room_place_suggestions")
+}
+
+model UserContact {
+  id                Int      @id @default(autoincrement())
+  user_id           Int
+  contact_name      String?  @db.VarChar(100)
+  phone_number_e164 String   @db.VarChar(30)
+  phone_number_hash String   @db.VarChar(255)
+  matched_user_id   Int?
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+  user              User     @relation("user_contacts_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade)
+  matched_user      User?    @relation("user_contacts_matched_user_idTousers", fields: [matched_user_id], references: [id], onDelete: SetNull)
+
+  @@unique([user_id, phone_number_hash])
+  @@index([matched_user_id])
+  @@index([user_id, matched_user_id])
+  @@map("user_contacts")
+}

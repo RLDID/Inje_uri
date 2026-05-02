@@ -1,0 +1,54 @@
+name: Security Scan 
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  binary-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Block executable binaries
+        run: |
+          set -e
+          found=0
+
+          while IFS= read -r file; do
+            info="$(file -b "$file" || true)"
+            if echo "$info" | grep -Eq '^(ELF|PE32|Mach-O)'; then
+              echo "❌ Executable binary detected: $file"
+              echo "$info"
+              found=1
+            fi
+          done < <(
+            find . \
+              -path './.git' -prune -o \
+              -path './node_modules' -prune -o \
+              -path './.next' -prune -o \
+              -type f -print
+          )
+
+          if [ "$found" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Block suspicious filenames
+        run: |
+          if find . \
+            -path './.git' -prune -o \
+            -path './node_modules' -prune -o \
+            -type f \( \
+              -name 'let' -o \
+              -name 'let;*' -o \
+              -name '*;chmod*' -o \
+              -name '*;curl*' -o \
+              -name '*;wget*' -o \
+              -name '*;bash*' -o \
+              -name '*;sh*' \
+            \) -print | grep .; then
+            echo "❌ Suspicious filename detected"
+            exit 1
+          fi

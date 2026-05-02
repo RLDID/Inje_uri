@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+violations=0
+
+while IFS= read -r -d '' f; do
+  [ -f "$f" ] || continue
+
+  case "$f" in
+    node_modules/*|.next/*|.git/*) continue ;;
+  esac
+
+  file_info=$(file -b "$f" 2>/dev/null || true)
+
+  if echo "$file_info" | grep -Eq '^(ELF|PE32|Mach-O)'; then
+    echo "❌ Executable binary blocked: $f"
+    echo "   $file_info"
+    violations=1
+  fi
+
+  case "$f" in
+    let|let\;*|*\;chmod*|*\;curl*|*\;wget*|*\;bash*|*\;sh*)
+      echo "❌ Suspicious filename blocked: $f"
+      violations=1
+      ;;
+  esac
+done < <(git diff --cached --name-only --diff-filter=ACM -z)
+
+if [ "$violations" -ne 0 ]; then
+  echo "Commit blocked by security hook."
+  exit 1
+fi
