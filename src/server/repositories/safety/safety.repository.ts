@@ -46,21 +46,41 @@ export class SafetyRepository {
         return comment ? comment.commenter_user_id : null;
       }
       case "chat_room": {
-        const participant = await this.db.chatRoomParticipant.findFirst({
+        const reporterParticipant = await this.db.chatRoomParticipant.findFirst({
+          where: {
+            chat_room_id: targetId,
+            user_id: reporterUserId,
+          },
+          select: { user_id: true },
+        });
+        if (!reporterParticipant) return null;
+
+        const otherParticipant = await this.db.chatRoomParticipant.findFirst({
           where: {
             chat_room_id: targetId,
             user_id: { not: reporterUserId },
           },
           select: { user_id: true },
         });
-        return participant ? participant.user_id : null;
+        return otherParticipant ? otherParticipant.user_id : null;
       }
       case "message": {
         const message = await this.db.message.findUnique({
           where: { id: targetId },
-          select: { sender_user_id: true },
+          select: { sender_user_id: true, chat_room_id: true },
         });
-        return message ? message.sender_user_id : null;
+        if (!message) return null;
+
+        const reporterParticipant = await this.db.chatRoomParticipant.findFirst({
+          where: {
+            chat_room_id: message.chat_room_id,
+            user_id: reporterUserId,
+          },
+          select: { user_id: true },
+        });
+        if (!reporterParticipant) return null;
+
+        return message.sender_user_id;
       }
       default:
         return null;
