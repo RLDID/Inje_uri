@@ -141,6 +141,7 @@ export class SafetyRepository {
         },
         update: {
           unblocked_at: null,
+          reason: blockData.reason,
         },
       }),
     ]);
