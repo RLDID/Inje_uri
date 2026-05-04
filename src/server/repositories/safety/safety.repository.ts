@@ -168,6 +168,19 @@ export class SafetyRepository {
     });
   }
 
+  async findActiveBlockBetweenUsers(userIdA: number, userIdB: number): Promise<{ id: number; blocker_user_id: number; blocked_user_id: number } | null> {
+    return this.db.block.findFirst({
+      where: {
+        unblocked_at: null,
+        OR: [
+          { blocker_user_id: userIdA, blocked_user_id: userIdB },
+          { blocker_user_id: userIdB, blocked_user_id: userIdA },
+        ],
+      },
+      select: { id: true, blocker_user_id: true, blocked_user_id: true },
+    });
+  }
+
   async createBlock(blockerUserId: number, blockedUserId: number, reason: string | null): Promise<{ id: number }> {
     return this.db.block.create({
       data: {

@@ -252,6 +252,41 @@ export async function createRoom(
   // ─────────────────────────────────────────────
 
   /**
+   * 두 유저가 함께 참여 중인 모든 active 채팅방을 blocked로 일괄 전이.
+   *
+   * 유저 차단(POST /api/blocks) 시점에 호출.
+   * 차단자(blockerUserId)가 차단 대상(blockedUserId)을 차단하면,
+   * 두 사람이 같이 들어있는 active 방을 모두 blocked 상태로 잠근다.
+   *
+   * - 양쪽 모두 left_at IS NULL인 active 방만 대상
+   * - blocked_by_user_id에는 차단을 실행한 유저(blockerUserId)를 기록
+   * - 정책상 채팅방은 목록에서 사라지지 않고, 메시지 전송만 차단됨 (히스토리 유지)
+   *
+   * @returns 갱신된 row 수
+   */
+  export async function blockActiveRoomsBetweenUsers(
+    blockerUserId: number,
+    blockedUserId: number,
+    tx?: Prisma.TransactionClient,
+  ) {
+    const db = tx ?? prisma;
+    const result = await db.chatRoom.updateMany({
+      where: {
+        status: "active",
+        AND: [
+          { participants: { some: { user_id: blockerUserId, left_at: null } } },
+          { participants: { some: { user_id: blockedUserId, left_at: null } } },
+        ],
+      },
+      data: {
+        status: "blocked",
+        blocked_by_user_id: blockerUserId,
+      },
+    });
+    return result.count;
+  }
+
+  /**
    * expires_at이 지났는데 아직 active인 방을 expired로 일괄 전이.
    *
    * 배치 잡에서 주기적으로 호출.

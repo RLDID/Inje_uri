@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
 
     if ("error" in result) {                                                                    
         const err = result.error!;                                                              
+        if (err === ERROR.BLOCKED_RELATIONSHIP) return fail(err, "차단 관계인 사용자와는 채팅방을 생성할 수 없습니다.");
         if (err === ERROR.DUPLICATE_ACTIVE_ROOM) return fail(err, "이미 활성화된 채팅방이 존재합니다.");
         if (err === ERROR.REMATCH_TOO_SOON) return fail(err, "마지막 대화 종료 후 7일이 지나지 않았습니다.");
         return fail(err, "채팅방 생성에 실패했습니다.");
