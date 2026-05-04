@@ -23,7 +23,7 @@ export interface FeedListItemDto {
 
 export interface FeedListDto {
   items: FeedListItemDto[];
-  nextCursor: number | null;
+  nextCursor: string | null;
 }
 
 export interface CreateFeedResultDto {

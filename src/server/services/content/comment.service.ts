@@ -174,6 +174,10 @@ export async function selectChat(
   if ("error" in chatRoom) {
     const error = chatRoom.error ?? ERROR.INTERNAL_ERROR;
 
+    if (error === ERROR.BLOCKED_RELATIONSHIP) {
+      throw new AppError("BLOCKED_RELATIONSHIP", "차단 관계인 사용자와는 채팅방을 생성할 수 없습니다.");
+    }
+
     if (error === ERROR.DUPLICATE_ACTIVE_ROOM) {
       throw new AppError("CHAT_ROOM_ALREADY_EXISTS", "이미 활성화된 채팅방이 존재합니다.");
     }

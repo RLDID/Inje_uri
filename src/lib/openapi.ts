@@ -760,7 +760,7 @@
           description: "활성 + 미만료 피드를 차단 관계와 banned 사용자를 제외하고 cursor 기반으로 조회",
           parameters: [
             { name: "keyword", in: "query", schema: { type: "string" }, description: "피드 키워드 이름 필터" },
-            { name: "cursor", in: "query", schema: { type: "integer" }, description: "다음 페이지 기준 피드 ID" },
+            { name: "cursor", in: "query", schema: { type: "string" }, description: "다음 페이지 cursor (응답의 nextCursor 값)" },
           ],
           responses: {
             "200": { description: "피드 목록", content: { "application/json": { schema: { $ref: "#/components/schemas/FeedListResponse" } } } },
@@ -1706,7 +1706,7 @@
               type: "object",
               properties: {
                 items: { type: "array", items: { $ref: "#/components/schemas/FeedListItem" } },
-                nextCursor: { type: "integer", nullable: true, example: null },
+                nextCursor: { type: "string", nullable: true, example: null },
               },
             },
           },
