@@ -4,6 +4,8 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   outputFileTracingRoot: process.cwd(),
   webpack: (config) => {
+    // Windows + Node 24 can misreport readlink errors for regular files.
+    config.cache = false;
     config.resolve = config.resolve ?? {};
     config.resolve.alias = {
       ...(config.resolve.alias ?? {}),

@@ -8,9 +8,10 @@
     "npm": "11.6.2"
   },
   "scripts": {
-    "dev": "npx rimraf .next && next dev --webpack",
-    "build": "next build --webpack",
-    "start": "next start",
+    "dev": "npx rimraf .next && node --require ./scripts/patch-win-readlink.cjs ./node_modules/next/dist/bin/next dev --webpack",
+    "build": "node --require ./scripts/patch-win-readlink.cjs ./node_modules/next/dist/bin/next build --webpack",
+    "start": "node .next/standalone/server.js",
+    "test": "vitest run",
     "lint": "eslint .",
     "prisma:generate": "prisma generate",
     "prisma:format": "prisma format",
@@ -21,15 +22,19 @@
     "prisma:seed": "prisma db seed"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "7.0.0",
-    "@prisma/client": "7.0.0",
+    "@prisma/adapter-pg": "7.8.0",
+    "@prisma/client": "7.8.0",
     "@scalar/nextjs-api-reference": "^0.10.11",
     "bcrypt": "^6.0.0",
-    "next": "16.0.0",
+    "next": "16.2.4",
     "pg": "^8.20.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "tsx": "^4.21.0"
+  },
+  "overrides": {
+    "@hono/node-server": "1.19.13",
+    "postcss": "8.5.13"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.1.0",
@@ -41,11 +46,12 @@
     "@types/react-dom": "^19.2.0",
     "dotenv": "^17.4.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^16.0.0",
-    "postcss": "^8.5.0",
-    "prisma": "7.0.0",
+    "eslint-config-next": "16.2.4",
+    "postcss": "8.5.13",
+    "prisma": "7.8.0",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.21.0",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "^4.1.5"
   }
 }
