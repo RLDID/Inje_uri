@@ -46,21 +46,41 @@ export class SafetyRepository {
         return comment ? comment.commenter_user_id : null;
       }
       case "chat_room": {
-        const participant = await this.db.chatRoomParticipant.findFirst({
+        const reporterParticipant = await this.db.chatRoomParticipant.findFirst({
+          where: {
+            chat_room_id: targetId,
+            user_id: reporterUserId,
+          },
+          select: { user_id: true },
+        });
+        if (!reporterParticipant) return null;
+
+        const otherParticipant = await this.db.chatRoomParticipant.findFirst({
           where: {
             chat_room_id: targetId,
             user_id: { not: reporterUserId },
           },
           select: { user_id: true },
         });
-        return participant ? participant.user_id : null;
+        return otherParticipant ? otherParticipant.user_id : null;
       }
       case "message": {
         const message = await this.db.message.findUnique({
           where: { id: targetId },
-          select: { sender_user_id: true },
+          select: { sender_user_id: true, chat_room_id: true },
         });
-        return message ? message.sender_user_id : null;
+        if (!message) return null;
+
+        const reporterParticipant = await this.db.chatRoomParticipant.findFirst({
+          where: {
+            chat_room_id: message.chat_room_id,
+            user_id: reporterUserId,
+          },
+          select: { user_id: true },
+        });
+        if (!reporterParticipant) return null;
+
+        return message.sender_user_id;
       }
       default:
         return null;
@@ -121,6 +141,7 @@ export class SafetyRepository {
         },
         update: {
           unblocked_at: null,
+          reason: blockData.reason,
         },
       }),
     ]);
@@ -144,6 +165,19 @@ export class SafetyRepository {
         },
       },
       select: { id: true, unblocked_at: true },
+    });
+  }
+
+  async findActiveBlockBetweenUsers(userIdA: number, userIdB: number): Promise<{ id: number; blocker_user_id: number; blocked_user_id: number } | null> {
+    return this.db.block.findFirst({
+      where: {
+        unblocked_at: null,
+        OR: [
+          { blocker_user_id: userIdA, blocked_user_id: userIdB },
+          { blocker_user_id: userIdB, blocked_user_id: userIdA },
+        ],
+      },
+      select: { id: true, blocker_user_id: true, blocked_user_id: true },
     });
   }
 

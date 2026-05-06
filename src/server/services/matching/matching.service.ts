@@ -7,6 +7,9 @@ import {
 } from "@/server/repositories/interest/interest.repository";
 import { passMatchedCandidateItem } from "@/server/repositories/recommendation/recommendation.repository";
 import * as chatRoomService from "@/server/services/conversation/chatRoom.service";
+import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
+
+const safetyRepo = new SafetyRepository(prisma);
 
 export interface MatchResult {
   matched: boolean;
@@ -39,6 +42,14 @@ export async function checkAndCreateMatch(
   const reverseInterest = await findReversePendingInterest(targetUserId, myUserId);
 
   if (!reverseInterest) {
+    return { matched: false, chat_room_id: null };
+  }
+
+  // 방어적 차단 검사: B파트(createInterest)에서 막혀야 정상이지만,
+  // 만일 차단 관계가 있는데도 호감이 생성된 경우 매칭/채팅방 생성을 모두 중단한다.
+  const activeBlock = await safetyRepo.findActiveBlockBetweenUsers(myUserId, targetUserId);
+  if (activeBlock) {
+    console.warn("[matching.service] 차단 관계 감지, 매칭 취소:", { myUserId, targetUserId });
     return { matched: false, chat_room_id: null };
   }
 

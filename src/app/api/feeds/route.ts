@@ -44,12 +44,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const keyword = searchParams.get("keyword");
-    const cursorParam = searchParams.get("cursor");
-
-    const cursor = cursorParam ? Number(cursorParam) : null;
-    if (cursorParam && (Number.isNaN(cursor) || !Number.isInteger(cursor))) {
-      return fail("INVALID_CURSOR", "cursor는 정수여야 합니다.");
-    }
+    const cursor = searchParams.get("cursor");
 
     const data = await listFeeds(currentUserId, keyword, cursor);
     return ok(data);
