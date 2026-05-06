@@ -9,8 +9,12 @@
   import * as chatRoomRepo from "@/server/repositories/chat/chatRoom.repo";
   import * as participantRepo from "@/server/repositories/chat/participant.repo";
   import * as messageRepo from "@/server/repositories/chat/message.repo";
+  import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
   import { chat_room_source_type } from "@/generated/prisma/client";
   import { prisma } from "@/server/db/prisma";
+  import type { ChatRoomListItemDto } from "@/lib/types/chat";
+
+  const safetyRepo = new SafetyRepository(prisma);
 
   // ─────────────────────────────────────────────
   // 타입
@@ -32,23 +36,29 @@
    * 채팅방 생성 — 규칙 검사 후 통과 시 생성.
    *
    * 검사 순서:
-   * 1. 두 유저 간 active 채팅방 중복 확인
-   * 2. 나간 채팅방 기준 7일 재매칭 정책 확인
-   * 3. expires_at 계산 (interest: +24h / comment: +2h)
-   * 4. 채팅방 + 참여자 INSERT + 시스템 메시지 INSERT
-   *
-   * 차단 관계 확인은 B/D가 호출 전 처리하므로 여기선 생략.
+   * 1. 양방향 차단 관계 확인 (어느 쪽이든 차단 중이면 거부)
+   * 2. 두 유저 간 active 채팅방 중복 확인
+   * 3. 나간 채팅방 기준 7일 재매칭 정책 확인
+   * 4. expires_at 계산 (interest: +24h / comment: +2h)
+   * 5. 채팅방 + 참여자 INSERT + 시스템 메시지 INSERT
    */
   export async function createChatRoom(input: CreateChatRoomParams) {
     const { requestUserId, targetUserId, sourceType } = input;
-    // 1. active 중복 확인
+
+    // 1. 양방향 차단 검사 — 어느 쪽이든 상대를 차단 중이면 새 방 거부
+    const activeBlock = await safetyRepo.findActiveBlockBetweenUsers(requestUserId, targetUserId);
+    if (activeBlock) {
+      return { error: ERROR.BLOCKED_RELATIONSHIP } as const;
+    }
+
+    // 2. active 중복 확인
     const existing = await
   chatRoomRepo.findActiveRoomBetweenUsers(requestUserId, targetUserId);
     if (existing) {
       return { error: ERROR.DUPLICATE_ACTIVE_ROOM } as const;
     }
 
-    // 2. 재매칭 7일 정책
+    // 3. 재매칭 7일 정책
     const lastLeft = await chatRoomRepo.findLastLeftRoomBetweenUsers(requestUserId, targetUserId);
     if (lastLeft) {
       let latestLeftAt: Date | null = null;
@@ -116,8 +126,14 @@
    * 내 채팅방 목록.
    * 마지막 메시지 시각 기준 내림차순 정렬.
    * tab=unread이면 unread count > 0인 방만 필터.
+   *
+   * 응답은 ChatRoomListItemDto로 매핑되며, 차단 상태(isBlocked, blockedByMe)를
+   * 명시적으로 노출한다. 정책상 차단된 방도 목록에 그대로 포함된다 (히스토리 유지).
    */
-  export async function getChatRooms(userId: number, tab: "all" | "unread") {
+  export async function getChatRooms(
+    userId: number,
+    tab: "all" | "unread",
+  ): Promise<ChatRoomListItemDto[]> {
     const rooms = await chatRoomRepo.findRoomsByUserId(userId);
 
     // 마지막 메시지 시각 기준 내림차순 정렬
@@ -133,12 +149,9 @@
         }
     }
 
-    if (tab === "all") return rooms;
-
-    // unread 필터
-    const result = [];
+    const filtered: typeof rooms = [];
     for (const room of rooms) {
-      let me = null;
+      let me: (typeof room.participants)[number] | null = null;
       for (const p of room.participants) {
         if (p.user_id === userId) {
           me = p;
@@ -147,15 +160,58 @@
       }
       if (me === null) continue;
 
-      const lastMsg = room.messages[0];
-      if (!lastMsg) continue;
-
-      if ((me.last_read_message_id ?? 0) < lastMsg.id) {
-        result.push(room);
+      if (tab === "unread") {
+        const lastMsg = room.messages[0];
+        if (!lastMsg) continue;
+        if ((me.last_read_message_id ?? 0) >= lastMsg.id) continue;
       }
+
+      filtered.push(room);
     }
 
-    return result;
+    return filtered.map((room) => toChatRoomListItemDto(room, userId));
+  }
+
+  function toChatRoomListItemDto(
+    room: Awaited<ReturnType<typeof chatRoomRepo.findRoomsByUserId>>[number],
+    currentUserId: number,
+  ): ChatRoomListItemDto {
+    let me: (typeof room.participants)[number] | null = null;
+    let other: (typeof room.participants)[number] | null = null;
+    for (const p of room.participants) {
+      if (p.user_id === currentUserId) me = p;
+      else if (other === null) other = p;
+    }
+
+    const lastMsg = room.messages[0] ?? null;
+    const lastReadId = me?.last_read_message_id ?? 0;
+    const unreadCount = lastMsg && lastMsg.id > lastReadId ? 1 : 0;
+
+    return {
+      roomId: room.id,
+      status: room.status,
+      isBlocked: room.status === "blocked",
+      blockedByMe: room.blocked_by_user_id === currentUserId,
+      createdAt: room.created_at.toISOString(),
+      expiresAt: room.expires_at.toISOString(),
+      otherUser: other
+        ? {
+            userId: other.user.id,
+            nickname: other.user.nickname,
+            profileImage: other.user.userProfileImages[0]?.image_url ?? null,
+          }
+        : null,
+      lastMessage: lastMsg
+        ? {
+            id: lastMsg.id,
+            content: lastMsg.content,
+            type: lastMsg.type,
+            senderUserId: lastMsg.sender_user_id,
+            createdAt: lastMsg.created_at.toISOString(),
+          }
+        : null,
+      unreadCount,
+    };
   }
 
   /**

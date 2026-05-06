@@ -8,6 +8,7 @@ const feedListSelect = {
   status: true,
   created_at: true,
   expires_at: true,
+  boost_score: true,
   author_user: {
     select: {
       id: true,
