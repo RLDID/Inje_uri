@@ -3,17 +3,24 @@
 
 import { runDailyRecommendationJobIfNeeded } from "@/server/jobs/dailyRecommendation.job";
 
-// pg 라이브러리가 Windows에서 Unix 소켓 경로 탐색 시 발생하는 ENOENT 에러 억제
-process.on("uncaughtException", (err: NodeJS.ErrnoException) => {
-  if (err.code === "ENOENT") return;
-  console.error("[uncaughtException]", err);
-});
+const globalForInstrumentation = globalThis as typeof globalThis & {
+  __injeuriDailyRecommendationJobStarted?: boolean;
+};
 
-(async () => {
-  try {
-    await runDailyRecommendationJobIfNeeded();
-  } catch (err) {
-    console.error("[instrumentation.node]", err);
-  }
-})();
+if (!globalForInstrumentation.__injeuriDailyRecommendationJobStarted) {
+  globalForInstrumentation.__injeuriDailyRecommendationJobStarted = true;
+
+  void (async () => {
+    try {
+      await runDailyRecommendationJobIfNeeded();
+    } catch (err) {
+      console.error("[instrumentation.node] daily recommendation job failed", err);
+    }
+  })();
+}
+
 export {};
+
+//전역 uncaughtException 억제 제거
+//dev hot reload 중 중복 실행 방지
+//batch job 실패는 로그로 남김
