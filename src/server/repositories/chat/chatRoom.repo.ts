@@ -131,9 +131,11 @@
    */
   export async function findActiveRoomBetweenUsers(
     userIdA: number,
-    userIdB: number
+    userIdB: number,
+    tx?: Prisma.TransactionClient
   ) {
-    return prisma.chatRoom.findFirst({
+    const db = tx ?? prisma;
+    return db.chatRoom.findFirst({
       where: {
         status: "active",
         AND: [
@@ -155,9 +157,11 @@
    */
   export async function findLastLeftRoomBetweenUsers(
     userIdA: number,
-    userIdB: number
+    userIdB: number,
+    tx?: Prisma.TransactionClient
   ) {
-    return prisma.chatRoom.findFirst({
+    const db = tx ?? prisma;
+    return db.chatRoom.findFirst({
       where: {
         AND: [
           { participants: { some: { user_id: userIdA } } }, //A가 이방 참여

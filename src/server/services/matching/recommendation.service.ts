@@ -14,7 +14,7 @@ import {
   createDailyRecommendation,
 } from "@/server/repositories/recommendation/recommendation.repository";
 import { findPendingInterest } from "@/server/repositories/interest/interest.repository";
-import { upsertDismissInTx, getDismissId } from "@/server/repositories/interest/dismiss.repository";
+import { upsertDismissInTx, getDismissId, findActiveDismiss } from "@/server/repositories/interest/dismiss.repository";
 import type {
   TodayRecommendationResponse,
   SelectCandidateResponse,
@@ -24,7 +24,7 @@ import type {
 const RECOMMEND_COUNT = 3;
 const DISMISS_COOLDOWN_DAYS = 7;
 const DECLINE_COOLDOWN_DAYS = 7;
-const RECENT_REC_EXCLUDE_DAYS = 2;
+const RECENT_REC_EXCLUDE_DAYS = 7;
 
 /** KST 오늘 날짜 (YYYY-MM-DD) */
 function getKSTDateString(): string {
@@ -41,25 +41,10 @@ export async function getTodayRecommendations(
 ): Promise<TodayRecommendationResponse> {
   const today = getKSTDateString();
 
-  let rec = await findTodayRecommendation(userId, today);
+  const rec = await findTodayRecommendation(userId, today);
 
-  // 추천 없음 + 온보딩 완료 유저 → 즉시 생성 시도
   if (!rec) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { onboarding_completed: true },
-    });
-
-    if (user?.onboarding_completed) {
-      await generateRecommendationsForUser(userId, today).catch((e) => {
-        console.error("[recommendation] 즉시 생성 실패:", userId, e);
-      });
-      rec = await findTodayRecommendation(userId, today);
-    }
-
-    if (!rec) {
-      throw new ApiError(ERROR.REC_NOT_GENERATED, "오늘의 추천이 아직 준비되지 않았습니다.");
-    }
+    throw new ApiError(ERROR.REC_NOT_GENERATED, "오늘의 추천이 아직 준비되지 않았습니다.");
   }
 
   const candidates = await findCandidatesWithProfile(rec.id);
@@ -123,7 +108,17 @@ export async function selectCandidate(
     throw new ApiError(ERROR.INVALID_ITEM, "유효하지 않은 추천 항목입니다.");
   }
 
-  // 3. BLOCKED_RELATIONSHIP: 차단 관계 확인
+  if (item.passed_at !== null) {
+    throw new ApiError(ERROR.ALREADY_DISMISSED, "이미 관심없음 처리된 항목입니다.");
+  }
+
+  // 3. ALREADY_DISMISSED: 유효한 dismiss 레코드 확인
+  const isDismissed = await findActiveDismiss(userId, item.candidate_user_id);
+  if (isDismissed) {
+    throw new ApiError(ERROR.ALREADY_DISMISSED, "관심없음 처리한 상대에게는 호감을 보낼 수 없습니다.");
+  }
+
+  // 4. BLOCKED_RELATIONSHIP: 차단 관계 확인
   const hasBlock = await hasBlockRelation(userId, item.candidate_user_id);
   if (hasBlock) {
     throw new ApiError(ERROR.BLOCKED_RELATIONSHIP, "차단 관계로 호감을 보낼 수 없습니다.");
@@ -199,10 +194,6 @@ export async function dismissCandidate(
     throw new ApiError(ERROR.ALREADY_SELECTED, "이미 호감을 보낸 상대는 관심없음 처리할 수 없습니다.");
   }
 
-  if (item.passed_at !== null) {
-    throw new ApiError(ERROR.ALREADY_PASSED, "이미 처리된 항목입니다.");
-  }
-
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + DISMISS_COOLDOWN_DAYS);
 
@@ -249,15 +240,20 @@ export async function generateRecommendationsForUser(
   const interestRows = await prisma.$queryRaw<{ user_id: number }[]>`
     SELECT to_user_id AS user_id FROM interests
     WHERE from_user_id = ${userId} AND matched_at IS NULL AND declined_at IS NULL
+      AND (expires_at IS NULL OR expires_at > NOW())
     UNION
     SELECT from_user_id AS user_id FROM interests
     WHERE to_user_id = ${userId} AND matched_at IS NULL AND declined_at IS NULL
+      AND (expires_at IS NULL OR expires_at > NOW())
     UNION
-    SELECT to_user_id AS user_id FROM interests
-    WHERE from_user_id = ${userId} AND matched_at IS NOT NULL
-    UNION
-    SELECT from_user_id AS user_id FROM interests
-    WHERE to_user_id = ${userId} AND matched_at IS NOT NULL
+    SELECT CASE WHEN i.from_user_id = ${userId} THEN i.to_user_id ELSE i.from_user_id END AS user_id
+    FROM interests i
+    JOIN chat_rooms cr ON cr.source_interest_id = i.id
+    JOIN chat_room_participants crp ON crp.chat_room_id = cr.id
+    WHERE (i.from_user_id = ${userId} OR i.to_user_id = ${userId})
+      AND i.matched_at IS NOT NULL
+      AND crp.user_id = ${userId}
+      AND (crp.left_at IS NULL OR crp.left_at > NOW() - INTERVAL '7 days')
   `;
   const excludeByInterest = new Set(interestRows.map((r) => r.user_id));
 
@@ -297,6 +293,7 @@ export async function generateRecommendationsForUser(
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 0, relaxDept: false },
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 2, relaxDept: false },
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 2, relaxDept: true },
+    { recentDays: 3, relaxSameYear: true, agePad: 2, relaxDept: true },
     { recentDays: 1, relaxSameYear: true, agePad: 2, relaxDept: true },
     { recentDays: 0, relaxSameYear: true, agePad: 2, relaxDept: true },
   ];
@@ -304,7 +301,7 @@ export async function generateRecommendationsForUser(
   let candidates: number[] = [];
 
   for (const step of fallbackSteps) {
-    const recentIds = await getRecentlyRecommendedUserIds(userId, step.recentDays);
+    const recentIds = await getRecentlyRecommendedUserIds(userId, step.recentDays, date);
 
     const excludeIds = new Set([
       userId,
@@ -325,6 +322,7 @@ export async function generateRecommendationsForUser(
       keyword_count: bigint;
       image_count: bigint;
       has_bio: boolean;
+      created_at: Date;
     }[]>`
       SELECT
         u.id,
@@ -332,6 +330,7 @@ export async function generateRecommendationsForUser(
         u.department,
         u.student_year,
         u.age,
+        u.created_at,
         COUNT(DISTINCT CASE WHEN uks.keyword_id IN (${Prisma.join(safeKeywordIds)}) THEN uks.id END) AS keyword_match_count,
         COUNT(DISTINCT uks.id) AS keyword_count,
         COUNT(DISTINCT upi.id) AS image_count,
@@ -370,19 +369,35 @@ export async function generateRecommendationsForUser(
       }
     }
 
-    // 이상형 키워드 일치도(1순위) + 프로필 완성도(2순위) + 랜덤(3순위) 정렬
-    const scored = pool.map((u) => ({
-      id: u.id,
-      score:
-        Number(u.keyword_match_count) * 10 + // 이상형 키워드 일치도 (최우선)
-        Number(u.keyword_count) * 2 +          // 프로필 완성도: 키워드 보유 수
-        Number(u.image_count) * 3 +            // 프로필 완성도: 이미지 수
-        (u.has_bio ? 2 : 0) +                  // 프로필 완성도: 자기소개 여부
-        Math.random() * 0.5,                   // 동점 시 랜덤 분산
-    }));
+    // 1개 이상 일치 풀과 0개 일치 풀 분리
+    const matchPool = pool.filter((u) => Number(u.keyword_match_count) >= 1);
+    const zeroPool = pool.filter((u) => Number(u.keyword_match_count) === 0);
 
-    scored.sort((a, b) => b.score - a.score);
-    candidates = scored.slice(0, RECOMMEND_COUNT).map((s) => s.id);
+    // 1개 이상 일치: 1순위 keyword_match_count 내림차순, 동점 시 프로필 완성도 내림차순
+    const scoredMatch = matchPool
+      .map((u) => ({
+        id: u.id,
+        keywordMatch: Number(u.keyword_match_count),
+        profileScore:
+          Number(u.image_count) * 3 +
+          Number(u.keyword_count) * 2 +
+          (u.has_bio ? 2 : 0),
+      }))
+      .sort((a, b) =>
+        b.keywordMatch !== a.keywordMatch
+          ? b.keywordMatch - a.keywordMatch
+          : b.profileScore - a.profileScore,
+      );
+
+    // 0개 일치: 매 요청마다 다른 결과 (랜덤)
+    const shuffledZero = zeroPool
+      .map((u) => ({ id: u.id, rand: Math.random() }))
+      .sort((a, b) => a.rand - b.rand);
+
+    candidates = [
+      ...scoredMatch.map((s) => s.id),
+      ...shuffledZero.map((s) => s.id),
+    ].slice(0, RECOMMEND_COUNT);
 
     if (candidates.length >= RECOMMEND_COUNT) break;
   }

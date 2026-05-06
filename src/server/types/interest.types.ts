@@ -30,7 +30,6 @@ export interface AcceptInterestResponse {
 export interface DeclineInterestResponse {
   interest_id: number;
   declined_at: string;
-  rejection_notify_at: string;
 }
 
 export interface SendInterestResponse {
