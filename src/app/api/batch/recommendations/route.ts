@@ -33,11 +33,11 @@ export async function POST(req: NextRequest) {
       select: { id: true },
     });
 
-    const alreadyDone = await prisma.dailyRecommendation.findMany({
-      where: { recommendation_date: new Date(today) },
-      select: { user_id: true },
-    });
-    const alreadyDoneIds = new Set(alreadyDone.map((r) => r.user_id));
+    const alreadyDoneRows = await prisma.$queryRaw<{ user_id: number }[]>`
+      SELECT user_id FROM daily_recommendations
+      WHERE recommendation_date = ${today}::date
+    `;
+    const alreadyDoneIds = new Set(alreadyDoneRows.map((r) => r.user_id));
 
     const targets = users.filter((u) => !alreadyDoneIds.has(u.id));
 

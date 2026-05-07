@@ -11,6 +11,7 @@
   import * as messageRepo from "@/server/repositories/chat/message.repo";
   import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
   import { chat_room_source_type } from "@/generated/prisma/client";
+  import type { Prisma } from "@/generated/prisma/client";
   import { prisma } from "@/server/db/prisma";
   import type { ChatRoomListItemDto } from "@/lib/types/chat";
 
@@ -26,6 +27,7 @@
     sourceType: chat_room_source_type;
     sourceInterestId?: number;
     sourceCommentId?: number;
+    tx?: Prisma.TransactionClient;
   };
 
   // ─────────────────────────────────────────────
@@ -53,13 +55,13 @@
 
     // 2. active 중복 확인
     const existing = await
-  chatRoomRepo.findActiveRoomBetweenUsers(requestUserId, targetUserId);
+  chatRoomRepo.findActiveRoomBetweenUsers(requestUserId, targetUserId, input.tx);
     if (existing) {
       return { error: ERROR.DUPLICATE_ACTIVE_ROOM } as const;
     }
 
-    // 3. 재매칭 7일 정책
-    const lastLeft = await chatRoomRepo.findLastLeftRoomBetweenUsers(requestUserId, targetUserId);
+    // 2. 재매칭 7일 정책
+    const lastLeft = await chatRoomRepo.findLastLeftRoomBetweenUsers(requestUserId, targetUserId, input.tx);
     if (lastLeft) {
       let latestLeftAt: Date | null = null;
 
@@ -89,7 +91,7 @@
     }
 
     // 4. 채팅방 + 참여자 생성
-  const room = await prisma.$transaction(async (tx) => {
+  const doCreate = async (db: Prisma.TransactionClient) => {
     const newRoom = await chatRoomRepo.createRoom(
       {
         source_type: sourceType,
@@ -99,7 +101,7 @@
         expires_at: expiresAt,
         participantUserIds: [requestUserId, targetUserId],
       },
-      tx
+      db
     );
 
     await messageRepo.insertMessage(
@@ -109,11 +111,15 @@
         content: "매칭이 성사되었어요! 대화를 시작해보세요.",
         type: "system",
       },
-      tx
+      db
     );
 
     return newRoom;
-  });
+  };
+
+  const room = input.tx
+    ? await doCreate(input.tx)
+    : await prisma.$transaction(doCreate);
 
   return { chatRoomId: room.id };
   }

@@ -48,6 +48,21 @@ export async function upsertDismissInTx(
   `;
 }
 
+/** 유효한 dismiss 레코드 존재 여부 조회 */
+export async function findActiveDismiss(
+  userId: number,
+  dismissedUserId: number,
+): Promise<boolean> {
+  const rows = await prisma.$queryRaw<{ id: number }[]>`
+    SELECT id FROM recommendation_dismisses
+    WHERE user_id = ${userId}
+      AND dismissed_user_id = ${dismissedUserId}
+      AND expires_at > NOW()
+    LIMIT 1
+  `;
+  return rows.length > 0;
+}
+
 /** dismiss 레코드 id 조회 (트랜잭션 완료 후 호출) */
 export async function getDismissId(
   userId: number,

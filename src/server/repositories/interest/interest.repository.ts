@@ -36,6 +36,8 @@ export async function findPendingInterest(
       AND to_user_id = ${toUserId}
       AND matched_at IS NULL
       AND declined_at IS NULL
+      AND status = 'pending'
+      AND (expires_at IS NULL OR expires_at > NOW())
     LIMIT 1
   `;
   return rows[0] ?? null;
@@ -54,6 +56,8 @@ export async function findReversePendingInterest(
       AND to_user_id = ${toUserId}
       AND matched_at IS NULL
       AND declined_at IS NULL
+      AND status = 'pending'
+      AND (expires_at IS NULL OR expires_at > NOW())
     LIMIT 1
   `;
   return rows[0] ?? null;
@@ -80,6 +84,7 @@ export async function findReceivedInterestsWithProfile(
       AND i.matched_at IS NULL
       AND i.declined_at IS NULL
       AND i.from_user_id NOT IN (${Prisma.join(excludeArray)})
+      AND (i.expires_at IS NULL OR i.expires_at > NOW())
     ORDER BY i.created_at DESC
   `;
 }
@@ -131,8 +136,10 @@ export async function declineInterestById(
 export async function confirmMatch(
   interestId1: number,
   interestId2: number,
+  tx?: Prisma.TransactionClient,
 ): Promise<void> {
-  await prisma.$executeRaw`
+  const db = tx ?? prisma;
+  await db.$executeRaw`
     UPDATE interests
     SET matched_at = NOW(), status = 'accepted'
     WHERE id IN (${interestId1}, ${interestId2})

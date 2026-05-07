@@ -6,11 +6,13 @@ import { hasBlockRelation } from "@/server/repositories/safety/block.repository"
 import { getBlockedUserIds } from "@/server/repositories/safety/block.repository";
 import {
   findPendingInterest,
+  findReversePendingInterest,
   findInterestById,
   findReceivedInterestsWithProfile,
   insertInterest,
   declineInterestById,
 } from "@/server/repositories/interest/interest.repository";
+import { findActiveDismiss } from "@/server/repositories/interest/dismiss.repository";
 import { checkAndCreateMatch } from "@/server/services/matching/matching.service";
 import type {
   ReceivedInterestsResponse,
@@ -64,7 +66,7 @@ export async function acceptInterest(
     throw new ApiError(ERROR.INVALID_INTEREST, "유효하지 않은 호감입니다.");
   }
 
-  if (interest.expires_at !== null && new Date(interest.expires_at) < new Date()) {
+  if (interest.expires_at !== null && new Date(interest.expires_at) <= new Date()) {
     throw new ApiError(ERROR.INTEREST_EXPIRED, "만료된 호감은 수락할 수 없습니다.");
   }
 
@@ -100,13 +102,12 @@ export async function declineInterest(
 ): Promise<DeclineInterestResponse> {
   const interest = await findInterestById(interestId);
 
-  if (
-    !interest ||
-    interest.to_user_id !== userId ||
-    interest.matched_at !== null ||
-    interest.declined_at !== null
-  ) {
+  if (!interest || interest.to_user_id !== userId || interest.matched_at !== null) {
     throw new ApiError(ERROR.INVALID_INTEREST, "유효하지 않은 호감입니다.");
+  }
+
+  if (interest.declined_at !== null) {
+    throw new ApiError(ERROR.ALREADY_PROCESSED, "이미 처리된 호감입니다.");
   }
 
   const declined = await declineInterestById(interestId);
@@ -115,12 +116,10 @@ export async function declineInterest(
   }
 
   const declinedAt = declined.declined_at ?? new Date();
-  const notifyAt = new Date(declinedAt.getTime() + 24 * 60 * 60 * 1000);
 
   return {
     interest_id: declined.id,
     declined_at: declinedAt.toISOString(),
-    rejection_notify_at: notifyAt.toISOString(),
   };
 }
 
@@ -143,6 +142,16 @@ export async function sendInterest(
   const existing = await findPendingInterest(userId, toUserId);
   if (existing) {
     throw new ApiError(ERROR.DUPLICATE_INTEREST, "이미 호감을 보낸 상대입니다.");
+  }
+
+  const isDismissed = await findActiveDismiss(userId, toUserId);
+  if (isDismissed) {
+    throw new ApiError(ERROR.ALREADY_DISMISSED, "관심없음 처리한 상대에게는 호감을 보낼 수 없습니다.");
+  }
+
+  const reverseInterest = await findReversePendingInterest(toUserId, userId);
+  if (!reverseInterest) {
+    throw new ApiError(ERROR.REVERSE_INTEREST_NOT_FOUND, "호감을 먼저 보낸 상대에게만 직접 호감을 보낼 수 있습니다.");
   }
 
   const newInterest = await insertInterest(userId, toUserId);
