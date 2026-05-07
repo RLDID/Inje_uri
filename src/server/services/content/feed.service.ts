@@ -3,6 +3,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/lib/app-error";
 import { FeedRepository } from "@/server/repositories/feed/feed.repository";
 import type { FeedDetailRow, FeedListRow } from "@/server/repositories/feed/feed.repository";
+import { decodeFeedCursor, encodeFeedCursor } from "@/lib/utils/cursor";
 import type {
   CreateFeedResultDto,
   FeedDetailDto,
@@ -89,7 +90,7 @@ function toKeywordListItemDto(row: {
 export async function listFeeds(
   currentUserId: number,
   keyword: string | null,
-  cursor: number | null,
+  cursor: string | null,
 ): Promise<FeedListDto> {
   const now = new Date();
   const blockedUserIds = await repo.findBlockedUserIds(currentUserId);
@@ -102,16 +103,30 @@ export async function listFeeds(
 
   if (blockedUserIds.size > 0) where.author_user_id = { notIn: [...blockedUserIds] };
   if (keyword) where.keywords = { some: { feed_keyword: { name: keyword } } };
-  if (cursor) where.id = { lt: cursor };
+
+  if (cursor) {
+    const decoded = decodeFeedCursor(cursor);
+    if (!decoded) {
+      throw new AppError("INVALID_CURSOR", "유효하지 않은 cursor 입니다.");
+    }
+    where.OR = [
+      { boost_score: { gt: decoded.boostScore } },
+      { boost_score: decoded.boostScore, id: { lt: decoded.id } },
+    ];
+  }
 
   const rows = await repo.findActiveFeeds(where);
 
   const hasNextPage = rows.length > FEED_PAGE_SIZE;
   const slice = hasNextPage ? rows.slice(0, FEED_PAGE_SIZE) : rows;
+  const lastRow = slice[slice.length - 1];
 
   return {
     items: slice.map(toFeedListItemDto),
-    nextCursor: hasNextPage ? slice[slice.length - 1].id : null,
+    nextCursor:
+      hasNextPage && lastRow
+        ? encodeFeedCursor({ boostScore: lastRow.boost_score, id: lastRow.id })
+        : null,
   };
 }
 

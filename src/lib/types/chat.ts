@@ -39,3 +39,25 @@ export type ChatStatus = 'active' | 'expired' | 'blocked';
 export interface ChatLimitInfo {
   currentCount: number;
 }
+
+export interface ChatRoomListItemDto {
+  roomId: number;
+  status: 'active' | 'expired' | 'blocked' | 'closed';
+  isBlocked: boolean;
+  blockedByMe: boolean;
+  createdAt: string;
+  expiresAt: string;
+  otherUser: {
+    userId: number;
+    nickname: string;
+    profileImage: string | null;
+  } | null;
+  lastMessage: {
+    id: number;
+    content: string;
+    type: string;
+    senderUserId: number;
+    createdAt: string;
+  } | null;
+  unreadCount: number;
+}
