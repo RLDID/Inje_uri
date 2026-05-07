@@ -149,13 +149,14 @@ export async function passItemInTx(
 export async function getRecentlyRecommendedUserIds(
   userId: number,
   withinDays: number,
+  today: string,
 ): Promise<Set<number>> {
   const rows = await prisma.$queryRaw<{ candidate_user_id: number }[]>`
     SELECT DISTINCT dri.candidate_user_id
     FROM daily_recommendation_items dri
     JOIN daily_recommendations dr ON dr.id = dri.daily_recommendation_id
     WHERE dr.user_id = ${userId}
-      AND dr.recommendation_date >= (CURRENT_DATE - ${withinDays}::int)
+      AND dr.recommendation_date >= (${today}::date - ${withinDays}::int)
   `;
   return new Set(rows.map((r) => r.candidate_user_id));
 }
@@ -187,28 +188,35 @@ export async function createDailyRecommendation(
   today: string,
   candidateIds: number[],
 ): Promise<number> {
-  const recRows = await prisma.$queryRaw<{ id: number }[]>`
-    INSERT INTO daily_recommendations (user_id, recommendation_date, generated_at)
-    VALUES (${userId}, ${today}::date, NOW())
-    ON CONFLICT (user_id, recommendation_date) DO NOTHING
-    RETURNING id
-  `;
-
-  if (recRows.length === 0) {
-    const existing = await findTodayRecommendation(userId, today);
-    if (!existing) throw new Error("추천 생성 실패");
-    return existing.id;
-  }
-
-  const recId = recRows[0].id;
-
-  for (let i = 0; i < candidateIds.length; i++) {
-    await prisma.$executeRaw`
-      INSERT INTO daily_recommendation_items
-        (daily_recommendation_id, candidate_user_id, rank_order)
-      VALUES (${recId}, ${candidateIds[i]}, ${i + 1})
+  return prisma.$transaction(async (tx) => {
+    const recRows = await tx.$queryRaw<{ id: number }[]>`
+      INSERT INTO daily_recommendations (user_id, recommendation_date, generated_at)
+      VALUES (${userId}, ${today}::date, NOW())
+      ON CONFLICT (user_id, recommendation_date) DO NOTHING
+      RETURNING id
     `;
-  }
 
-  return recId;
+    if (recRows.length === 0) {
+      const existingRows = await tx.$queryRaw<{ id: number }[]>`
+        SELECT id FROM daily_recommendations
+        WHERE user_id = ${userId}
+          AND recommendation_date = ${today}::date
+        LIMIT 1
+      `;
+      if (!existingRows[0]) throw new Error("추천 생성 실패");
+      return existingRows[0].id;
+    }
+
+    const recId = recRows[0].id;
+
+    for (let i = 0; i < candidateIds.length; i++) {
+      await tx.$executeRaw`
+        INSERT INTO daily_recommendation_items
+          (daily_recommendation_id, candidate_user_id, rank_order)
+        VALUES (${recId}, ${candidateIds[i]}, ${i + 1})
+      `;
+    }
+
+    return recId;
+  });
 }
