@@ -1,0 +1,42 @@
+services:
+  db:
+    image: postgres:17
+    container_name: injeuri-db-test
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: injeuri
+    volumes:
+      - injeuri-db-test-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d injeuri"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - injeuri-test
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: injeuri-app-test
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/injeuri?schema=public
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks:
+      - injeuri-test
+    command: sh -c "npm run prisma:migrate:deploy && node .next/standalone/server.js"
+
+volumes:
+  injeuri-db-test-data:
+
+networks:
+  injeuri-test:
+    driver: bridge
