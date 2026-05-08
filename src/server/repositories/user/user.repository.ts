@@ -13,6 +13,14 @@ export type UserUpdateData = Partial<{
   onboarding_completed: boolean;
 }>;
 
+export type AccountRecoveryUser = {
+  id: number;
+  login_id: string | null;
+  birth_hash: string | null;
+  status: string;
+  deleted_at: Date | null;
+};
+
 export async function findUserById(id: number) {
   return prisma.user.findUnique({
     where: { id },
@@ -49,6 +57,19 @@ export async function findUserByStudentNumber(studentNumber: string) {
   });
 }
 
+export async function findUserForAccountRecovery(studentNumber: string): Promise<AccountRecoveryUser | null> {
+  return prisma.user.findFirst({
+    where: { student_number: studentNumber },
+    select: {
+      id: true,
+      login_id: true,
+      birth_hash: true,
+      status: true,
+      deleted_at: true,
+    },
+  });
+}
+
 export async function findUserProfileById(userId: number) {
   return prisma.user.findUnique({
     where: { id: userId },
@@ -74,5 +95,12 @@ export async function updateUser(userId: number, data: UserUpdateData) {
   return prisma.user.update({
     where: { id: userId },
     data: data as Prisma.UserUncheckedUpdateInput,
+  });
+}
+
+export async function updateUserPasswordHash(userId: number, passwordHash: string) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: { password_hash: passwordHash },
   });
 }

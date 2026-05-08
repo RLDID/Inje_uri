@@ -1,13 +1,14 @@
 import { NextRequest } from 'next/server';
 import {
+  attachSessionCookie,
   clearAppAccessCookie,
   clearPreSignupCookie,
-  clearSessionCookie,
   readPreSignupTokenFromRequest,
 } from '@/server/lib/auth';
 import { ApiError, ERROR } from '@/server/lib/errors';
 import { ok, fail } from '@/server/lib/response';
 import { register, type RegisterInput } from '@/server/services/auth/auth.service';
+import { findCanonicalDepartment } from '@/lib/departments';
 
 export const runtime = 'nodejs';
 
@@ -60,7 +61,8 @@ function parseRegisterInput(body: RegisterBody): RegisterInput {
   const password = normalizeString(body.password);
   const nickname = normalizeString(body.nickname);
   const birth = normalizeString(body.birth);
-  const department = normalizeString(body.department);
+  const rawDepartment = normalizeString(body.department);
+  const department = findCanonicalDepartment(rawDepartment);
   const realName = normalizeString(body.realName);
   const email = normalizeString(body.email).toLowerCase();
   const university = normalizeString(body.university);
@@ -68,8 +70,12 @@ function parseRegisterInput(body: RegisterBody): RegisterInput {
   const age = toInteger(body.age);
   const studentYear = toInteger(body.studentYear);
 
-  if (!loginId || !password || !nickname || !birth || !age || !department || !realName || !email || !university || !gender || !studentYear) {
+  if (!loginId || !password || !nickname || !birth || !age || !rawDepartment || !realName || !email || !university || !gender || !studentYear) {
     throw new ApiError(ERROR.VALIDATION_ERROR, '회원가입 필드를 모두 입력해주세요.');
+  }
+
+  if (!department) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '학과는 목록에서 선택해주세요.');
   }
 
   if (loginId.length < 4 || loginId.length > 100) {
@@ -121,9 +127,14 @@ export async function POST(request: NextRequest) {
     }
 
     const result = await register(parseRegisterInput(body), readPreSignupTokenFromRequest(request));
-    const response = ok(result);
+    const response = ok({
+      registered: result.registered,
+      nextPath: result.nextPath,
+      user: result.user,
+      sessionExpiresAt: result.expiresAt.toISOString(),
+    });
 
-    clearSessionCookie(response);
+    attachSessionCookie(response, result.token, result.expiresAt);
     clearAppAccessCookie(response);
     clearPreSignupCookie(response);
     return response;
