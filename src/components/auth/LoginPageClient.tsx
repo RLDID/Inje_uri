@@ -8,6 +8,11 @@ import { APP_NAME } from '@/lib/constants';
 
 interface LoginApiResponse {
   success?: boolean;
+  data?: {
+    user?: {
+      onboardingCompleted?: boolean;
+    };
+  };
   error?: {
     message?: string;
   };
@@ -29,6 +34,17 @@ export function LoginPageClient() {
   const [password, setPassword] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const pushAuthPath = (path: string) => {
+    const next = searchParams.get('next');
+    const query = next && next.startsWith('/') && !next.startsWith('//')
+      ? `?next=${encodeURIComponent(next)}`
+      : '';
+
+    startTransition(() => {
+      router.push(`${path}${query}`);
+    });
+  };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -67,6 +83,14 @@ export function LoginPageClient() {
       if (response.ok && payload.success) {
         showToast('로그인되었습니다.', 'success');
         const nextPath = resolveNextPath(searchParams.get('next'));
+        if (payload.data?.user?.onboardingCompleted === false) {
+          const nextQuery = nextPath ? `&next=${encodeURIComponent(nextPath)}` : '';
+          startTransition(() => {
+            router.replace(`/register?step=categories${nextQuery}`);
+          });
+          return;
+        }
+
         startTransition(() => {
           router.replace(nextPath);
         });
@@ -149,6 +173,40 @@ export function LoginPageClient() {
               로그인
             </Button>
           </form>
+
+          <div className="mt-5 space-y-3 border-t border-[var(--color-border-light)] pt-5">
+            <Button
+              type="button"
+              variant="secondary"
+              fullWidth
+              size="lg"
+              disabled={isSubmitting}
+              onClick={() => pushAuthPath('/register')}
+            >
+              회원가입
+            </Button>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                fullWidth
+                disabled={isSubmitting}
+                onClick={() => router.push('/account-recovery?mode=id')}
+              >
+                아이디 찾기
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                fullWidth
+                disabled={isSubmitting}
+                onClick={() => router.push('/account-recovery?mode=password')}
+              >
+                비밀번호 찾기
+              </Button>
+            </div>
+          </div>
         </Card>
       </main>
     </PageContainer>

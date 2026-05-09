@@ -1,10 +1,10 @@
 import { Suspense } from 'react';
-import { InjeCheckPageClient } from '@/components/auth/InjeCheckPageClient';
+import { LoginPageClient } from '@/components/auth/LoginPageClient';
 
 export default function Home() {
   return (
     <Suspense fallback={null}>
-      <InjeCheckPageClient />
+      <LoginPageClient />
     </Suspense>
   );
 }

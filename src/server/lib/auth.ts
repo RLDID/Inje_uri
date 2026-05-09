@@ -1,8 +1,9 @@
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import type { NextRequest, NextResponse } from 'next/server';
 import type { AuthSession, User } from '@/generated/prisma/client';
 import {
   APP_AUTH_COOKIE_NAME,
+  ACCOUNT_RECOVERY_COOKIE_NAME,
   PRE_SIGNUP_COOKIE_MAX_AGE_SECONDS,
   PRE_SIGNUP_COOKIE_NAME,
   SESSION_COOKIE_NAME,
@@ -24,6 +25,7 @@ import {
 export { SESSION_COOKIE_NAME };
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 export const SESSION_TOUCH_INTERVAL_SECONDS = 60 * 5;
+export const ACCOUNT_RECOVERY_TOKEN_MAX_AGE_SECONDS = 60 * 10;
 
 export const ACTIVE_USER_STATUS = 'active';
 export const SUSPENDED_USER_STATUS = 'banned';
@@ -49,6 +51,10 @@ export interface PreSignupPayload {
   birthHash: string;
 }
 
+export interface AccountRecoveryPayload {
+  userId: number;
+}
+
 export type AuthedHandler<T> = (request: NextRequest, auth: AuthContext) => Promise<T> | T;
 
 function hashValue(value: string): string {
@@ -57,6 +63,30 @@ function hashValue(value: string): string {
 
 function generateToken(): string {
   return randomBytes(32).toString('hex');
+}
+
+function getAccountRecoverySecret(): string {
+  return (
+    process.env.AUTH_SECRET
+    ?? process.env.SESSION_SECRET
+    ?? process.env.DATABASE_URL
+    ?? 'injeuri-account-recovery-development-secret'
+  );
+}
+
+function signAccountRecoveryPayload(payload: string): string {
+  return createHmac('sha256', getAccountRecoverySecret()).update(payload).digest('base64url');
+}
+
+function safeCompare(left: string, right: string): boolean {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  if (leftBuffer.length !== rightBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(leftBuffer, rightBuffer);
 }
 
 export function hashBirth(birth: string): string {
@@ -94,6 +124,10 @@ export function readSessionTokenFromRequest(request: Request): string | null {
 
 export function readPreSignupTokenFromRequest(request: NextRequest): string | null {
   return request.cookies.get(PRE_SIGNUP_COOKIE_NAME)?.value ?? null;
+}
+
+export function readAccountRecoveryTokenFromRequest(request: NextRequest): string | null {
+  return request.cookies.get(ACCOUNT_RECOVERY_COOKIE_NAME)?.value ?? null;
 }
 
 export async function createUserSession(userId: number) {
@@ -169,6 +203,27 @@ export function clearPreSignupCookie(response: NextResponse) {
   });
 }
 
+export function attachAccountRecoveryCookie(response: NextResponse, token: string) {
+  response.cookies.set(ACCOUNT_RECOVERY_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: ACCOUNT_RECOVERY_TOKEN_MAX_AGE_SECONDS,
+  });
+}
+
+export function clearAccountRecoveryCookie(response: NextResponse) {
+  response.cookies.set(ACCOUNT_RECOVERY_COOKIE_NAME, '', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 0,
+    expires: new Date(0),
+  });
+}
+
 export async function issuePreSignupVerification(studentNumber: string, birth: string): Promise<string> {
   const token = generateToken();
   const tokenHash = hashValue(token);
@@ -216,6 +271,51 @@ export async function clearPreSignupVerificationToken(token: string | null) {
 
   const tokenHash = hashValue(token);
   await deletePreSignupVerificationByTokenHash(tokenHash);
+}
+
+export function issueAccountRecoveryToken(userId: number): string {
+  const payload = Buffer.from(JSON.stringify({
+    userId,
+    expiresAt: Date.now() + ACCOUNT_RECOVERY_TOKEN_MAX_AGE_SECONDS * 1000,
+  })).toString('base64url');
+  const signature = signAccountRecoveryPayload(payload);
+
+  return `${payload}.${signature}`;
+}
+
+export function verifyAccountRecoveryToken(token: string | null): AccountRecoveryPayload | null {
+  if (!token) {
+    return null;
+  }
+
+  const [payload, signature] = token.split('.');
+  if (!payload || !signature) {
+    return null;
+  }
+
+  const expectedSignature = signAccountRecoveryPayload(payload);
+  if (!safeCompare(signature, expectedSignature)) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
+      userId?: unknown;
+      expiresAt?: unknown;
+    };
+
+    if (typeof parsed.userId !== 'number' || !Number.isInteger(parsed.userId)) {
+      return null;
+    }
+
+    if (typeof parsed.expiresAt !== 'number' || parsed.expiresAt <= Date.now()) {
+      return null;
+    }
+
+    return { userId: parsed.userId };
+  } catch {
+    return null;
+  }
 }
 
 export function shouldTouchSession(lastSeenAt: Date | null | undefined): boolean {
