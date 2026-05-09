@@ -1,4 +1,4 @@
-import { PrismaClient } from "../src/generated/prisma/client";
+import { Prisma, PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import "dotenv/config";
 import crypto from "crypto";
@@ -390,16 +390,86 @@ const testUserSeeds = [
 // 테스트 유저 키워드 할당
 // ─────────────────────────────────────────────
 const testUserKeywordSeeds = [
-  { email: "test_a@inje.ac.kr", keywords: ["활발함", "운동", "다정함"] },
-  { email: "test_b@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
-  { email: "test_c@inje.ac.kr", keywords: ["차분함", "독서", "배려심"] },
-  { email: "test_d@inje.ac.kr", keywords: ["유머러스", "게임", "표현적"] },
-  { email: "test_e@inje.ac.kr", keywords: ["활발함", "운동", "표현적"] },
-  { email: "test_f@inje.ac.kr", keywords: ["차분함", "요리", "배려심"] },
-  { email: "test_g@inje.ac.kr", keywords: ["진지함", "독서", "다정함"] },
-  { email: "test_h@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
-  { email: "test_i@inje.ac.kr", keywords: ["유머러스", "운동", "표현적"] },
-  { email: "test_j@inje.ac.kr", keywords: ["차분함", "여행", "배려심"] },
+  {
+    email: "test_a@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "active" },
+      { categoryCode: "hobby_kr", keywordCode: "exercise" },
+      { categoryCode: "love_style", keywordCode: "caring" },
+    ],
+  },
+  {
+    email: "test_b@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "active" },
+      { categoryCode: "hobby_kr", keywordCode: "travel" },
+      { categoryCode: "love_style", keywordCode: "caring" },
+    ],
+  },
+  {
+    email: "test_c@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "calm" },
+      { categoryCode: "hobby_kr", keywordCode: "reading" },
+      { categoryCode: "love_style", keywordCode: "considerate" },
+    ],
+  },
+  {
+    email: "test_d@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "humorous" },
+      { categoryCode: "hobby_kr", keywordCode: "gaming" },
+      { categoryCode: "love_style", keywordCode: "expressive" },
+    ],
+  },
+  {
+    email: "test_e@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "active" },
+      { categoryCode: "hobby_kr", keywordCode: "exercise" },
+      { categoryCode: "love_style", keywordCode: "expressive" },
+    ],
+  },
+  {
+    email: "test_f@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "calm" },
+      { categoryCode: "hobby_kr", keywordCode: "cooking" },
+      { categoryCode: "love_style", keywordCode: "considerate" },
+    ],
+  },
+  {
+    email: "test_g@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "serious" },
+      { categoryCode: "hobby_kr", keywordCode: "reading" },
+      { categoryCode: "love_style", keywordCode: "caring" },
+    ],
+  },
+  {
+    email: "test_h@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "active" },
+      { categoryCode: "hobby_kr", keywordCode: "travel" },
+      { categoryCode: "love_style", keywordCode: "caring" },
+    ],
+  },
+  {
+    email: "test_i@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "humorous" },
+      { categoryCode: "hobby_kr", keywordCode: "exercise" },
+      { categoryCode: "love_style", keywordCode: "expressive" },
+    ],
+  },
+  {
+    email: "test_j@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality_kr", keywordCode: "calm" },
+      { categoryCode: "hobby_kr", keywordCode: "travel" },
+      { categoryCode: "love_style", keywordCode: "considerate" },
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────
@@ -436,47 +506,205 @@ function getCategoryKeywordLabel(keyword: string | { code: string; label: string
   return typeof keyword === "string" ? keyword : keyword.label;
 }
 
+type SeedTransaction = Prisma.TransactionClient;
+type KeywordSeedInput = string | { code: string; label: string };
+
+const managedProfileCategoryCodes = new Set([
+  "lifestyle",
+  "drinking",
+  "smoking",
+  "mbti",
+  "personality",
+  "conversation",
+  "interests",
+  "desired_vibe",
+  "date_style",
+  "deal_breakers",
+]);
+
+const legacyProfileKeywordCodeMap: Record<string, Record<string, string>> = {
+  lifestyle: {
+    outdoor: "active",
+    early_bird: "balanced",
+    night_owl: "balanced",
+  },
+  drinking: {
+    frequent: "often",
+    social: "sometimes",
+    occasional: "sometimes",
+  },
+  smoking: {
+    smoker: "yes",
+    outside_only: "yes",
+    occasional: "yes",
+    non_smoker: "no",
+  },
+  personality: {
+    energetic: "passionate",
+    romantic: "affectionate",
+    warm: "positive",
+    thoughtful: "careful",
+    ambitious: "independent",
+  },
+  interests: {
+    books: "reading",
+    games: "gaming",
+  },
+  desired_vibe: {
+    romantic: "serious",
+  },
+  date_style: {
+    good_food: "restaurant",
+    cafe_talk: "cafe",
+    drive: "home",
+  },
+  deal_breakers: {
+    smoking: "smoker",
+    heavy_drinking: "heavy-drinker",
+    late_reply: "slow-replier",
+    ghosting: "no-plans",
+    rude: "too-fast",
+  },
+};
+
+function getCanonicalKeywordCodes(keywords: readonly KeywordSeedInput[]) {
+  return new Set(keywords.map(getCategoryKeywordCode));
+}
+
+async function migrateKeywordSelections(
+  tx: SeedTransaction,
+  legacyKeywordId: number,
+  targetKeyword: { keyword_id: number; category_id: number },
+) {
+  const legacySelections = await tx.userKeywordSelection.findMany({
+    where: { keyword_id: legacyKeywordId },
+    select: { user_id: true },
+  });
+
+  if (legacySelections.length > 0) {
+    await tx.userKeywordSelection.createMany({
+      data: legacySelections.map((selection) => ({
+        user_id: selection.user_id,
+        category_id: targetKeyword.category_id,
+        keyword_id: targetKeyword.keyword_id,
+      })),
+      skipDuplicates: true,
+    });
+
+    await tx.userKeywordSelection.deleteMany({
+      where: { keyword_id: legacyKeywordId },
+    });
+  }
+}
+
+async function mergeLegacyKeyword(
+  tx: SeedTransaction,
+  categoryId: number,
+  legacyCode: string,
+  targetCode: string,
+) {
+  if (legacyCode === targetCode) return;
+
+  const legacyKeyword = await tx.keyword.findUnique({
+    where: {
+      category_id_keyword_code: {
+        category_id: categoryId,
+        keyword_code: legacyCode,
+      },
+    },
+  });
+  if (!legacyKeyword) return;
+
+  const targetKeyword = await tx.keyword.findUnique({
+    where: {
+      category_id_keyword_code: {
+        category_id: categoryId,
+        keyword_code: targetCode,
+      },
+    },
+  });
+  if (!targetKeyword) return;
+
+  await migrateKeywordSelections(tx, legacyKeyword.keyword_id, targetKeyword);
+  await tx.keyword.delete({ where: { keyword_id: legacyKeyword.keyword_id } });
+}
+
+async function cleanupManagedProfileKeywords(
+  tx: SeedTransaction,
+  category: { category_id: number; category_code: string },
+  keywords: readonly KeywordSeedInput[],
+) {
+  if (!managedProfileCategoryCodes.has(category.category_code)) return;
+
+  const canonicalKeywordCodes = getCanonicalKeywordCodes(keywords);
+  const legacyMap = legacyProfileKeywordCodeMap[category.category_code] ?? {};
+
+  for (const [legacyCode, targetCode] of Object.entries(legacyMap)) {
+    if (!canonicalKeywordCodes.has(targetCode)) continue;
+    await mergeLegacyKeyword(tx, category.category_id, legacyCode, targetCode);
+  }
+
+  const obsoleteKeywords = await tx.keyword.findMany({
+    where: {
+      category_id: category.category_id,
+      keyword_code: { notIn: Array.from(canonicalKeywordCodes) },
+    },
+    select: { keyword_id: true },
+  });
+
+  for (const obsoleteKeyword of obsoleteKeywords) {
+    await tx.userKeywordSelection.deleteMany({
+      where: { keyword_id: obsoleteKeyword.keyword_id },
+    });
+    await tx.keyword.delete({ where: { keyword_id: obsoleteKeyword.keyword_id } });
+  }
+}
+
 // ─────────────────────────────────────────────
 // Seed 함수
 // ─────────────────────────────────────────────
 async function seedCategories() {
-  for (const categorySeed of categorySeeds) {
-    const category = await prisma.category.upsert({
-      where: { category_code: categorySeed.category_code },
-      update: {
-        name: categorySeed.name,
-        selection_type: categorySeed.selection_type,
-        max_select_count: categorySeed.max_select_count,
-      },
-      create: {
-        category_code: categorySeed.category_code,
-        name: categorySeed.name,
-        selection_type: categorySeed.selection_type,
-        max_select_count: categorySeed.max_select_count,
-      },
-    });
-
-    for (const [index, keyword] of categorySeed.keywords.entries()) {
-      const keywordCode = getCategoryKeywordCode(keyword);
-      const keywordLabel = getCategoryKeywordLabel(keyword);
-
-      await prisma.keyword.upsert({
-        where: {
-          category_id_keyword_code: {
-            category_id: category.category_id,
-            keyword_code: keywordCode,
-          },
+  await prisma.$transaction(async (tx) => {
+    for (const categorySeed of categorySeeds) {
+      const category = await tx.category.upsert({
+        where: { category_code: categorySeed.category_code },
+        update: {
+          name: categorySeed.name,
+          selection_type: categorySeed.selection_type,
+          max_select_count: categorySeed.max_select_count,
         },
-        update: { label: keywordLabel, sort_order: index + 1 },
         create: {
-          category_id: category.category_id,
-          keyword_code: keywordCode,
-          label: keywordLabel,
-          sort_order: index + 1,
+          category_code: categorySeed.category_code,
+          name: categorySeed.name,
+          selection_type: categorySeed.selection_type,
+          max_select_count: categorySeed.max_select_count,
         },
       });
+
+      for (const [index, keyword] of categorySeed.keywords.entries()) {
+        const keywordCode = getCategoryKeywordCode(keyword);
+        const keywordLabel = getCategoryKeywordLabel(keyword);
+
+        await tx.keyword.upsert({
+          where: {
+            category_id_keyword_code: {
+              category_id: category.category_id,
+              keyword_code: keywordCode,
+            },
+          },
+          update: { label: keywordLabel, sort_order: index + 1 },
+          create: {
+            category_id: category.category_id,
+            keyword_code: keywordCode,
+            label: keywordLabel,
+            sort_order: index + 1,
+          },
+        });
+      }
+
+      await cleanupManagedProfileKeywords(tx, category, categorySeed.keywords);
     }
-  }
+  });
 }
 
 async function seedTestKeywordCategories() {
@@ -589,17 +817,39 @@ async function seedTestFeedAndComment() {
 }
 
 async function seedTestUserKeywords() {
-  const allKeywords = await prisma.keyword.findMany({
-    select: { keyword_id: true, label: true, category_id: true },
+  const categoryCodes = Array.from(
+    new Set(
+      testUserKeywordSeeds.flatMap((seed) =>
+        seed.keywords.map((keyword) => keyword.categoryCode),
+      ),
+    ),
+  );
+  const categories = await prisma.category.findMany({
+    where: { category_code: { in: categoryCodes } },
+    include: { keywords: true },
   });
-  const labelToKeyword = new Map(allKeywords.map((k) => [k.label, k]));
+  const keywordByCategoryAndCode = new Map<
+    string,
+    { keyword_id: number; category_id: number }
+  >();
 
+  for (const category of categories) {
+    for (const keyword of category.keywords) {
+      keywordByCategoryAndCode.set(
+        `${category.category_code}:${keyword.keyword_code}`,
+        keyword,
+      );
+    }
+  }
   for (const seed of testUserKeywordSeeds) {
     const user = await prisma.user.findUnique({ where: { email: seed.email } });
     if (!user) continue;
 
-    for (const label of seed.keywords) {
-      const kw = labelToKeyword.get(label);
+    for (const keywordSeed of seed.keywords) {
+      const kw = keywordByCategoryAndCode.get(
+        `${keywordSeed.categoryCode}:${keywordSeed.keywordCode}`,
+      );
+      const label = `${keywordSeed.categoryCode}/${keywordSeed.keywordCode}`;
       if (!kw) {
         console.warn(`키워드 없음: "${label}"`);
         continue;
