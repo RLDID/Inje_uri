@@ -59,7 +59,7 @@ function toOptionalCode(value: unknown): string | undefined {
   }
 
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : '';
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function groupSelectionsByCategory(

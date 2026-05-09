@@ -567,8 +567,15 @@ const legacyProfileKeywordCodeMap: Record<string, Record<string, string>> = {
   },
 };
 
+const PROFILE_TAXONOMY_CLEANUP_ENV = "PRISMA_SEED_CLEAN_PROFILE_TAXONOMY";
+
 function getCanonicalKeywordCodes(keywords: readonly KeywordSeedInput[]) {
   return new Set(keywords.map(getCategoryKeywordCode));
+}
+
+function shouldCleanupManagedProfileKeywords() {
+  const value = process.env[PROFILE_TAXONOMY_CLEANUP_ENV]?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
 }
 
 async function migrateKeywordSelections(
@@ -638,6 +645,26 @@ async function cleanupManagedProfileKeywords(
 
   const canonicalKeywordCodes = getCanonicalKeywordCodes(keywords);
   const legacyMap = legacyProfileKeywordCodeMap[category.category_code] ?? {};
+
+  if (!shouldCleanupManagedProfileKeywords()) {
+    const obsoleteKeywords = await tx.keyword.findMany({
+      where: {
+        category_id: category.category_id,
+        keyword_code: { notIn: Array.from(canonicalKeywordCodes) },
+      },
+      select: { keyword_code: true },
+    });
+
+    if (obsoleteKeywords.length > 0) {
+      console.warn(
+        `[seed] ${category.category_code}: obsolete profile keywords skipped (${obsoleteKeywords
+          .map((keyword) => keyword.keyword_code)
+          .join(", ")}). Set ${PROFILE_TAXONOMY_CLEANUP_ENV}=1 to migrate/delete them.`,
+      );
+    }
+
+    return;
+  }
 
   for (const [legacyCode, targetCode] of Object.entries(legacyMap)) {
     if (!canonicalKeywordCodes.has(targetCode)) continue;

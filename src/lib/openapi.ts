@@ -1329,14 +1329,25 @@
             keywordSelections: {
               type: "array",
               items: {
-                type: "object",
                 description: "categoryId/keywordIds 또는 categoryCode/keywordCodes 중 한 형식을 사용합니다.",
-                properties: {
-                  categoryId: { type: "integer", example: 1 },
-                  keywordIds: { type: "array", items: { type: "integer" }, example: [1] },
-                  categoryCode: { type: "string", example: "interests" },
-                  keywordCodes: { type: "array", items: { type: "string" }, example: ["music", "photography"] },
-                },
+                oneOf: [
+                  {
+                    type: "object",
+                    required: ["categoryId", "keywordIds"],
+                    properties: {
+                      categoryId: { type: "integer", example: 1 },
+                      keywordIds: { type: "array", items: { type: "integer" }, example: [1] },
+                    },
+                  },
+                  {
+                    type: "object",
+                    required: ["categoryCode", "keywordCodes"],
+                    properties: {
+                      categoryCode: { type: "string", example: "interests" },
+                      keywordCodes: { type: "array", items: { type: "string" }, example: ["music", "photography"] },
+                    },
+                  },
+                ],
               },
             },
           },
