@@ -198,13 +198,39 @@ export async function createDailyRecommendation(
 
     if (recRows.length === 0) {
       const existingRows = await tx.$queryRaw<{ id: number }[]>`
-        SELECT id FROM daily_recommendations
+        SELECT id, selected_candidate_user_id FROM daily_recommendations
         WHERE user_id = ${userId}
           AND recommendation_date = ${today}::date
         LIMIT 1
       `;
       if (!existingRows[0]) throw new Error("추천 생성 실패");
-      return existingRows[0].id;
+
+      const existingRec = existingRows[0];
+
+      if (existingRec.selected_candidate_user_id !== null) {
+        return existingRec.id;
+      }
+
+      await tx.$executeRaw`
+        DELETE FROM daily_recommendation_items
+        WHERE daily_recommendation_id = ${existingRec.id}
+      `;
+
+      await tx.$executeRaw`
+        UPDATE daily_recommendations
+        SET generated_at = NOW()
+        WHERE id = ${existingRec.id}
+      `;
+
+      for (let i = 0; i < candidateIds.length; i++) {
+        await tx.$executeRaw`
+          INSERT INTO daily_recommendation_items
+            (daily_recommendation_id, candidate_user_id, rank_order)
+          VALUES (${existingRec.id}, ${candidateIds[i]}, ${i + 1})
+        `;
+      }
+
+      return existingRec.id;
     }
 
     const recId = recRows[0].id;

@@ -86,44 +86,89 @@ const categorySeeds = [
 ];
 
 // ─────────────────────────────────────────────
-// 테스트용 한국어 키워드 카테고리
+// 기존 테스트용 한국어 키워드 카테고리
+// ─────────────────────────────────────────────
+// const testKeywordCategorySeeds = [
+//   {
+//     category_code: "personality_kr",
+//     name: "성격",
+//     selection_type: "multi",
+//     max_select_count: 3,
+//     keywords: [
+//       { code: "active",    label: "활발함" },
+//       { code: "calm",      label: "차분함" },
+//       { code: "humorous",  label: "유머러스" },
+//       { code: "serious",   label: "진지함" },
+//     ],
+//   },
+//   {
+//     category_code: "hobby_kr",
+//     name: "취미",
+//     selection_type: "multi",
+//     max_select_count: 5,
+//     keywords: [
+//       { code: "exercise", label: "운동" },
+//       { code: "reading",  label: "독서" },
+//       { code: "gaming",   label: "게임" },
+//       { code: "cooking",  label: "요리" },
+//       { code: "travel",   label: "여행" },
+//     ],
+//   },
+//   {
+//     category_code: "love_style",
+//     name: "연애스타일",
+//     selection_type: "multi",
+//     max_select_count: 3,
+//     keywords: [
+//       { code: "caring",       label: "다정함" },
+//       { code: "independent",  label: "독립적" },
+//       { code: "expressive",   label: "표현적" },
+//       { code: "considerate",  label: "배려심" },
+//     ],
+//   },
+// ];
+
+// ─────────────────────────────────────────────
+// 테스트용 추천 매칭 키워드 카테고리
 // ─────────────────────────────────────────────
 const testKeywordCategorySeeds = [
   {
-    category_code: "personality_kr",
-    name: "성격",
-    selection_type: "multi",
-    max_select_count: 3,
+    category_code: "desired_vibe",
+    name: "Desired Vibe",
+    selection_type: "single",
+    max_select_count: 1,
     keywords: [
-      { code: "active",    label: "활발함" },
-      { code: "calm",      label: "차분함" },
-      { code: "humorous",  label: "유머러스" },
-      { code: "serious",   label: "진지함" },
+      { code: "comfortable", label: "Comfortable" },
+      { code: "exciting", label: "Exciting" },
+      { code: "serious", label: "Serious" },
+      { code: "casual", label: "Casual" },
+      { code: "romantic", label: "Romantic" },
     ],
   },
   {
-    category_code: "hobby_kr",
-    name: "취미",
-    selection_type: "multi",
-    max_select_count: 5,
+    category_code: "date_style",
+    name: "Date Style",
+    selection_type: "single",
+    max_select_count: 1,
     keywords: [
-      { code: "exercise", label: "운동" },
-      { code: "reading",  label: "독서" },
-      { code: "gaming",   label: "게임" },
-      { code: "cooking",  label: "요리" },
-      { code: "travel",   label: "여행" },
+      { code: "cafe_talk", label: "Cafe Talk" },
+      { code: "good_food", label: "Good Food" },
+      { code: "walk", label: "Walk" },
+      { code: "activity", label: "Activity" },
+      { code: "drive", label: "Drive" },
     ],
   },
   {
-    category_code: "love_style",
-    name: "연애스타일",
+    category_code: "deal_breakers",
+    name: "Deal Breakers",
     selection_type: "multi",
     max_select_count: 3,
     keywords: [
-      { code: "caring",       label: "다정함" },
-      { code: "independent",  label: "독립적" },
-      { code: "expressive",   label: "표현적" },
-      { code: "considerate",  label: "배려심" },
+      { code: "rude", label: "Rude" },
+      { code: "smoking", label: "Smoking" },
+      { code: "heavy_drinking", label: "Heavy Drinking" },
+      { code: "ghosting", label: "Ghosting" },
+      { code: "late_reply", label: "Late Reply" },
     ],
   },
 ];
@@ -318,19 +363,35 @@ const testUserSeeds = [
 ];
 
 // ─────────────────────────────────────────────
-// 테스트 유저 키워드 할당
+// 기존 테스트 유저 키워드 할당
+// ─────────────────────────────────────────────
+// const testUserKeywordSeeds = [
+//   { email: "test_a@inje.ac.kr", keywords: ["활발함", "운동", "다정함"] },
+//   { email: "test_b@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
+//   { email: "test_c@inje.ac.kr", keywords: ["차분함", "독서", "배려심"] },
+//   { email: "test_d@inje.ac.kr", keywords: ["유머러스", "게임", "표현적"] },
+//   { email: "test_e@inje.ac.kr", keywords: ["활발함", "운동", "표현적"] },
+//   { email: "test_f@inje.ac.kr", keywords: ["차분함", "요리", "배려심"] },
+//   { email: "test_g@inje.ac.kr", keywords: ["진지함", "독서", "다정함"] },
+//   { email: "test_h@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
+//   { email: "test_i@inje.ac.kr", keywords: ["유머러스", "운동", "표현적"] },
+//   { email: "test_j@inje.ac.kr", keywords: ["차분함", "여행", "배려심"] },
+// ];
+
+// ─────────────────────────────────────────────
+// 테스트 유저 키워드 할당 (추천 로직 기준)
 // ─────────────────────────────────────────────
 const testUserKeywordSeeds = [
-  { email: "test_a@inje.ac.kr", keywords: ["활발함", "운동", "다정함"] },
-  { email: "test_b@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
-  { email: "test_c@inje.ac.kr", keywords: ["차분함", "독서", "배려심"] },
-  { email: "test_d@inje.ac.kr", keywords: ["유머러스", "게임", "표현적"] },
-  { email: "test_e@inje.ac.kr", keywords: ["활발함", "운동", "표현적"] },
-  { email: "test_f@inje.ac.kr", keywords: ["차분함", "요리", "배려심"] },
-  { email: "test_g@inje.ac.kr", keywords: ["진지함", "독서", "다정함"] },
-  { email: "test_h@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
-  { email: "test_i@inje.ac.kr", keywords: ["유머러스", "운동", "표현적"] },
-  { email: "test_j@inje.ac.kr", keywords: ["차분함", "여행", "배려심"] },
+  { email: "test_a@inje.ac.kr", keywords: ["Romantic", "Walk", "Smoking"] },
+  { email: "test_b@inje.ac.kr", keywords: ["Romantic", "Walk", "Smoking"] },
+  { email: "test_c@inje.ac.kr", keywords: ["Comfortable", "Cafe Talk"] },
+  { email: "test_d@inje.ac.kr", keywords: ["Exciting", "Activity"] },
+  { email: "test_e@inje.ac.kr", keywords: ["Serious", "Drive"] },
+  { email: "test_f@inje.ac.kr", keywords: ["Casual", "Good Food"] },
+  { email: "test_g@inje.ac.kr", keywords: ["Comfortable", "Rude"] },
+  { email: "test_h@inje.ac.kr", keywords: ["Exciting", "Late Reply"] },
+  { email: "test_i@inje.ac.kr", keywords: ["Serious", "Ghosting"] },
+  { email: "test_j@inje.ac.kr", keywords: ["Casual", "Heavy Drinking"] },
 ];
 
 // ─────────────────────────────────────────────

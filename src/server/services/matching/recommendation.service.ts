@@ -280,12 +280,26 @@ export async function generateRecommendationsForUser(
   `;
   const excludeByDismiss = new Set(dismissRows.map((r) => r.dismissed_user_id));
 
-  // 이상형 키워드 ID 목록 조회 (정렬 1순위 기준)
-  const userKeywordRows = await prisma.$queryRaw<{ keyword_id: number }[]>`
-    SELECT keyword_id FROM user_keyword_selections WHERE user_id = ${userId}
+  // // 이상형 키워드 ID 목록 조회 (정렬 1순위 기준)
+  // const userKeywordRows = await prisma.$queryRaw<{ keyword_id: number }[]>`
+  //   SELECT keyword_id FROM user_keyword_selections WHERE user_id = ${userId}
+  // `;
+  // [수정 포인트 1] 키워드 분리 추출 (나의 이상형 vs 상대의 정보 매핑용)
+  // 카테고리 코드를 기준으로 이상형 조건 키워드만 필터링합니다.
+ 
+  const idealKeywordRows = await prisma.$queryRaw<{ keyword_id: number }[]>`
+    SELECT uks.keyword_id 
+    FROM user_keyword_selections uks
+    JOIN categories c ON uks.category_id = c.category_id
+    WHERE uks.user_id = ${userId}
+      AND c.category_code IN ('desired_vibe', 'date_style', 'deal_breakers') -- 이상형 관련 카테고리
   `;
-  const userKeywordIds = userKeywordRows.map((r) => r.keyword_id);
-  const safeKeywordIds = userKeywordIds.length > 0 ? userKeywordIds : [-1];
+  
+  // const userKeywordIds = userKeywordRows.map((r) => r.keyword_id);
+  // const safeKeywordIds = userKeywordIds.length > 0 ? userKeywordIds : [-1];
+
+  const idealKeywordIds = idealKeywordRows.map((r) => r.keyword_id);
+  const safeIdealIds = idealKeywordIds.length > 0 ? idealKeywordIds : [-1];
 
   // 추천 조건 완화 단계별 시도
   const fallbackSteps = [
@@ -312,6 +326,44 @@ export async function generateRecommendationsForUser(
       ...recentIds,
     ]);
 
+    // const activeUsers = await prisma.$queryRaw<{
+    //   id: number;
+    //   gender: string;
+    //   department: string;
+    //   student_year: number;
+    //   age: number | null;
+    //   keyword_match_count: bigint;
+    //   keyword_count: bigint;
+    //   image_count: bigint;
+    //   has_bio: boolean;
+    //   created_at: Date;
+    // }[]>
+    // //COUNT(DISTINCT CASE WHEN uks.keyword_id IN (${Prisma.join(safeKeywordIds)}) THEN uks.id END) AS keyword_match_count,
+    // //여기서 `safeKeywordIds`는 **나(유저 B)가 선택한 모든 키워드**입니다. 여기에는 나의 성격도 있고, 내 이상형 조건도 섞여 있습니다. 이 쿼리는 상대방(유저 A)이 이 ID 중 하나라도 가지고 있으면 점수를 주기 때문에, 결국 **"나랑 똑같은 키워드를 고른 사람"**을 찾게 됩니다.
+    // `
+    //   SELECT
+    //     u.id,
+    //     u.gender,
+    //     u.department,
+    //     u.student_year,
+    //     u.age,
+    //     u.created_at,
+    //     COUNT(DISTINCT uks.id) AS keyword_count,
+    //     COUNT(DISTINCT upi.id) AS image_count,
+    //     (u.bio IS NOT NULL AND u.bio != '') AS has_bio
+    //   FROM users u
+    //   LEFT JOIN user_keyword_selections uks ON uks.user_id = u.id
+    //   LEFT JOIN user_profile_images upi ON upi.user_id = u.id
+    //   WHERE u.status = 'active'
+    //     AND u.onboarding_completed = true
+    //     AND u.gender != ${user.gender}
+    //     AND u.id NOT IN (${Prisma.join(excludeIds.size > 0 ? [...excludeIds] : [-1])})
+    //   GROUP BY u.id
+    // `;
+    
+    // [수정 포인트 2] SQL 쿼리 수정
+    // 상대방(u)의 키워드 중 '본인 정보'에 해당하는 카테고리(lifestyle, personality 등)가 
+    // 나의 '이상형 키워드(safeIdealIds)'와 얼마나 일치하는지 계산합니다.
     const activeUsers = await prisma.$queryRaw<{
       id: number;
       gender: string;
@@ -331,7 +383,8 @@ export async function generateRecommendationsForUser(
         u.student_year,
         u.age,
         u.created_at,
-        COUNT(DISTINCT CASE WHEN uks.keyword_id IN (${Prisma.join(safeKeywordIds)}) THEN uks.id END) AS keyword_match_count,
+        -- 나의 이상형 ID 목록이 상대방의 키워드 선택지에 포함되어 있는지 확인
+        COUNT(DISTINCT CASE WHEN uks.keyword_id IN (${Prisma.join(safeIdealIds)}) THEN uks.id END) AS keyword_match_count,
         COUNT(DISTINCT uks.id) AS keyword_count,
         COUNT(DISTINCT upi.id) AS image_count,
         (u.bio IS NOT NULL AND u.bio != '') AS has_bio
