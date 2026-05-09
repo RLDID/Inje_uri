@@ -193,6 +193,10 @@ function MyPageContent() {
     );
   }
 
+  const handleLogout = () => {
+    showToast('로그아웃 기능은 준비 중입니다.', 'info');
+  };
+
   const imageSrc = imgError ? PLACEHOLDER_PROFILE_IMAGE : (currentUser.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE);
   const visibleIdealKeywords = idealKeywords.slice(0, visibleIdealKeywordCount);
   const hiddenIdealKeywordCount = Math.max(idealKeywords.length - visibleIdealKeywords.length, 0);
@@ -376,6 +380,13 @@ function MyPageContent() {
         </div>
 
         <div className="pb-6 text-center">
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="mx-auto mb-5 inline-flex h-11 items-center justify-center rounded-full bg-[var(--color-surface)] px-6 text-sm font-semibold text-[var(--color-text-secondary)] shadow-[0_3px_10px_rgba(34,34,34,0.06)] transition active:scale-[0.98]"
+          >
+            로그아웃
+          </button>
           <p className="text-xs text-[var(--color-text-tertiary)]">인제우리 v0.3.0</p>
           <div className="mt-3 flex justify-center gap-4 text-xs text-[var(--color-text-tertiary)]">
             <button className="transition-colors hover:text-[var(--color-text-secondary)]">이용약관</button>
