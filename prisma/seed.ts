@@ -26,62 +26,131 @@ const categorySeeds = [
   },
   {
     category_code: "lifestyle",
-    name: "Lifestyle",
+    name: "라이프스타일",
     selection_type: "single",
     max_select_count: 1,
-    keywords: ["Homebody", "Outdoor", "Early Bird", "Night Owl"],
+    keywords: [
+      { code: "active", label: "활동적인 편이에요" },
+      { code: "homebody", label: "집에서 쉬는 걸 좋아해요" },
+      { code: "balanced", label: "밖과 집이 적당히 좋아요" },
+    ],
   },
   {
     category_code: "drinking",
-    name: "Drinking",
+    name: "음주",
     selection_type: "single",
     max_select_count: 1,
-    keywords: ["Never", "Social", "Occasional", "Frequent"],
+    keywords: [
+      { code: "often", label: "술자리를 좋아해요" },
+      { code: "sometimes", label: "가볍게 마셔요" },
+      { code: "never", label: "술은 거의 마시지 않아요" },
+    ],
   },
   {
     category_code: "smoking",
-    name: "Smoking",
+    name: "흡연",
     selection_type: "single",
     max_select_count: 1,
-    keywords: ["Non Smoker", "Outside Only", "Occasional", "Smoker"],
+    keywords: [
+      { code: "yes", label: "흡연해요" },
+      { code: "no", label: "비흡연이에요" },
+    ],
   },
   {
     category_code: "personality",
-    name: "Personality",
+    name: "성격 키워드",
     selection_type: "multi",
-    max_select_count: 3,
+    max_select_count: 5,
     keywords: [
-      "Warm", "Calm", "Humorous", "Energetic",
-      "Honest", "Thoughtful", "Ambitious", "Romantic",
+      { code: "humorous", label: "유머러스해요" },
+      { code: "calm", label: "차분한 편이에요" },
+      { code: "passionate", label: "열정적인 편이에요" },
+      { code: "affectionate", label: "다정한 편이에요" },
+      { code: "honest", label: "솔직한 편이에요" },
+      { code: "positive", label: "긍정적인 편이에요" },
+      { code: "careful", label: "신중한 편이에요" },
+      { code: "social", label: "사람 만나는 걸 좋아해요" },
+      { code: "independent", label: "혼자만의 시간도 중요해요" },
+      { code: "emotional", label: "감수성이 풍부해요" },
+      { code: "rational", label: "이성적으로 생각해요" },
+      { code: "considerate", label: "배려심이 있어요" },
+    ],
+  },
+  {
+    category_code: "conversation",
+    name: "대화 스타일",
+    selection_type: "single",
+    max_select_count: 1,
+    keywords: [
+      { code: "talkative", label: "대화가 자연스럽게 이어져요" },
+      { code: "listener", label: "잘 들어주는 편이에요" },
+      { code: "depends", label: "상황에 따라 달라요" },
     ],
   },
   {
     category_code: "interests",
-    name: "Interests",
+    name: "관심사",
     selection_type: "multi",
-    max_select_count: 5,
-    keywords: ["Movies", "Music", "Cafe", "Travel", "Exercise", "Games", "Books", "Food"],
+    max_select_count: 7,
+    keywords: [
+      { code: "exercise", label: "운동" },
+      { code: "music", label: "음악" },
+      { code: "movies", label: "영화/드라마" },
+      { code: "reading", label: "독서" },
+      { code: "travel", label: "여행" },
+      { code: "gaming", label: "게임" },
+      { code: "food", label: "맛집 탐방" },
+      { code: "cafe", label: "카페" },
+      { code: "photography", label: "사진" },
+      { code: "cooking", label: "요리" },
+      { code: "pets", label: "반려동물" },
+      { code: "selfdev", label: "자기계발" },
+      { code: "fashion", label: "패션" },
+      { code: "art", label: "전시/예술" },
+    ],
   },
   {
     category_code: "desired_vibe",
-    name: "Desired Vibe",
-    selection_type: "single",
-    max_select_count: 1,
-    keywords: ["Comfortable", "Exciting", "Serious", "Casual", "Romantic"],
+    name: "원하는 만남 분위기",
+    selection_type: "multi",
+    max_select_count: 3,
+    keywords: [
+      { code: "comfortable", label: "편안한 분위기" },
+      { code: "exciting", label: "설레는 분위기" },
+      { code: "intellectual", label: "대화가 잘 통하는 분위기" },
+      { code: "funny", label: "웃음이 많은 분위기" },
+      { code: "serious", label: "진지한 만남도 괜찮아요" },
+      { code: "casual", label: "가볍게 알아가고 싶어요" },
+    ],
   },
   {
     category_code: "date_style",
-    name: "Date Style",
+    name: "선호하는 데이트",
     selection_type: "single",
     max_select_count: 1,
-    keywords: ["Cafe Talk", "Good Food", "Walk", "Activity", "Drive"],
+    keywords: [
+      { code: "restaurant", label: "맛집 데이트" },
+      { code: "cafe", label: "카페 데이트" },
+      { code: "movie", label: "영화/공연 데이트" },
+      { code: "walk", label: "산책 데이트" },
+      { code: "activity", label: "액티비티 데이트" },
+      { code: "home", label: "집 근처 가벼운 데이트" },
+      { code: "concert", label: "콘서트 데이트" },
+      { code: "bookstore", label: "서점 데이트" },
+    ],
   },
   {
     category_code: "deal_breakers",
-    name: "Deal Breakers",
+    name: "피하고 싶은 조건",
     selection_type: "multi",
     max_select_count: 3,
-    keywords: ["Rude", "Smoking", "Heavy Drinking", "Ghosting", "Late Reply"],
+    keywords: [
+      { code: "smoker", label: "흡연은 피하고 싶어요" },
+      { code: "heavy-drinker", label: "과한 음주는 부담돼요" },
+      { code: "slow-replier", label: "답장이 너무 느리면 아쉬워요" },
+      { code: "no-plans", label: "약속을 자주 미루면 아쉬워요" },
+      { code: "too-fast", label: "너무 빠른 진도는 부담돼요" },
+    ],
   },
 ];
 
@@ -359,6 +428,14 @@ function toKeywordCode(label: string) {
     .replace(/^_+|_+$/g, "");
 }
 
+function getCategoryKeywordCode(keyword: string | { code: string; label: string }) {
+  return typeof keyword === "string" ? toKeywordCode(keyword) : keyword.code;
+}
+
+function getCategoryKeywordLabel(keyword: string | { code: string; label: string }) {
+  return typeof keyword === "string" ? keyword : keyword.label;
+}
+
 // ─────────────────────────────────────────────
 // Seed 함수
 // ─────────────────────────────────────────────
@@ -379,19 +456,22 @@ async function seedCategories() {
       },
     });
 
-    for (const [index, label] of categorySeed.keywords.entries()) {
+    for (const [index, keyword] of categorySeed.keywords.entries()) {
+      const keywordCode = getCategoryKeywordCode(keyword);
+      const keywordLabel = getCategoryKeywordLabel(keyword);
+
       await prisma.keyword.upsert({
         where: {
           category_id_keyword_code: {
             category_id: category.category_id,
-            keyword_code: toKeywordCode(label),
+            keyword_code: keywordCode,
           },
         },
-        update: { label, sort_order: index + 1 },
+        update: { label: keywordLabel, sort_order: index + 1 },
         create: {
           category_id: category.category_id,
-          keyword_code: toKeywordCode(label),
-          label,
+          keyword_code: keywordCode,
+          label: keywordLabel,
           sort_order: index + 1,
         },
       });

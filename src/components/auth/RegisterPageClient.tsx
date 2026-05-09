@@ -8,6 +8,7 @@ import { KeywordSelector, ProfileSection } from '@/components/profile';
 import { Button, Card, useToast } from '@/components/ui';
 import { APP_NAME } from '@/lib/constants';
 import { findCanonicalDepartment, getDepartmentSuggestions } from '@/lib/departments';
+import { buildKeywordCodeSelections } from '@/lib/profile-keyword-selections';
 import { PROFILE_CATEGORIES } from '@/lib/types';
 
 type RegisterStep = 'verify' | 'profile' | 'categories';
@@ -30,29 +31,11 @@ interface RegisterApiResponse {
   };
 }
 
-interface ProfileTaxonomyResponse {
-  success?: boolean;
-  data?: {
-    categories?: TaxonomyCategory[];
-  };
-}
-
 interface SavePreferencesResponse {
   success?: boolean;
   error?: {
     message?: string;
   };
-}
-
-interface TaxonomyCategory {
-  id: number;
-  code: string;
-  selectionType: string;
-  maxSelectCount: number;
-  keywords: Array<{
-    id: number;
-    code: string;
-  }>;
 }
 
 interface RegisterFormState {
@@ -81,85 +64,6 @@ const INITIAL_FORM_STATE: RegisterFormState = {
   realName: '',
   email: '',
   university: '인제대학교',
-};
-
-const PROFILE_TO_TAXONOMY_CODE: Record<string, string> = {
-  lifestyle: 'lifestyle',
-  drinking: 'drinking',
-  smoking: 'smoking',
-  mbti: 'mbti',
-  personality: 'personality',
-  interests: 'interests',
-  vibe: 'desired_vibe',
-  dateStyle: 'date_style',
-  dealBreakers: 'deal_breakers',
-};
-
-const OPTION_TO_KEYWORD_CODE: Record<string, Record<string, string>> = {
-  lifestyle: {
-    active: 'outdoor',
-    homebody: 'homebody',
-    balanced: 'outdoor',
-  },
-  drinking: {
-    often: 'frequent',
-    sometimes: 'social',
-    never: 'never',
-  },
-  smoking: {
-    yes: 'smoker',
-    no: 'non_smoker',
-  },
-  personality: {
-    humorous: 'humorous',
-    calm: 'calm',
-    passionate: 'energetic',
-    affectionate: 'romantic',
-    honest: 'honest',
-    positive: 'warm',
-    careful: 'thoughtful',
-    social: 'energetic',
-    independent: 'ambitious',
-    emotional: 'warm',
-    rational: 'thoughtful',
-    considerate: 'thoughtful',
-  },
-  interests: {
-    exercise: 'exercise',
-    music: 'music',
-    movies: 'movies',
-    reading: 'books',
-    travel: 'travel',
-    gaming: 'games',
-    food: 'food',
-    cafe: 'cafe',
-    cooking: 'food',
-  },
-  vibe: {
-    comfortable: 'comfortable',
-    exciting: 'exciting',
-    intellectual: 'serious',
-    funny: 'exciting',
-    serious: 'serious',
-    casual: 'casual',
-  },
-  dateStyle: {
-    restaurant: 'good_food',
-    cafe: 'cafe_talk',
-    movie: 'activity',
-    walk: 'walk',
-    activity: 'activity',
-    home: 'drive',
-    concert: 'activity',
-    bookstore: 'walk',
-  },
-  dealBreakers: {
-    smoker: 'smoking',
-    'heavy-drinker': 'heavy_drinking',
-    'slow-replier': 'late_reply',
-    'no-plans': 'ghosting',
-    'too-fast': 'rude',
-  },
 };
 
 const aboutMeCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'aboutMe');
@@ -193,46 +97,6 @@ function toSelectionArray(value: string | string[] | undefined): string[] {
   return value ? [value] : [];
 }
 
-function toKeywordCode(categoryId: string, optionId: string): string {
-  if (categoryId === 'mbti') {
-    return optionId.toLowerCase();
-  }
-
-  return OPTION_TO_KEYWORD_CODE[categoryId]?.[optionId] ?? '';
-}
-
-function buildKeywordSelections(
-  taxonomyCategories: TaxonomyCategory[],
-  selectedPreferences: Record<string, string | string[]>,
-) {
-  const taxonomyByCode = new Map(taxonomyCategories.map((category) => [category.code, category]));
-
-  return PROFILE_CATEGORIES.flatMap((profileCategory) => {
-    const taxonomyCode = PROFILE_TO_TAXONOMY_CODE[profileCategory.id];
-    const taxonomyCategory = taxonomyCode ? taxonomyByCode.get(taxonomyCode) : undefined;
-
-    if (!taxonomyCategory) {
-      return [];
-    }
-
-    const keywordByCode = new Map(taxonomyCategory.keywords.map((keyword) => [keyword.code, keyword.id]));
-    const selectedOptionIds = toSelectionArray(selectedPreferences[profileCategory.id]);
-    const keywordIds = selectedOptionIds
-      .map((optionId) => keywordByCode.get(toKeywordCode(profileCategory.id, optionId)))
-      .filter((keywordId): keywordId is number => typeof keywordId === 'number')
-      .slice(0, taxonomyCategory.maxSelectCount);
-
-    if (keywordIds.length === 0) {
-      return [];
-    }
-
-    return [{
-      categoryId: taxonomyCategory.id,
-      keywordIds: [...new Set(keywordIds)],
-    }];
-  });
-}
-
 export function RegisterPageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -242,53 +106,16 @@ export function RegisterPageClient() {
   const [studentNumber, setStudentNumber] = useState('');
   const [verifyBirth, setVerifyBirth] = useState('');
   const [form, setForm] = useState<RegisterFormState>(INITIAL_FORM_STATE);
-  const [taxonomyCategories, setTaxonomyCategories] = useState<TaxonomyCategory[]>([]);
   const [selectedPreferences, setSelectedPreferences] = useState<Record<string, string | string[]>>({});
   const [errorMessage, setErrorMessage] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(false);
-  const [hasRequestedTaxonomy, setHasRequestedTaxonomy] = useState(false);
   const [isSavingPreferences, setIsSavingPreferences] = useState(false);
   const [isDepartmentListOpen, setIsDepartmentListOpen] = useState(false);
 
   useEffect(() => {
     setStep(resolveInitialStep(searchParams.get('step')));
   }, [searchParams]);
-
-  useEffect(() => {
-    if (step !== 'categories' || taxonomyCategories.length > 0 || isLoadingTaxonomy || hasRequestedTaxonomy) {
-      return;
-    }
-
-    let isActive = true;
-    setHasRequestedTaxonomy(true);
-    setIsLoadingTaxonomy(true);
-
-    fetch('/api/profile-taxonomy')
-      .then(async (response) => {
-        let payload: ProfileTaxonomyResponse = {};
-        try {
-          payload = await response.json() as ProfileTaxonomyResponse;
-        } catch {
-          payload = {};
-        }
-
-        if (response.ok && payload.success && payload.data?.categories && isActive) {
-          setTaxonomyCategories(payload.data.categories);
-        }
-      })
-      .catch(() => undefined)
-      .finally(() => {
-        if (isActive) {
-          setIsLoadingTaxonomy(false);
-        }
-      });
-
-    return () => {
-      isActive = false;
-    };
-  }, [hasRequestedTaxonomy, isLoadingTaxonomy, step, taxonomyCategories.length]);
 
   const isBusy = isVerifying || isSubmitting || isSavingPreferences;
   const departmentSuggestions = getDepartmentSuggestions(form.department);
@@ -434,7 +261,7 @@ export function RegisterPageClient() {
     setErrorMessage('');
 
     try {
-      const keywordSelections = buildKeywordSelections(taxonomyCategories, selectedPreferences);
+      const keywordSelections = buildKeywordCodeSelections(selectedPreferences);
       const response = await fetch('/api/users/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -745,12 +572,6 @@ export function RegisterPageClient() {
 
           {step === 'categories' && (
             <form className="mt-6 space-y-6" onSubmit={handlePreferenceSubmit}>
-              {isLoadingTaxonomy && (
-                <p className="rounded-xl bg-[var(--color-surface-secondary)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
-                  저장 연결을 준비하는 중입니다. 선택은 바로 진행할 수 있습니다.
-                </p>
-              )}
-
               <ProfileSection title="내 성향">
                 {aboutMeCategories.map((category) => (
                   <KeywordSelector

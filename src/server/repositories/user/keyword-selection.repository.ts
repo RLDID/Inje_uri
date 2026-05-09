@@ -18,6 +18,13 @@ export async function findCategoriesWithKeywordsByIds(categoryIds: number[]) {
   });
 }
 
+export async function findCategoriesWithKeywordsByCodes(categoryCodes: string[]) {
+  return prisma.category.findMany({
+    where: { category_code: { in: categoryCodes } },
+    include: { keywords: true },
+  });
+}
+
 export async function replaceUserKeywordSelections(
   userId: number,
   rows: Array<{

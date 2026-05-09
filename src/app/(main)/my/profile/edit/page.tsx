@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { PageContainer, PageHeader, PageContent } from '@/components/layout';
@@ -10,6 +10,27 @@ import { PROFILE_CATEGORIES } from '@/lib/types';
 import { currentUser } from '@/lib/data';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
+import {
+  buildKeywordCodeSelections,
+  keywordSelectionsToPreferenceState,
+  mergeKeywordCodeSelections,
+  type UserKeywordSelectionGroup,
+} from '@/lib/profile-keyword-selections';
+
+interface CurrentUserResponse {
+  success?: boolean;
+  data?: {
+    user?: {
+      bio?: string | null;
+    };
+    keywordSelections?: UserKeywordSelectionGroup[];
+  };
+  error?: {
+    message?: string;
+  };
+}
+
+type SaveProfileResponse = CurrentUserResponse;
 
 function EditProfilePageContent() {
   const { showToast } = useToast();
@@ -29,6 +50,33 @@ function EditProfilePageContent() {
     interests: [...currentUser.interests],
     bio: currentUser.bio || '',
   });
+  const [existingKeywordSelections, setExistingKeywordSelections] = useState<UserKeywordSelectionGroup[] | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    fetch('/api/users/me')
+      .then(async (response) => {
+        const payload = await response.json() as CurrentUserResponse;
+        if (!response.ok || !payload.success || !payload.data || !isActive) {
+          return;
+        }
+
+        const preferences = keywordSelectionsToPreferenceState(payload.data.keywordSelections);
+        setExistingKeywordSelections(payload.data.keywordSelections ?? []);
+        setProfile((prevProfile) => ({
+          ...prevProfile,
+          ...preferences,
+          bio: payload.data?.user?.bio ?? prevProfile.bio,
+        }));
+      })
+      .catch(() => undefined);
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const handleCategoryChange = (categoryId: string, value: string | string[]) => {
     setProfile((prevProfile) => ({ ...prevProfile, [categoryId]: value }));
@@ -56,14 +104,46 @@ function EditProfilePageContent() {
 
   const hasMinPhotos = photos.length >= 1;
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!hasMinPhotos) {
       showToast('프로필 사진은 1장 이상 등록해주세요.', 'error');
       return;
     }
 
-    showToast('프로필 소개를 업데이트했어요.', 'success');
-    goBack();
+    if (!existingKeywordSelections) {
+      showToast('프로필 정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.', 'error');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const changedSelections = buildKeywordCodeSelections(profile, aboutMeCategories, { includeEmpty: true });
+      const response = await fetch('/api/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: {
+            bio: profile.bio,
+          },
+          keywordSelections: mergeKeywordCodeSelections(existingKeywordSelections, changedSelections),
+        }),
+      });
+      const payload = await response.json() as SaveProfileResponse;
+
+      if (!response.ok || !payload.success) {
+        showToast(payload.error?.message ?? '프로필 저장에 실패했습니다.', 'error');
+        return;
+      }
+
+      setExistingKeywordSelections(payload.data?.keywordSelections ?? existingKeywordSelections);
+      showToast('프로필 소개를 업데이트했어요.', 'success');
+      goBack();
+    } catch {
+      showToast('프로필 저장 중 문제가 발생했습니다.', 'error');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const aboutMeCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'aboutMe');
@@ -186,7 +266,7 @@ function EditProfilePageContent() {
         <button
           type="button"
           onClick={handleSave}
-          disabled={!hasMinPhotos}
+          disabled={!hasMinPhotos || isSaving}
           className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
           aria-label="저장하기"
         >
