@@ -31,13 +31,12 @@ function SettingsPageContent() {
     <PageContainer>
       <PageHeader
         title="추천 설정"
-        subtitle="추천 알고리즘에 반영되는 조건만 이 화면에서 따로 관리해요."
         showBack
         onBack={goBack}
       />
 
       <PageContent className="app-section-stack page-with-sticky-cta">
-        <PageSection className="notice-card shadow-none">
+        <PageSection className="notice-card !border-0 shadow-[0_4px_14px_rgba(34,34,34,0.055)]">
           <SectionHeading
             eyebrow="Notice"
             title="변경한 설정은 다음 추천부터 반영돼요"
@@ -45,12 +44,8 @@ function SettingsPageContent() {
           />
         </PageSection>
 
-        <PageSection>
-          <SectionHeading
-            title="추천 기준 조정"
-            description="선호 나이대와 같은 학과·학번 관련 조건은 이곳에서만 관리해요."
-          />
-          <div className="mt-5">
+        <PageSection className="!border-0 !p-0">
+          <div>
             <RecommendationSettingsFields settings={settings} onChange={handleChange} />
           </div>
         </PageSection>

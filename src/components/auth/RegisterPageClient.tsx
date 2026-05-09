@@ -161,11 +161,11 @@ export function RegisterPageClient() {
   };
 
   return (
-    <PageContainer withBottomNav={false} className="flex min-h-dvh flex-col bg-[radial-gradient(circle_at_top,#e9f7fb_0%,#f3f7f8_45%,#eef3f4_100%)]">
+    <PageContainer withBottomNav={false} className="flex min-h-dvh flex-col bg-[var(--color-bg)]">
       <main className="flex flex-1 items-center px-[var(--page-padding-x)] py-10">
-        <Card variant="elevated" padding="lg" className="w-full border-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-border-light))] bg-white/95 backdrop-blur">
+        <Card variant="elevated" padding="lg" className="w-full border-[color-mix(in_srgb,var(--color-pink-cta)_18%,var(--color-border-light))] bg-[var(--color-surface)] backdrop-blur">
           <div className="mb-7">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
               {APP_NAME}
             </p>
             <h1 className="mt-2 break-keep text-[26px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
@@ -310,7 +310,7 @@ export function RegisterPageClient() {
             {errorMessage && (
               <p
                 role="alert"
-                className="rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary-light)]/70 px-3 py-2 text-sm text-[var(--color-secondary-dark)]"
+                className="rounded-xl border border-[var(--color-pink-cta)]/25 bg-[var(--color-brand-pink)] px-3 py-2 text-sm text-[var(--color-text-primary)]"
               >
                 {errorMessage}
               </p>
@@ -341,4 +341,4 @@ function LabeledInput({
   );
 }
 
-const inputClassName = 'w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20';
+const inputClassName = 'w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20';

@@ -37,8 +37,8 @@ export function StoryCard({ story }: StoryCardProps) {
         <div
           className={`relative h-[76px] w-[76px] rounded-full p-[3px] shadow-sm ${
             timeRemaining.isExpiringSoon
-              ? 'bg-gradient-to-tr from-orange-500 to-rose-500'
-              : 'bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-secondary)]'
+              ? 'bg-[var(--color-pink-cta)]'
+              : 'bg-[var(--color-like-active)]'
           }`}
         >
           <div className="h-full w-full overflow-hidden rounded-full bg-[var(--color-surface)] p-[2px]">
@@ -53,7 +53,7 @@ export function StoryCard({ story }: StoryCardProps) {
           </div>
 
           {timeRemaining.isExpiringSoon && (
-            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 rounded-full bg-rose-500 px-2 py-0.5 text-[10px] font-bold whitespace-nowrap text-white shadow-sm">
+            <div className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 rounded-full bg-[var(--color-pink-cta)] px-2 py-0.5 text-[10px] font-bold whitespace-nowrap text-[var(--color-text-primary)] shadow-sm">
               {timeRemaining.minutes}분
             </div>
           )}
@@ -78,14 +78,14 @@ export function AddStoryButton({ hasActiveStory = false }: AddStoryButtonProps) 
         <div
           className={`relative flex h-[76px] w-[76px] items-center justify-center rounded-full ${
             hasActiveStory
-              ? 'bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-secondary)] p-[3px] shadow-sm'
+              ? 'bg-[var(--color-like-active)] p-[3px] shadow-sm'
               : 'bg-[var(--color-border)]'
           }`}
         >
           {hasActiveStory ? (
             <div className="flex h-full w-full items-center justify-center rounded-full bg-[var(--color-surface)] p-[2px]">
               <svg
-                className="h-8 w-8 text-[var(--color-primary)]"
+                className="h-8 w-8 text-[var(--color-text-primary)]"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"

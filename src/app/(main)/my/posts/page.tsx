@@ -1,19 +1,22 @@
 'use client';
 
 import { Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PageContainer } from '@/components/layout';
 import { MyStoriesView } from '@/components/self-date/MyStoriesView';
 import { useSafeBack } from '@/lib/navigation';
 
 function MyPostsPageContent() {
   const { goBack } = useSafeBack({ fallbackPath: '/my' });
+  const searchParams = useSearchParams();
+  const isLikedTab = searchParams.get('tab') === 'liked';
 
   return (
     <MyStoriesView
       ownerSection="my"
-      title="내 피드"
-      subtitle="작성한 피드와 보낸 반응을 함께 확인하세요"
+      title={isLikedTab ? '좋아요한 피드' : '내 피드'}
       onBack={goBack}
+      showTabs={false}
     />
   );
 }

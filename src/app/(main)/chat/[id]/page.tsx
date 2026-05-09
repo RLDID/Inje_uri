@@ -20,6 +20,18 @@ import { buildProfileDetailHref, useCurrentRouteContext, useSafeBack } from '@/l
 import type { Message } from '@/lib/types';
 
 type ChatAction = 'leave' | 'block' | 'report' | null;
+type ChatRoomRestriction = 'reported' | 'blocked' | null;
+
+const CHAT_ROOM_RESTRICTION_PREFIX = 'chat-room:restriction:';
+const CHAT_ROOM_REPORTED_PREFIX = 'chat-room:reported:';
+
+function getChatRoomRestrictionKey(chatId: string): string {
+  return `${CHAT_ROOM_RESTRICTION_PREFIX}${chatId}`;
+}
+
+function getChatRoomReportedKey(chatId: string): string {
+  return `${CHAT_ROOM_REPORTED_PREFIX}${chatId}`;
+}
 
 function readSessionValue(key: string): string | null {
   if (typeof window === 'undefined') {
@@ -45,6 +57,18 @@ function writeSessionValue(key: string, value: string): void {
   }
 }
 
+function removeSessionValue(key: string): void {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 function sortMessages(messages: Message[]): Message[] {
   return [...messages].sort(
     (left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime(),
@@ -67,6 +91,8 @@ function ChatRoomPageContent() {
   const [confirmAction, setConfirmAction] = useState<ChatAction>(null);
   const [leaveRoomOnSubmit, setLeaveRoomOnSubmit] = useState(false);
   const [imgError, setImgError] = useState(false);
+  const [roomRestriction, setRoomRestriction] = useState<ChatRoomRestriction>(null);
+  const [hasReportedRoom, setHasReportedRoom] = useState(false);
   const [timeInfo, setTimeInfo] = useState({
     hours: 0,
     minutes: 0,
@@ -84,6 +110,19 @@ function ChatRoomPageContent() {
   useEffect(() => {
     setMessages(initialMessages);
   }, [initialMessages]);
+
+  useEffect(() => {
+    if (!chat) {
+      setRoomRestriction(null);
+      setHasReportedRoom(false);
+      return;
+    }
+
+    const storedRestriction = readSessionValue(getChatRoomRestrictionKey(chat.id));
+    const storedReported = readSessionValue(getChatRoomReportedKey(chat.id));
+    setRoomRestriction(storedRestriction === 'blocked' || storedRestriction === 'reported' ? storedRestriction : null);
+    setHasReportedRoom(storedReported === 'true' || storedRestriction === 'reported');
+  }, [chat]);
 
   useEffect(() => {
     if (!chat) {
@@ -141,6 +180,16 @@ function ChatRoomPageContent() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  useEffect(() => {
+    if (!chat || !roomRestriction || !timeInfo.isExpired) {
+      return;
+    }
+
+    removeSessionValue(getChatRoomRestrictionKey(chat.id));
+    showToast('채팅방 유지 시간이 끝나 목록으로 이동해요.', 'info');
+    router.push('/chat');
+  }, [chat, roomRestriction, router, showToast, timeInfo.isExpired]);
+
   if (!chat || !otherUser) {
     return (
       <PageContainer withBottomNav={false}>
@@ -152,6 +201,9 @@ function ChatRoomPageContent() {
   }
 
   const { isExpired, isExpiringSoon, timeLabel } = timeInfo;
+  const isBlockedRoom = roomRestriction === 'blocked' || chat.status === 'blocked';
+  const isRoomRestricted = roomRestriction === 'blocked' || roomRestriction === 'reported' || chat.status === 'blocked';
+  const isChatDisabled = isExpired || isRoomRestricted;
 
   const openProfileDetail = () => {
     router.push(buildProfileDetailHref(otherUser.id, 'chat', {
@@ -162,7 +214,7 @@ function ChatRoomPageContent() {
   };
 
   const handleSend = (content: string) => {
-    if (isExpired) {
+    if (isChatDisabled) {
       return;
     }
 
@@ -180,6 +232,24 @@ function ChatRoomPageContent() {
   };
 
   const openConfirm = (action: Exclude<ChatAction, null>) => {
+    if (action === 'report' && hasReportedRoom) {
+      showToast('이미 신고한 채팅방이에요.', 'info');
+      setShowMenu(false);
+      return;
+    }
+
+    if (roomRestriction === 'blocked' && action === 'block') {
+      showToast('이미 차단한 채팅방이에요.', 'info');
+      setShowMenu(false);
+      return;
+    }
+
+    if (roomRestriction === 'reported' && action === 'report') {
+      showToast('이미 신고한 채팅방이에요.', 'info');
+      setShowMenu(false);
+      return;
+    }
+
     setShowMenu(false);
     setLeaveRoomOnSubmit(false);
     setConfirmAction(action);
@@ -206,11 +276,20 @@ function ChatRoomPageContent() {
         return;
       }
 
+      writeSessionValue(getChatRoomRestrictionKey(chat.id), 'blocked');
+      setRoomRestriction('blocked');
       closeConfirm();
       return;
     }
 
     if (confirmAction === 'report') {
+      writeSessionValue(getChatRoomReportedKey(chat.id), 'true');
+      setHasReportedRoom(true);
+      if (roomRestriction !== 'blocked') {
+        writeSessionValue(getChatRoomRestrictionKey(chat.id), 'reported');
+        setRoomRestriction('reported');
+      }
+
       showToast('신고가 접수되었고 대화 내역이 함께 제출되었어요.', 'success');
 
       if (leaveRoomOnSubmit) {
@@ -264,7 +343,7 @@ function ChatRoomPageContent() {
   return (
     <PageContainer withBottomNav={true}>
       <header className="fixed left-0 right-0 top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-        <div className="mx-auto flex min-h-14 max-w-[430px] items-center gap-1.5 px-2.5 py-2 sm:gap-2 sm:px-4">
+        <div className="mx-auto flex min-h-[76px] max-w-[430px] items-center gap-1.5 px-2.5 py-3 sm:gap-2 sm:px-4">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <button
               type="button"
@@ -318,36 +397,49 @@ function ChatRoomPageContent() {
             aria-label="채팅 옵션 열기"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="6" r="2" />
+              <circle cx="5" cy="12" r="2" />
               <circle cx="12" cy="12" r="2" />
-              <circle cx="12" cy="18" r="2" />
+              <circle cx="19" cy="12" r="2" />
             </svg>
           </button>
         </div>
       </header>
 
-      <div className="pb-[48px] pt-14">
+      <div className={`${isChatDisabled ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+24px)]' : 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+0px)]'} pt-[76px]`}>
         <div className="flex flex-col items-center py-6">
-          <div className="flex items-center">
-            <div className="h-16 w-16 overflow-hidden rounded-full border-2 border-white bg-[var(--color-surface-secondary)] shadow-md">
+          <div className="relative h-[112px] w-[184px]">
+            <div className="absolute left-4 top-0 h-20 w-20 overflow-hidden rounded-full border-[3px] border-white bg-[var(--color-surface-secondary)] shadow-[0_4px_12px_rgba(34,34,34,0.12)]">
               <Image
                 src={currentUser.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE}
                 alt="내 프로필"
-                width={64}
-                height={64}
+                width={80}
+                height={80}
                 className="h-full w-full object-cover"
               />
             </div>
-            <div className="-ml-4 h-16 w-16 overflow-hidden rounded-full border-2 border-white bg-[var(--color-surface-secondary)] shadow-md">
+            <div className="absolute right-4 top-0 h-20 w-20 overflow-hidden rounded-full border-[3px] border-white bg-[var(--color-surface-secondary)] shadow-[0_4px_12px_rgba(34,34,34,0.12)]">
               <Image
                 src={imageSrc}
                 alt={otherUser.nickname}
-                width={64}
-                height={64}
+                width={80}
+                height={80}
                 className="h-full w-full object-cover"
                 onError={() => setImgError(true)}
               />
             </div>
+            <div className="absolute left-1/2 top-[36px] z-30 flex -translate-x-1/2 items-center justify-center">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor" className="text-[#FF6FA0] drop-shadow-[0_3px_4px_rgba(255,111,160,0.34)]" aria-hidden="true">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            </div>
+            <Image
+              src="/brand/bear-hero-face2.png"
+              alt=""
+              width={82}
+              height={82}
+              priority
+              className="pointer-events-none absolute left-1/2 top-[58px] z-20 h-[62px] w-[62px] -translate-x-1/2 object-contain drop-shadow-[0_3px_6px_rgba(34,34,34,0.12)]"
+            />
           </div>
           <p className="mt-4 text-sm font-semibold text-[var(--color-text-primary)]">축하합니다</p>
           <p className="mt-1 text-sm text-[var(--color-text-secondary)]">특별한 우리들의 대화가 시작되었어요</p>
@@ -372,19 +464,33 @@ function ChatRoomPageContent() {
             .map((message) => (
               <ChatBubble key={message.id} message={message} />
             ))}
+          {isBlockedRoom && (
+            <div className="my-5 flex justify-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-surface-secondary)] px-4 py-2 text-[13px] font-semibold text-[var(--color-text-secondary)] shadow-[0_3px_8px_rgba(34,34,34,0.055)]">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="9" />
+                  <path d="M15 9 9 15M9 9l6 6" />
+                </svg>
+                차단된 사용자입니다
+              </div>
+            </div>
+          )}
           <div ref={messagesEndRef} />
         </div>
       </div>
 
-      <div className="fixed bottom-[60px] left-0 right-0 z-40 bg-[var(--color-surface)]">
+      {!isChatDisabled && (
+        <div className="fixed bottom-[calc(78px+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
+        <div className="pointer-events-none absolute left-0 right-0 top-full h-[calc(78px+var(--spacing-safe-bottom))] bg-[var(--color-surface)]" aria-hidden="true" />
         <div className="mx-auto max-w-[430px]">
           <ChatInput
             onSend={handleSend}
-            disabled={isExpired}
+            disabled={false}
             placeholder={isExpired ? '대화 시간이 만료되었어요' : '메시지를 입력해보세요...'}
           />
         </div>
-      </div>
+        </div>
+      )}
 
       <CenteredModal isOpen={showMenu} onClose={() => setShowMenu(false)}>
         <div className="py-2">
@@ -398,14 +504,14 @@ function ChatRoomPageContent() {
           <button
             type="button"
             onClick={() => openConfirm('report')}
-            className="w-full px-6 py-4 text-left text-red-500 transition-colors hover:bg-red-50"
+            className="w-full px-6 py-4 text-left text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]"
           >
             신고하기
           </button>
           <button
             type="button"
             onClick={() => openConfirm('block')}
-            className="w-full px-6 py-4 text-left text-red-500 transition-colors hover:bg-red-50"
+            className="w-full px-6 py-4 text-left text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]"
           >
             차단하기
           </button>
@@ -428,7 +534,7 @@ function ChatRoomPageContent() {
                   type="checkbox"
                   checked={leaveRoomOnSubmit}
                   onChange={(event) => setLeaveRoomOnSubmit(event.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-primary)] focus:ring-[var(--color-primary)]"
+                  className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-pink-cta)] focus:ring-[var(--color-focus)]"
                 />
                 <div>
                   <p className="text-sm font-medium text-[var(--color-text-primary)]">채팅방도 함께 나가기</p>

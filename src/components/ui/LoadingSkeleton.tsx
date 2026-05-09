@@ -71,7 +71,7 @@ export function PageLoading() {
   return (
     <div className="flex items-center justify-center min-h-[50vh]">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-10 h-10 border-3 border-[var(--color-border)] border-t-[var(--color-primary)] rounded-full animate-spin" />
+        <div className="w-10 h-10 border-3 border-[var(--color-border)] border-t-[var(--color-pink-cta)] rounded-full animate-spin" />
         <p className="text-sm text-[var(--color-text-secondary)]">로딩 중...</p>
       </div>
     </div>

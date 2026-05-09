@@ -1,14 +1,16 @@
 'use client';
 
-import { Suspense, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { PageContainer, PageContent, PageHeader, PageSection, SectionHeading } from '@/components/layout';
-import { Badge, useToast } from '@/components/ui';
+import { PageContainer, PageContent } from '@/components/layout';
+import { useToast } from '@/components/ui';
 import { currentUser } from '@/lib/data';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { getUserAcademicLabel } from '@/lib/utils';
+
+const IDEAL_KEYWORD_CHIP_GAP = 8;
 
 type MenuItem =
   | {
@@ -28,19 +30,20 @@ type MenuItem =
 
 const menuItems: MenuItem[] = [
   {
-    id: 'ideal-type',
-    label: '이상형 키워드 수정하기',
-    description: '이런 만남을 원해요에 들어갈 키워드만 따로 관리해요.',
-    href: '/my/ideal-type',
+    id: 'notice',
+    label: '공지사항',
+    description: '인제우리의 새로운 소식과 안내를 확인해요.',
+    comingSoonMessage: '공지사항 화면은 준비 중이에요.',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+        <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
+        <path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z" />
       </svg>
     ),
   },
   {
     id: 'settings',
-    label: '추천 설정',
+    label: '이상형 추천 설정',
     description: '선호 페이즈와 추천 조건을 이곳에서 따로 관리해요.',
     href: '/my/settings',
     icon: (
@@ -77,17 +80,110 @@ const menuItems: MenuItem[] = [
   },
 ];
 
+const idealKeywordLabelMap: Record<string, string> = {
+  comfortable: '편안함',
+  exciting: '설렘',
+  intellectual: '대화 잘 통함',
+  funny: '유머',
+  serious: '진지한 만남',
+  casual: '가볍게',
+  restaurant: '맛집 탐방',
+  cafe: '카페 투어',
+  movie: '영화',
+  walk: '산책',
+  activity: '운동',
+  home: '동네 데이트',
+  concert: '공연',
+  bookstore: '서점',
+  'slow-replier': '빠른 답장',
+  'no-plans': '약속 중요',
+  'too-fast': '천천히',
+};
+
+function getIdealKeywordLabels() {
+  const keywords = [
+    ...currentUser.desiredVibe,
+    currentUser.dateStyle,
+    ...currentUser.dealBreakers,
+  ].filter((keyword): keyword is string => Boolean(keyword));
+
+  return keywords.map((keyword) => idealKeywordLabelMap[keyword] ?? keyword);
+}
+
 function MyPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { showToast } = useToast();
   const [imgError, setImgError] = useState(false);
+  const idealKeywords = useMemo(() => getIdealKeywordLabels(), []);
+  const [visibleIdealKeywordCount, setVisibleIdealKeywordCount] = useState(() => Math.min(idealKeywords.length, 4));
+  const idealKeywordRowRef = useRef<HTMLDivElement>(null);
+  const idealKeywordMeasureRefs = useRef<Array<HTMLSpanElement | null>>([]);
+  const idealKeywordMoreMeasureRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     if (searchParams.get('tab') === 'feeds') {
       router.replace('/my/posts');
     }
   }, [router, searchParams]);
+
+  useEffect(() => {
+    const row = idealKeywordRowRef.current;
+
+    if (!row) {
+      return;
+    }
+
+    const updateVisibleIdealKeywords = () => {
+      const availableWidth = row.clientWidth;
+
+      if (availableWidth <= 0) {
+        return;
+      }
+
+      const chipWidths = idealKeywords.map((_, index) => (
+        idealKeywordMeasureRefs.current[index]?.offsetWidth ?? 0
+      ));
+      const moreChipWidth = idealKeywordMoreMeasureRef.current?.offsetWidth ?? 44;
+      let usedWidth = 0;
+      let nextVisibleCount = 0;
+
+      for (let index = 0; index < chipWidths.length; index += 1) {
+        const chipWidth = chipWidths[index];
+        const widthWithGap = nextVisibleCount > 0 ? IDEAL_KEYWORD_CHIP_GAP + chipWidth : chipWidth;
+        const hiddenCountAfterThisChip = idealKeywords.length - (index + 1);
+        const reservedMoreWidth = hiddenCountAfterThisChip > 0
+          ? IDEAL_KEYWORD_CHIP_GAP + moreChipWidth
+          : 0;
+
+        if (usedWidth + widthWithGap + reservedMoreWidth > availableWidth) {
+          break;
+        }
+
+        usedWidth += widthWithGap;
+        nextVisibleCount += 1;
+      }
+
+      const safeVisibleCount = idealKeywords.length > 0
+        ? Math.max(1, nextVisibleCount)
+        : 0;
+
+      setVisibleIdealKeywordCount((prevCount) => (
+        prevCount === safeVisibleCount ? prevCount : safeVisibleCount
+      ));
+    };
+
+    updateVisibleIdealKeywords();
+
+    const resizeObserver = new ResizeObserver(updateVisibleIdealKeywords);
+    resizeObserver.observe(row);
+    window.addEventListener('resize', updateVisibleIdealKeywords);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateVisibleIdealKeywords);
+    };
+  }, [idealKeywords]);
 
   if (searchParams.get('tab') === 'feeds') {
     return (
@@ -97,70 +193,165 @@ function MyPageContent() {
     );
   }
 
-  const imageSrc = imgError ? PLACEHOLDER_PROFILE_IMAGE : currentUser.profileImages[0];
+  const imageSrc = imgError ? PLACEHOLDER_PROFILE_IMAGE : (currentUser.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE);
+  const visibleIdealKeywords = idealKeywords.slice(0, visibleIdealKeywordCount);
+  const hiddenIdealKeywordCount = Math.max(idealKeywords.length - visibleIdealKeywords.length, 0);
 
   return (
     <PageContainer>
-      <PageHeader title="마이" subtitle="프로필, 추천 설정, 이상형 키워드를 역할에 맞게 따로 관리해요." />
+      <header className="sticky top-0 z-40 flex min-h-[76px] items-center bg-[var(--color-surface)]/95 px-5 py-3 backdrop-blur-xl">
+        <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
+          마이
+        </h1>
+      </header>
 
       <PageContent className="app-section-stack">
         <Link href="/my/profile" className="block">
-          <PageSection className="p-0">
-            <div className="flex items-start gap-4 p-5">
-              <div className="relative h-[76px] w-[76px] shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-secondary)] ring-2 ring-[var(--color-primary)]/15">
+          <section className="p-0">
+            <div className="flex items-center gap-5 px-0 py-3">
+              <div className="relative h-[140px] w-[140px] shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-secondary)] ring-4 ring-white shadow-[0_5px_12px_rgba(34,34,34,0.08)]">
                 <Image
                   src={imageSrc}
                   alt={currentUser.nickname}
-                  width={76}
-                  height={76}
-                  className="h-full w-full object-cover"
+                  fill
+                  sizes="140px"
+                  className="object-cover"
                   onError={() => setImgError(true)}
                 />
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="meta-wrap">
-                  <span className="text-lg font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                <div className="flex items-center gap-2">
+                  <span className="truncate text-[22px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
                     {currentUser.nickname}
                   </span>
-                  {currentUser.isGraduate && (
-                    <span className="rounded-full bg-[var(--color-surface-secondary)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
-                      졸업생
+                  {currentUser.isVerified && (
+                    <span
+                      className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#5BAEF6] text-white shadow-sm"
+                      aria-label="학교 인증"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="m5 12 4 4 10-10" />
+                      </svg>
                     </span>
                   )}
                 </div>
-                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                <p className="mt-1.5 truncate text-[14px] font-medium text-[var(--color-text-secondary)]">
                   {getUserAcademicLabel(currentUser)}
                 </p>
-                <div className="mt-3 chip-wrap">
-                  {currentUser.mbti && <Badge variant="primary" size="sm">{currentUser.mbti}</Badge>}
-                </div>
+                {currentUser.mbti && (
+                  <div className="mt-2 flex">
+                    <span className="inline-flex h-7 items-center rounded-full bg-[var(--color-brand-pink)] px-3 text-[12px] font-semibold text-[var(--color-pink-cta)]">
+                      {currentUser.mbti}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <svg className="mt-1 h-5 w-5 shrink-0 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 18l6-6-6-6" />
               </svg>
             </div>
-          </PageSection>
+          </section>
         </Link>
 
-        <PageSection>
-          <SectionHeading
-            eyebrow="Settings"
-            title="설정과 관리"
-          />
+        <section className="relative !mt-2 grid w-full grid-cols-3 overflow-hidden rounded-[20px] bg-white px-2 py-3">
+          <span className="pointer-events-none absolute left-1/3 top-1/2 h-12 w-px -translate-y-1/2 bg-[var(--color-border-light)]" aria-hidden="true" />
+          <span className="pointer-events-none absolute left-2/3 top-1/2 h-12 w-px -translate-y-1/2 bg-[var(--color-border-light)]" aria-hidden="true" />
+          <Link href="/my/posts" className="group flex min-w-0 flex-col items-center justify-center gap-1.5 px-1.5 py-2">
+            <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-[var(--color-pink-cta)] transition-transform group-active:scale-95">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 20h9" />
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                <path d="m14 6 4 4" />
+              </svg>
+            </span>
+            <span className="whitespace-nowrap text-[13px] font-semibold text-[var(--color-text-secondary)]">
+              내가 쓴 피드
+            </span>
+          </Link>
 
-          <div className="mt-5 divide-y divide-[var(--color-border-light)] overflow-hidden rounded-2xl border border-[var(--color-border-light)] bg-[var(--color-surface)]">
+          <Link href="/my/posts?tab=liked" className="group flex min-w-0 flex-col items-center justify-center gap-1.5 px-1.5 py-2">
+            <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-[var(--color-pink-cta)] transition-transform group-active:scale-95">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78Z" />
+              </svg>
+            </span>
+            <span className="whitespace-nowrap text-[13px] font-semibold text-[var(--color-text-secondary)]">
+              좋아요한 피드
+            </span>
+          </Link>
+
+          <Link href="/my/recent-views" className="group flex min-w-0 flex-col items-center justify-center gap-1.5 px-1.5 py-2">
+            <span className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-white text-[#5BAEF6] transition-transform group-active:scale-95">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M20 21a8 8 0 0 0-16 0" />
+                <circle cx="12" cy="8" r="4" />
+              </svg>
+            </span>
+            <span className="whitespace-nowrap text-[13px] font-semibold text-[var(--color-text-secondary)]">
+              최근 본 사람
+            </span>
+          </Link>
+        </section>
+
+        <Link href="/my/ideal-type" className="relative block rounded-[20px] border border-[var(--color-border-light)] px-4 py-4 transition-transform active:scale-[0.99]" aria-label="이상형 키워드 수정하기">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-[18px] font-bold tracking-[-0.03em] text-[var(--color-text-primary)]">
+              이상형 키워드
+            </h2>
+            <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface-secondary)] text-[var(--color-text-muted)]">
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </span>
+          </div>
+          <div ref={idealKeywordRowRef} className="mt-3 flex items-center gap-2 overflow-hidden">
+            {visibleIdealKeywords.map((keyword) => (
+              <span
+                key={keyword}
+                className="inline-flex h-9 shrink-0 items-center rounded-full bg-[var(--color-surface-secondary)] px-3.5 text-[13px] font-semibold text-[var(--color-text-secondary)]"
+              >
+                {keyword}
+              </span>
+            ))}
+            {hiddenIdealKeywordCount > 0 && (
+              <span className="inline-flex h-9 shrink-0 items-center rounded-full bg-[var(--color-surface-secondary)] px-3.5 text-[13px] font-semibold text-[var(--color-text-secondary)]">
+                +{hiddenIdealKeywordCount}
+              </span>
+            )}
+          </div>
+          <div className="invisible pointer-events-none absolute -z-10 flex gap-2 whitespace-nowrap" aria-hidden="true">
+            {idealKeywords.map((keyword, index) => (
+              <span
+                key={`${keyword}-${index}`}
+                ref={(node) => {
+                  idealKeywordMeasureRefs.current[index] = node;
+                }}
+                className="inline-flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold"
+              >
+                {keyword}
+              </span>
+            ))}
+            <span
+              ref={idealKeywordMoreMeasureRef}
+              className="inline-flex h-9 shrink-0 items-center rounded-full px-3.5 text-[13px] font-semibold"
+            >
+              +99
+            </span>
+          </div>
+        </Link>
+
+        <div className="divide-y divide-[var(--color-border-light)] overflow-hidden rounded-[20px] bg-[var(--color-surface)] shadow-[0_4px_14px_rgba(34,34,34,0.055)]">
             {menuItems.map((item) => (
               'href' in item ? (
                 <Link key={item.id} href={item.href} className="block">
-                  <div className="flex items-start gap-4 px-4 py-4 transition-colors hover:bg-[var(--color-surface-secondary)]">
-                    <span className="mt-0.5 shrink-0 text-[var(--color-text-secondary)]">{item.icon}</span>
+                  <div className="flex items-center gap-4 px-4 py-5 transition-colors hover:bg-[var(--color-surface-secondary)]">
+                    <span className="shrink-0 text-[var(--color-text-secondary)]">{item.icon}</span>
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-[var(--color-text-primary)]">{item.label}</p>
-                      <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{item.description}</p>
                     </div>
-                    <svg className="mt-1 h-5 w-5 shrink-0 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg className="h-5 w-5 shrink-0 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M9 18l6-6-6-6" />
                     </svg>
                   </div>
@@ -170,21 +361,19 @@ function MyPageContent() {
                   key={item.id}
                   type="button"
                   onClick={() => showToast(item.comingSoonMessage, 'info')}
-                  className="flex w-full items-start gap-4 px-4 py-4 text-left transition-colors hover:bg-[var(--color-surface-secondary)]"
+                  className="flex w-full items-center gap-4 px-4 py-5 text-left transition-colors hover:bg-[var(--color-surface-secondary)]"
                 >
-                  <span className="mt-0.5 shrink-0 text-[var(--color-text-secondary)]">{item.icon}</span>
+                  <span className="shrink-0 text-[var(--color-text-secondary)]">{item.icon}</span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-[var(--color-text-primary)]">{item.label}</p>
-                    <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">{item.description}</p>
                   </div>
-                  <svg className="mt-1 h-5 w-5 shrink-0 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg className="h-5 w-5 shrink-0 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M9 18l6-6-6-6" />
                   </svg>
                 </button>
               )
             ))}
-          </div>
-        </PageSection>
+        </div>
 
         <div className="pb-6 text-center">
           <p className="text-xs text-[var(--color-text-tertiary)]">인제우리 v0.3.0</p>

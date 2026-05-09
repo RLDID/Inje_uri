@@ -62,7 +62,7 @@ function ToastContainer({ toasts, onHide }: ToastContainerProps) {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-20 left-0 right-0 z-50 flex flex-col items-center gap-2 px-4">
+    <div className="pointer-events-none fixed bottom-[calc(78px+var(--spacing-safe-bottom)+20px)] left-0 right-0 z-[160] flex flex-col items-center gap-2 px-4">
       {toasts.map((toast) => (
         <ToastItem key={toast.id} toast={toast} onHide={() => onHide(toast.id)} />
       ))}
@@ -75,11 +75,11 @@ interface ToastItemProps {
   onHide: () => void;
 }
 
-const typeStyles = {
-  success: 'border border-[var(--color-primary)]/12 bg-[var(--color-primary-light)] text-[var(--color-primary-dark)]',
-  error: 'border border-[var(--color-secondary)]/12 bg-[var(--color-secondary-light)] text-[var(--color-secondary-dark)]',
-  warning: 'border border-[var(--color-secondary)]/12 bg-[var(--color-secondary-light)] text-[var(--color-secondary-dark)]',
-  info: 'border border-[var(--color-border-light)] bg-[var(--color-surface)] text-[var(--color-text-primary)]',
+const iconStyles = {
+  success: 'text-[var(--color-blue-secondary)]',
+  error: 'text-[var(--color-pink-cta)]',
+  warning: 'text-[var(--color-pink-cta)]',
+  info: 'text-[var(--color-text-secondary)]',
 };
 
 const ToastIcons = {
@@ -117,13 +117,12 @@ function ToastItem({ toast, onHide }: ToastItemProps) {
       aria-live="polite"
       className={`
         toast-enter
-        pointer-events-auto flex max-w-[calc(100vw-32px)] cursor-pointer items-center gap-2.5 rounded-2xl px-4 py-3
-        text-sm font-medium shadow-lg transition-opacity active:opacity-90
-        ${typeStyles[toast.type]}
+        pointer-events-auto flex max-w-[calc(100vw-32px)] cursor-pointer items-center gap-2.5 rounded-[22px] bg-[var(--color-surface)] px-4 py-3
+        text-sm font-medium text-[var(--color-text-primary)] shadow-[0_5px_14px_rgba(34,34,34,0.08)] transition-opacity active:opacity-90
       `}
       onClick={onHide}
     >
-      <span className="shrink-0">{ToastIcons[toast.type]}</span>
+      <span className={`shrink-0 ${iconStyles[toast.type]}`}>{ToastIcons[toast.type]}</span>
       <span>{toast.message}</span>
     </div>
   );

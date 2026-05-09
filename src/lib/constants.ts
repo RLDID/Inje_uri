@@ -12,10 +12,10 @@ export const MAX_DEALBREAKER_KEYWORDS = 3;
 
 export const PLACEHOLDER_PROFILE_IMAGE = 'data:image/svg+xml,' + encodeURIComponent(`
 <svg width="400" height="500" viewBox="0 0 400 500" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="400" height="500" fill="#F3F4F6"/>
-  <circle cx="200" cy="160" r="70" fill="#D1D5DB"/>
-  <ellipse cx="200" cy="380" rx="110" ry="100" fill="#D1D5DB"/>
-  <path d="M130 160 Q200 100 270 160" stroke="#E5E7EB" stroke-width="8" fill="none"/>
+  <rect width="400" height="500" fill="#F8FAFC"/>
+  <circle cx="200" cy="160" r="70" fill="#E5E7EB"/>
+  <ellipse cx="200" cy="380" rx="110" ry="100" fill="#E5E7EB"/>
+  <path d="M130 160 Q200 100 270 160" stroke="#9CA3AF" stroke-width="8" fill="none"/>
 </svg>
 `);
 

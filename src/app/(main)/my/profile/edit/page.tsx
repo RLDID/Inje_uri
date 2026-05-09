@@ -1,11 +1,11 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useRef, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { PageContainer, PageHeader, PageContent } from '@/components/layout';
 import { KeywordSelector, ProfileSection } from '@/components/profile/KeywordSelector';
-import { useToast } from '@/components/ui';
+import { BottomSheet, useToast } from '@/components/ui';
 import { PROFILE_CATEGORIES } from '@/lib/types';
 import { currentUser } from '@/lib/data';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
@@ -19,6 +19,10 @@ function EditProfilePageContent() {
     currentUser.profileImages?.length > 0 ? currentUser.profileImages : [],
   );
   const [brokenPhotoIndices, setBrokenPhotoIndices] = useState<number[]>([]);
+  const [photoTargetIndex, setPhotoTargetIndex] = useState<number | null>(null);
+  const [showPhotoOptions, setShowPhotoOptions] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const libraryInputRef = useRef<HTMLInputElement>(null);
   const [profile, setProfile] = useState({
     lifestyle: currentUser.lifestyle || '',
     drinking: currentUser.drinking || '',
@@ -31,16 +35,60 @@ function EditProfilePageContent() {
   });
 
   const handleCategoryChange = (categoryId: string, value: string | string[]) => {
+    const isEmptySelection = Array.isArray(value) ? value.length === 0 : value.length === 0;
+
+    if (isEmptySelection) {
+      showToast('키워드는 한 개 이상 선택해야 해요.', 'error');
+      return;
+    }
+
     setProfile((prevProfile) => ({ ...prevProfile, [categoryId]: value }));
   };
 
-  const handleAddPhoto = (index: number) => {
+  const applyPhoto = (index: number, src: string) => {
     setPhotos((prevPhotos) => {
       const nextPhotos = [...prevPhotos];
-      nextPhotos[index] = `https://picsum.photos/seed/${Date.now()}-${index}/400/500`;
+      nextPhotos[index] = src;
       return nextPhotos;
     });
     setBrokenPhotoIndices((prevIndices) => prevIndices.filter((photoIndex) => photoIndex !== index));
+  };
+
+  const handleAddPhoto = (index: number) => {
+    setPhotoTargetIndex(index);
+    setShowPhotoOptions(true);
+  };
+
+  const handlePhotoSourceSelect = (source: 'camera' | 'library') => {
+    setShowPhotoOptions(false);
+
+    if (source === 'camera') {
+      cameraInputRef.current?.click();
+      return;
+    }
+
+    libraryInputRef.current?.click();
+  };
+
+  const handlePhotoFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    const targetIndex = photoTargetIndex;
+    event.target.value = '';
+
+    if (!file || targetIndex === null) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result !== 'string') {
+        return;
+      }
+
+      applyPhoto(targetIndex, reader.result);
+      setPhotoTargetIndex(null);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleRemovePhoto = (index: number) => {
@@ -55,6 +103,19 @@ function EditProfilePageContent() {
   };
 
   const hasMinPhotos = photos.length >= 1;
+  const aboutMeCategories = PROFILE_CATEGORIES
+    .filter((category) => category.belongsTo === 'aboutMe')
+    .map((category) => ({
+      ...category,
+      options: category.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+      })),
+    }));
+  const hasRequiredKeywords = aboutMeCategories.every((category) => {
+    const selected = profile[category.id as keyof typeof profile];
+    return Array.isArray(selected) ? selected.length > 0 : Boolean(selected);
+  });
 
   const handleSave = () => {
     if (!hasMinPhotos) {
@@ -62,17 +123,19 @@ function EditProfilePageContent() {
       return;
     }
 
+    if (!hasRequiredKeywords) {
+      showToast('키워드는 한 개 이상 선택해야 해요.', 'error');
+      return;
+    }
+
     showToast('프로필 소개를 업데이트했어요.', 'success');
     goBack();
   };
-
-  const aboutMeCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'aboutMe');
 
   return (
     <PageContainer withBottomNav={false}>
       <PageHeader
         title="프로필 수정"
-        subtitle="이 화면에서는 나를 소개하는 정보만 가볍게 정리해요."
         showBack
         onBack={goBack}
       />
@@ -81,14 +144,15 @@ function EditProfilePageContent() {
         <ProfileSection
           id="profile-photos"
           title="프로필 사진"
-          description="대표 사진은 가장 먼저 보이는 정보예요. 너무 많은 설명보다 사진 한 장의 첫 인상이 더 중요해요."
+          description="나를 가장 잘 나타낼 수 있는 사진을 올려보세요."
           required
+          className="!border-0 !px-0 !shadow-none"
         >
           <div className="grid grid-cols-3 gap-2">
             {[0, 1, 2, 3, 4, 5].map((index) => (
               <div
                 key={index}
-                className="relative aspect-[4/5] overflow-hidden rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)]"
+                className="relative aspect-[4/5] overflow-hidden rounded-xl bg-[var(--color-surface-secondary)]"
               >
                 {photos[index] ? (
                   <>
@@ -96,6 +160,8 @@ function EditProfilePageContent() {
                       src={brokenPhotoIndices.includes(index) ? PLACEHOLDER_PROFILE_IMAGE : photos[index]}
                       alt={`프로필 사진 ${index + 1}`}
                       fill
+                      sizes="33vw"
+                      unoptimized={photos[index]?.startsWith('data:')}
                       className="object-cover"
                       onError={() => handlePhotoError(index)}
                     />
@@ -110,7 +176,7 @@ function EditProfilePageContent() {
                       </svg>
                     </button>
                     {index === 0 && (
-                      <span className="absolute bottom-1.5 left-1.5 rounded-md bg-[var(--color-primary)] px-2 py-0.5 text-xs font-medium text-white">
+                      <span className="absolute bottom-1.5 left-1.5 rounded-md bg-[var(--color-action-primary)] px-2 py-0.5 text-xs font-medium text-[var(--color-action-primary-text)]">
                         대표
                       </span>
                     )}
@@ -131,7 +197,7 @@ function EditProfilePageContent() {
             ))}
           </div>
           {!hasMinPhotos && (
-            <p className="text-xs text-[var(--color-secondary)]">
+            <p className="text-xs text-[var(--color-text-secondary)]">
               프로필 사진은 1장 이상 등록해야 저장할 수 있어요.
             </p>
           )}
@@ -139,7 +205,7 @@ function EditProfilePageContent() {
 
         <ProfileSection
           title="나는 이런 사람이에요"
-          description="메인 화면에서 다 보여주지 않기 때문에 소개와 키워드만 깔끔하게 정리해도 충분해요."
+          className="!border-0 !px-0 !shadow-none"
         >
           <div className="space-y-2">
             <textarea
@@ -148,7 +214,7 @@ function EditProfilePageContent() {
               placeholder="예: 여유로운 카페를 좋아하고, 편하게 대화하는 시간을 좋아해요."
               maxLength={100}
               rows={3}
-              className="w-full resize-none rounded-xl bg-[var(--color-surface-secondary)] px-4 py-3 text-base leading-6 placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30"
+              className="w-full resize-none rounded-xl bg-[var(--color-surface)] px-4 py-3 text-base leading-6 placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/30"
             />
             <p className="text-right text-xs text-[var(--color-text-tertiary)]">{profile.bio.length}/100</p>
           </div>
@@ -173,7 +239,7 @@ function EditProfilePageContent() {
               </svg>
             </Link>
             <Link href="/my/settings" className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
-              <span>추천 설정 보기</span>
+              <span>이상형 추천 설정</span>
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 18l6-6-6-6" />
               </svg>
@@ -182,19 +248,89 @@ function EditProfilePageContent() {
         </div>
       </PageContent>
 
-      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+12px)] right-4 z-40">
+      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
         <button
           type="button"
           onClick={handleSave}
-          disabled={!hasMinPhotos}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
+          disabled={!hasMinPhotos || !hasRequiredKeywords}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
           aria-label="저장하기"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </button>
       </div>
+
+      <BottomSheet
+        isOpen={showPhotoOptions}
+        onClose={() => {
+          setShowPhotoOptions(false);
+          setPhotoTargetIndex(null);
+        }}
+        title="프로필 사진 추가"
+      >
+        <div className="px-4 pb-6">
+          <button
+            type="button"
+            onClick={() => handlePhotoSourceSelect('camera')}
+            className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-[var(--color-surface-secondary)] active:bg-[var(--color-border-light)]"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-chip-background)] text-[var(--color-text-primary)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-[var(--color-text-primary)]">사진 찍기</p>
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                바로 촬영한 사진을 프로필에 추가해요.
+              </p>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handlePhotoSourceSelect('library')}
+            className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-[var(--color-surface-secondary)] active:bg-[var(--color-border-light)]"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <polyline points="21 15 16 10 5 21" />
+              </svg>
+            </div>
+            <div>
+              <p className="font-medium text-[var(--color-text-primary)]">사진 보관함</p>
+              <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
+                저장된 사진 중 하나를 선택해요.
+              </p>
+            </div>
+          </button>
+        </div>
+      </BottomSheet>
+
+      <input
+        ref={cameraInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif"
+        capture="environment"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handlePhotoFileChange}
+      />
+      <input
+        ref={libraryInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/gif"
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handlePhotoFileChange}
+      />
     </PageContainer>
   );
 }

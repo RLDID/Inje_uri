@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: '인제대학교 학생들을 위한 소개팅 서비스',
     start_url: '/',
     display: 'standalone',
-    background_color: '#ffffff',
-    theme_color: '#23BDD6',
+    background_color: '#F8FAFC',
+    theme_color: '#F8FAFC',
     icons: [
       {
         src: '/icon.svg',

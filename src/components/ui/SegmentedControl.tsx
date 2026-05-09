@@ -31,7 +31,7 @@ export function SegmentedControl<T extends string>({
   return (
     <div
       className={`
-        inline-flex rounded-2xl border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] p-1
+        inline-flex rounded-[var(--radius-2xl)] border border-[var(--color-border-light)] bg-[var(--color-surface)] p-1 shadow-sm
         ${className}
       `}
       role="tablist"
@@ -46,16 +46,16 @@ export function SegmentedControl<T extends string>({
             aria-selected={isSelected}
             onClick={() => onChange(option.value)}
             className={`
-              flex flex-1 items-center justify-center gap-1.5 rounded-xl px-4 font-semibold tracking-[-0.01em]
+              flex flex-1 items-center justify-center gap-1.5 rounded-2xl px-4 font-semibold tracking-[-0.01em]
               transition-all duration-200 ease-out
               ${sizeStyles[size]}
               ${isSelected
-                ? 'bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm'
+                ? 'bg-[var(--color-brand-pink)] text-[var(--color-text-primary)] shadow-sm'
                 : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
               }
             `}
           >
-            {option.icon && <span className={isSelected ? 'text-[var(--color-primary)]' : ''}>{option.icon}</span>}
+            {option.icon && <span className={isSelected ? 'text-[var(--color-text-primary)]' : ''}>{option.icon}</span>}
             {option.label}
           </button>
         );

@@ -13,6 +13,8 @@ export function normalizeRecommendationSettings(
   return {
     excludeSameDepartment: rawSettings?.excludeSameDepartment ?? fallback.excludeSameDepartment,
     reduceSameYear: rawSettings?.reduceSameYear ?? fallback.reduceSameYear,
+    excludeSmokers: rawSettings?.excludeSmokers ?? fallback.excludeSmokers,
+    excludeFrequentDrinkers: rawSettings?.excludeFrequentDrinkers ?? fallback.excludeFrequentDrinkers,
     preferredAgeRange: {
       min: nextMin,
       max: nextMax,

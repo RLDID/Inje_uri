@@ -73,8 +73,8 @@ export function StoryViewer({ story, onClose }: StoryViewerProps) {
         {content.images[0] ? (
           <Image src={content.images[0]} alt="스토리 이미지" fill className="object-contain" />
         ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-secondary)] p-8">
-            <p className="text-center text-2xl font-medium leading-relaxed text-white">{content.text}</p>
+          <div className="flex h-full w-full items-center justify-center bg-[var(--color-chip-background)] p-8">
+            <p className="text-center text-2xl font-medium leading-relaxed text-[var(--color-text-primary)]">{content.text}</p>
           </div>
         )}
       </div>

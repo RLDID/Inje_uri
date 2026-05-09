@@ -27,7 +27,11 @@ export const mockStories: Story[] = [
     author: mockUsers[0],
     content: {
       text: '오늘 날씨 좋아서 잠깐 산책할 사람 찾고 있어요.',
-      images: ['https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=400'],
+      images: [
+        'https://images.unsplash.com/photo-1523906834658-6e24ef2386f9?w=400',
+        'https://images.unsplash.com/photo-1500534623283-312aade485b7?w=400',
+        'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?w=400',
+      ],
     },
     category: 'walk',
     categories: ['walk', 'cafe', 'food'],
@@ -41,7 +45,11 @@ export const mockStories: Story[] = [
     author: mockUsers[2],
     content: {
       text: '수업 끝나고 아이스라떼 마시고 있어요. 잠깐 카페 갈 분 있을까요?',
-      images: ['https://images.unsplash.com/photo-1544928147-79a2dbc1f389?w=400'],
+      images: [
+        'https://images.unsplash.com/photo-1544928147-79a2dbc1f389?w=400',
+        'https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=400',
+        'https://images.unsplash.com/photo-1521017432531-fbd92d768814?w=400',
+      ],
     },
     category: 'cafe',
     categories: ['cafe', 'talk', 'book', 'food'],
@@ -69,7 +77,12 @@ export const mockStories: Story[] = [
     author: mockUsers[5],
     content: {
       text: '도서관에서 과제 끝내고 있는데 같이 공부할 사람 있으면 반가워요.',
-      images: [],
+      images: [
+        'https://images.unsplash.com/photo-1524995997946-a1c2e315a42f?w=400',
+        'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=400',
+        'https://images.unsplash.com/photo-1513475382585-d06e58bcb0e0?w=400',
+        'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=400',
+      ],
     },
     category: 'study',
     categories: ['study', 'cafe', 'book', 'talk'],

@@ -1,7 +1,6 @@
 import { DAILY_RECOMMENDATION_REFRESH_HOUR } from '@/lib/constants';
 
-const HOUR_LABEL = '\uC2DC\uAC04';
-const MINUTE_LABEL = '\uBD84';
+const formatTimeUnit = (value: number) => String(value).padStart(2, '0');
 
 export function getNextDailyRecommendationRefresh(nowMs = Date.now()): Date {
   const now = new Date(nowMs);
@@ -19,13 +18,10 @@ export function getNextDailyRecommendationRefresh(nowMs = Date.now()): Date {
 export function getDailyRecommendationRefreshLabel(nowMs = Date.now()): string {
   const nextRefresh = getNextDailyRecommendationRefresh(nowMs);
   const diffMs = Math.max(nextRefresh.getTime() - nowMs, 0);
-  const totalMinutes = Math.ceil(diffMs / (1000 * 60));
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
+  const totalSeconds = Math.ceil(diffMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
 
-  if (hours <= 0) {
-    return `${Math.max(minutes, 1)}${MINUTE_LABEL}`;
-  }
-
-  return `${hours}${HOUR_LABEL} ${minutes}${MINUTE_LABEL}`;
+  return `${formatTimeUnit(hours)}:${formatTimeUnit(minutes)}:${formatTimeUnit(seconds)}`;
 }

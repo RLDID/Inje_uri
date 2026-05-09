@@ -14,21 +14,21 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantStyles: Record<ButtonVariant, string> = {
   primary:
-    'border border-transparent bg-[var(--color-primary)] text-white shadow-sm hover:bg-[var(--color-primary-dark)] active:bg-[var(--color-primary-dark)] disabled:border-transparent disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/30 focus-visible:ring-offset-2',
+    'border border-transparent bg-[var(--color-pink-cta)] text-white shadow-md hover:bg-[var(--color-action-primary-hover)] active:bg-[var(--color-action-primary-hover)] disabled:border-transparent disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]/30 focus-visible:ring-offset-2',
   secondary:
-    'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] hover:border-[var(--color-primary)]/25 hover:bg-[var(--color-primary-light)] active:bg-[var(--color-primary-light)] disabled:border-[var(--color-border-light)] disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/25 focus-visible:ring-offset-2',
+    'border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm hover:bg-[var(--color-chip-background)] active:bg-[var(--color-chip-background)] disabled:border-[var(--color-border-light)] disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]/25 focus-visible:ring-offset-2',
   tertiary:
-    'border border-transparent bg-[var(--color-primary-light)] text-[var(--color-primary)] hover:bg-[var(--color-primary)]/15 active:bg-[var(--color-primary)]/15 disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/25 focus-visible:ring-offset-2',
+    'border border-transparent bg-[var(--color-chip-background)] text-[var(--color-text-secondary)] hover:bg-[var(--color-brand-pink)] hover:text-[var(--color-text-primary)] active:bg-[var(--color-brand-pink)] disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]/25 focus-visible:ring-offset-2',
   danger:
-    'border border-transparent bg-[var(--color-error)] text-white hover:brightness-95 active:brightness-95 disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-error)]/30 focus-visible:ring-offset-2',
+    'border border-[color-mix(in_srgb,var(--color-pink-cta)_36%,var(--color-border))] bg-[var(--color-error-bg)] text-[var(--color-error)] shadow-sm hover:bg-[var(--color-brand-pink)] active:bg-[var(--color-brand-pink)] disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]/30 focus-visible:ring-offset-2',
   ghost:
-    'border border-transparent bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)] active:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/25 focus-visible:ring-offset-2',
+    'border border-transparent bg-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-chip-background)] active:bg-[var(--color-chip-background)] disabled:text-[var(--color-text-tertiary)] disabled:cursor-not-allowed focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]/25 focus-visible:ring-offset-2',
 };
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'min-h-9 px-3.5 py-2 text-sm rounded-xl',
-  md: 'min-h-12 px-4 py-3 text-sm rounded-xl',
-  lg: 'min-h-14 px-6 py-4 text-base rounded-2xl',
+  sm: 'min-h-9 px-3.5 py-2 text-sm rounded-2xl',
+  md: 'min-h-12 px-4 py-3 text-sm rounded-2xl',
+  lg: 'min-h-14 px-6 py-4 text-base rounded-[22px]',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -50,7 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         className={`
           inline-flex items-center justify-center text-center font-semibold leading-5 tracking-[-0.01em] whitespace-normal break-keep
-          transition-colors duration-150 ease-in-out
+          transition-all duration-150 ease-in-out
           ${variantStyles[variant]}
           ${sizeStyles[size]}
           ${fullWidth ? 'w-full' : ''}

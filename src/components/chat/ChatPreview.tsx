@@ -31,9 +31,8 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
   if (!user) return null;
 
   const imageSrc = imgError ? PLACEHOLDER_PROFILE_IMAGE : user.profileImages[0];
-  const { hours, minutes, isExpired } = getChatRemainingTime(chat);
-  
-  const chatTypeDuration = chat.chatType === 'today' ? '24H' : '2H';
+  const { hours, minutes, totalMinutes, isExpired } = getChatRemainingTime(chat);
+  const remainingBadgeLabel = isExpired ? '0H' : `${Math.max(1, Math.ceil(totalMinutes / 60))}H`;
 
   const handleMenuClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -87,7 +86,7 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
               />
             </div>
             {chat.unreadCount > 0 && !isExpired && (
-              <div className="absolute -top-0.5 -right-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1.5 text-xs font-bold text-white shadow-sm">
+              <div className="absolute -top-0.5 -right-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--color-like-active)] px-1.5 text-xs font-bold text-white shadow-sm">
                 {chat.unreadCount}
               </div>
             )}
@@ -104,20 +103,20 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
                   <span className={`
                     rounded px-1.5 py-0.5 text-[10px] font-bold
                     ${chat.chatType === 'today' 
-                      ? 'bg-blue-100 text-blue-600' 
-                      : 'bg-rose-100 text-rose-600'
+                      ? 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
+                      : 'bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]'
                     }
                   `}>
-                    {chatTypeDuration}
+                    {remainingBadgeLabel}
                   </span>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
                 {/* 남은 시간 - 작게 */}
                 <span
-                  className={`text-[10px] font-medium ${
+                  className={`hidden text-[10px] font-medium ${
                     isExpired
-                      ? 'text-gray-400'
+                      ? 'text-[var(--color-text-tertiary)]'
                       : 'text-[var(--color-text-tertiary)]'
                   }`}
                 >
@@ -148,9 +147,9 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
             aria-label="채팅 메뉴"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-              <circle cx="12" cy="6" r="2" />
+              <circle cx="5" cy="12" r="2" />
               <circle cx="12" cy="12" r="2" />
-              <circle cx="12" cy="18" r="2" />
+              <circle cx="19" cy="12" r="2" />
             </svg>
           </button>
         </div>
@@ -164,7 +163,7 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
           <button onClick={handleLeaveChat} className="w-full px-6 py-3.5 text-left text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-secondary)]">
             채팅방 나가기
           </button>
-          <button onClick={handleReport} className="w-full px-6 py-3.5 text-left text-[var(--color-error)] transition-colors hover:bg-rose-50">
+          <button onClick={handleReport} className="w-full px-6 py-3.5 text-left text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]">
             신고/차단
           </button>
         </div>

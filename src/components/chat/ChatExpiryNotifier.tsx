@@ -10,6 +10,8 @@ import {
 } from '@/lib/data';
 import { buildChatRoomHref, useCurrentRouteContext } from '@/lib/navigation';
 
+const BANNER_AUTO_DISMISS_MS = 1000 * 60;
+
 function readSessionFlag(key: string): boolean {
   if (typeof window === 'undefined') {
     return false;
@@ -103,6 +105,22 @@ export function ChatExpiryNotifier() {
       ) ?? null,
     [currentChatId, dismissedBannerId, expiringChats, isChatRoom],
   );
+  const activeBannerChatId = activeBannerChat?.id ?? null;
+
+  useEffect(() => {
+    if (!activeBannerChatId) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      writeSessionFlag(getChatExpirySessionKey('bannerDismissed', activeBannerChatId));
+      setDismissedBannerId(activeBannerChatId);
+    }, BANNER_AUTO_DISMISS_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [activeBannerChatId]);
 
   if (!activeBannerChat) {
     return null;
@@ -111,9 +129,9 @@ export function ChatExpiryNotifier() {
   const copy = getChatExpiryNotificationCopy(activeBannerChat);
 
   return (
-    <div className="pointer-events-none fixed inset-x-0 top-0 z-50 px-4 pt-[calc(env(safe-area-inset-top,0px)+8px)]">
-      <div className="pointer-events-auto mx-auto flex max-w-[430px] items-start gap-3 rounded-2xl border border-[var(--color-primary)]/15 bg-[var(--color-surface)]/95 px-4 py-3 shadow-lg backdrop-blur">
-        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)]">
+    <div className="pointer-events-none fixed inset-x-0 top-0 z-[180] px-4 pt-[calc(env(safe-area-inset-top,0px)+8px)]">
+      <div className="pointer-events-auto mx-auto flex max-w-[430px] items-start gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)]/95 px-4 py-3 shadow-lg backdrop-blur">
+        <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-chip-background)] text-[var(--color-text-primary)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />

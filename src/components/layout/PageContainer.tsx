@@ -26,18 +26,19 @@ interface PageHeaderProps {
   action?: ReactNode;
   showBack?: boolean;
   onBack?: () => void;
+  showBorder?: boolean;
 }
 
-export function PageHeader({ title, subtitle, action, showBack = false, onBack }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, action, showBack = false, onBack, showBorder = true }: PageHeaderProps) {
   return (
-    <header className="sticky top-0 z-40 border-b border-[var(--color-border-light)] bg-[var(--color-surface)]/92 backdrop-blur-xl">
-      <div className="flex min-h-16 items-start justify-between gap-3 px-[var(--page-padding-x)] py-3">
-        <div className="flex min-w-0 items-start gap-3">
+    <header className={`sticky top-0 z-40 bg-[var(--color-surface)]/92 backdrop-blur-xl ${showBorder ? 'border-b border-[var(--color-border-light)]' : ''}`}>
+      <div className="flex min-h-[76px] items-center justify-between gap-3 px-[var(--page-padding-x)] py-3">
+        <div className="flex min-w-0 items-center gap-3">
           {showBack && (
             <button
               type="button"
               onClick={onBack}
-              className="flex h-10 w-10 -ml-2 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--color-primary)]/30"
+              className="flex h-10 w-10 -ml-2 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-secondary)] focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]/30"
               aria-label="이전으로"
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -58,7 +59,7 @@ export function PageHeader({ title, subtitle, action, showBack = false, onBack }
           </div>
         </div>
 
-        {action && <div className="flex shrink-0 items-start pt-0.5">{action}</div>}
+        {action && <div className="flex shrink-0 items-center">{action}</div>}
       </div>
     </header>
   );

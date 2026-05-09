@@ -16,7 +16,7 @@ export function RecommendationCounter({
         <span
           key={index}
           className={`h-2 w-2 rounded-full transition-colors ${
-            index < viewedCount ? 'bg-[var(--color-primary)]' : 'bg-[var(--color-border)]'
+            index < viewedCount ? 'bg-[var(--color-pink-cta)]' : 'bg-[var(--color-border)]'
           }`}
         />
       ))}
