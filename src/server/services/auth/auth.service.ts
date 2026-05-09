@@ -6,6 +6,8 @@ import {
 import {
   createUserSession,
   hashBirth,
+  issueAccountRecoveryToken,
+  verifyAccountRecoveryToken,
   issuePreSignupVerification,
   SUSPENDED_USER_STATUS,
   toAuthUserSummary,
@@ -18,9 +20,11 @@ import { deleteAuthSessionById } from '@/server/repositories/auth/session.reposi
 import {
   createUser,
   findUserByEmail,
+  findUserForAccountRecovery,
   findUserByLoginId,
   findUserByNickname,
   findUserByStudentNumber,
+  updateUserPasswordHash,
 } from '@/server/repositories/user/user.repository';
 
 export interface RegisterInput {
@@ -170,7 +174,7 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
   }
 
   const passwordHash = await bcrypt.hash(input.password, 10);
-  await createUser({
+  const user = await createUser({
     login_id: input.loginId,
     real_name: input.realName,
     age: input.age,
@@ -187,14 +191,77 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
   });
 
   await clearPreSignupVerificationToken(preSignupToken);
+  const { token, expiresAt } = await createUserSession(user.id);
 
   return {
     registered: true,
-    nextPath: '/login',
+    nextPath: '/register?step=categories',
+    token,
+    expiresAt,
+    user: toAuthUserSummary(user),
   };
+}
+
+export interface AccountRecoveryVerificationResult {
+  loginId: string;
+  token: string;
 }
 
 export async function logout(sessionId: number) {
   await deleteAuthSessionById(sessionId).catch(() => undefined);
   return { loggedOut: true };
+}
+
+export async function verifyAccountRecoveryIdentity(input: {
+  studentNumber: string;
+  birth: string;
+}): Promise<AccountRecoveryVerificationResult> {
+  const studentNumber = input.studentNumber.trim();
+  const birth = input.birth.trim();
+
+  if (!studentNumber) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '학번을 입력해주세요.');
+  }
+
+  if (!/^\d{6}$/.test(birth)) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '생년월일 6자리를 입력해주세요.');
+  }
+
+  const user = await findUserForAccountRecovery(studentNumber);
+  if (!user || !user.login_id || !user.birth_hash || user.birth_hash !== hashBirth(birth)) {
+    throw new ApiError(ERROR.INVALID_VERIFICATION, '입력한 정보와 일치하는 계정을 찾을 수 없습니다.');
+  }
+
+  if (user.deleted_at !== null || user.status === WITHDRAWN_USER_STATUS) {
+    throw new ApiError(ERROR.ACCOUNT_WITHDRAWN, '탈퇴한 계정입니다.');
+  }
+
+  if (user.status === SUSPENDED_USER_STATUS) {
+    throw new ApiError(ERROR.ACCOUNT_SUSPENDED, '정지된 계정입니다.');
+  }
+
+  return {
+    loginId: user.login_id,
+    token: issueAccountRecoveryToken(user.id),
+  };
+}
+
+export async function resetPasswordWithRecoveryToken(input: {
+  token: string | null;
+  newPassword: string;
+}) {
+  const payload = verifyAccountRecoveryToken(input.token);
+  if (!payload) {
+    throw new ApiError(ERROR.UNAUTHORIZED, '본인 확인이 만료되었습니다. 다시 인증해주세요.');
+  }
+
+  const newPassword = input.newPassword.trim();
+  if (newPassword.length < 8) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '비밀번호는 8자 이상이어야 합니다.');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+  await updateUserPasswordHash(payload.userId, passwordHash);
+
+  return { passwordReset: true };
 }

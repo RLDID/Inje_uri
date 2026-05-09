@@ -4,18 +4,55 @@ import type { ReactNode } from 'react';
 import { FormEvent, startTransition, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PageContainer } from '@/components/layout';
+import { KeywordSelector, ProfileSection } from '@/components/profile';
 import { Button, Card, useToast } from '@/components/ui';
-import { PRE_AUTH_CREDENTIALS_STORAGE_KEY } from '@/lib/auth/constants';
 import { APP_NAME } from '@/lib/constants';
+import { findCanonicalDepartment, getDepartmentSuggestions } from '@/lib/departments';
+import { PROFILE_CATEGORIES } from '@/lib/types';
 
-interface RegisterApiResponse {
+type RegisterStep = 'verify' | 'profile' | 'categories';
+type Gender = 'male' | 'female';
+
+interface InjeCheckResponse {
   success?: boolean;
   data?: {
-    nextPath?: string;
+    nextStep?: 'login' | 'register';
   };
   error?: {
     message?: string;
   };
+}
+
+interface RegisterApiResponse {
+  success?: boolean;
+  error?: {
+    message?: string;
+  };
+}
+
+interface ProfileTaxonomyResponse {
+  success?: boolean;
+  data?: {
+    categories?: TaxonomyCategory[];
+  };
+}
+
+interface SavePreferencesResponse {
+  success?: boolean;
+  error?: {
+    message?: string;
+  };
+}
+
+interface TaxonomyCategory {
+  id: number;
+  code: string;
+  selectionType: string;
+  maxSelectCount: number;
+  keywords: Array<{
+    id: number;
+    code: string;
+  }>;
 }
 
 interface RegisterFormState {
@@ -26,7 +63,7 @@ interface RegisterFormState {
   age: string;
   studentYear: string;
   department: string;
-  gender: 'male' | 'female';
+  gender: Gender;
   realName: string;
   email: string;
   university: string;
@@ -46,21 +83,154 @@ const INITIAL_FORM_STATE: RegisterFormState = {
   university: '인제대학교',
 };
 
-function resolveNextPath(nextPath: string | null): string | null {
+const PROFILE_TO_TAXONOMY_CODE: Record<string, string> = {
+  lifestyle: 'lifestyle',
+  drinking: 'drinking',
+  smoking: 'smoking',
+  mbti: 'mbti',
+  personality: 'personality',
+  interests: 'interests',
+  vibe: 'desired_vibe',
+  dateStyle: 'date_style',
+  dealBreakers: 'deal_breakers',
+};
+
+const OPTION_TO_KEYWORD_CODE: Record<string, Record<string, string>> = {
+  lifestyle: {
+    active: 'outdoor',
+    homebody: 'homebody',
+    balanced: 'outdoor',
+  },
+  drinking: {
+    often: 'frequent',
+    sometimes: 'social',
+    never: 'never',
+  },
+  smoking: {
+    yes: 'smoker',
+    no: 'non_smoker',
+  },
+  personality: {
+    humorous: 'humorous',
+    calm: 'calm',
+    passionate: 'energetic',
+    affectionate: 'romantic',
+    honest: 'honest',
+    positive: 'warm',
+    careful: 'thoughtful',
+    social: 'energetic',
+    independent: 'ambitious',
+    emotional: 'warm',
+    rational: 'thoughtful',
+    considerate: 'thoughtful',
+  },
+  interests: {
+    exercise: 'exercise',
+    music: 'music',
+    movies: 'movies',
+    reading: 'books',
+    travel: 'travel',
+    gaming: 'games',
+    food: 'food',
+    cafe: 'cafe',
+    cooking: 'food',
+  },
+  vibe: {
+    comfortable: 'comfortable',
+    exciting: 'exciting',
+    intellectual: 'serious',
+    funny: 'exciting',
+    serious: 'serious',
+    casual: 'casual',
+  },
+  dateStyle: {
+    restaurant: 'good_food',
+    cafe: 'cafe_talk',
+    movie: 'activity',
+    walk: 'walk',
+    activity: 'activity',
+    home: 'drive',
+    concert: 'activity',
+    bookstore: 'walk',
+  },
+  dealBreakers: {
+    smoker: 'smoking',
+    'heavy-drinker': 'heavy_drinking',
+    'slow-replier': 'late_reply',
+    'no-plans': 'ghosting',
+    'too-fast': 'rude',
+  },
+};
+
+const aboutMeCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'aboutMe');
+const partnerCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'desiredPartner');
+
+function resolveInitialStep(step: string | null): RegisterStep {
+  return step === 'categories' ? 'categories' : 'verify';
+}
+
+function resolveNextPath(nextPath: string | null): string {
   if (!nextPath || !nextPath.startsWith('/') || nextPath.startsWith('//')) {
-    return null;
+    return '/match';
   }
 
   return nextPath;
 }
 
-function resolveLoginPath(nextPath: string | null): string {
-  const resolvedNextPath = resolveNextPath(nextPath);
-  if (!resolvedNextPath) {
-    return '/login';
+function getNextQuery(nextPath: string | null): string {
+  if (!nextPath || !nextPath.startsWith('/') || nextPath.startsWith('//')) {
+    return '';
   }
 
-  return `/login?next=${encodeURIComponent(resolvedNextPath)}`;
+  return `&next=${encodeURIComponent(nextPath)}`;
+}
+
+function toSelectionArray(value: string | string[] | undefined): string[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  return value ? [value] : [];
+}
+
+function toKeywordCode(categoryId: string, optionId: string): string {
+  if (categoryId === 'mbti') {
+    return optionId.toLowerCase();
+  }
+
+  return OPTION_TO_KEYWORD_CODE[categoryId]?.[optionId] ?? '';
+}
+
+function buildKeywordSelections(
+  taxonomyCategories: TaxonomyCategory[],
+  selectedPreferences: Record<string, string | string[]>,
+) {
+  const taxonomyByCode = new Map(taxonomyCategories.map((category) => [category.code, category]));
+
+  return PROFILE_CATEGORIES.flatMap((profileCategory) => {
+    const taxonomyCode = PROFILE_TO_TAXONOMY_CODE[profileCategory.id];
+    const taxonomyCategory = taxonomyCode ? taxonomyByCode.get(taxonomyCode) : undefined;
+
+    if (!taxonomyCategory) {
+      return [];
+    }
+
+    const keywordByCode = new Map(taxonomyCategory.keywords.map((keyword) => [keyword.code, keyword.id]));
+    const selectedOptionIds = toSelectionArray(selectedPreferences[profileCategory.id]);
+    const keywordIds = selectedOptionIds
+      .map((optionId) => keywordByCode.get(toKeywordCode(profileCategory.id, optionId)))
+      .filter((keywordId): keywordId is number => typeof keywordId === 'number')
+      .slice(0, taxonomyCategory.maxSelectCount);
+
+    if (keywordIds.length === 0) {
+      return [];
+    }
+
+    return [{
+      categoryId: taxonomyCategory.id,
+      keywordIds: [...new Set(keywordIds)],
+    }];
+  });
 }
 
 export function RegisterPageClient() {
@@ -68,43 +238,141 @@ export function RegisterPageClient() {
   const searchParams = useSearchParams();
   const { showToast } = useToast();
 
+  const [step, setStep] = useState<RegisterStep>(() => resolveInitialStep(searchParams.get('step')));
+  const [studentNumber, setStudentNumber] = useState('');
+  const [verifyBirth, setVerifyBirth] = useState('');
   const [form, setForm] = useState<RegisterFormState>(INITIAL_FORM_STATE);
+  const [taxonomyCategories, setTaxonomyCategories] = useState<TaxonomyCategory[]>([]);
+  const [selectedPreferences, setSelectedPreferences] = useState<Record<string, string | string[]>>({});
   const [errorMessage, setErrorMessage] = useState('');
+  const [isVerifying, setIsVerifying] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(false);
+  const [hasRequestedTaxonomy, setHasRequestedTaxonomy] = useState(false);
+  const [isSavingPreferences, setIsSavingPreferences] = useState(false);
+  const [isDepartmentListOpen, setIsDepartmentListOpen] = useState(false);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
+    setStep(resolveInitialStep(searchParams.get('step')));
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (step !== 'categories' || taxonomyCategories.length > 0 || isLoadingTaxonomy || hasRequestedTaxonomy) {
       return;
     }
 
-    const raw = window.sessionStorage.getItem(PRE_AUTH_CREDENTIALS_STORAGE_KEY);
-    if (!raw) {
+    let isActive = true;
+    setHasRequestedTaxonomy(true);
+    setIsLoadingTaxonomy(true);
+
+    fetch('/api/profile-taxonomy')
+      .then(async (response) => {
+        let payload: ProfileTaxonomyResponse = {};
+        try {
+          payload = await response.json() as ProfileTaxonomyResponse;
+        } catch {
+          payload = {};
+        }
+
+        if (response.ok && payload.success && payload.data?.categories && isActive) {
+          setTaxonomyCategories(payload.data.categories);
+        }
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (isActive) {
+          setIsLoadingTaxonomy(false);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [hasRequestedTaxonomy, isLoadingTaxonomy, step, taxonomyCategories.length]);
+
+  const isBusy = isVerifying || isSubmitting || isSavingPreferences;
+  const departmentSuggestions = getDepartmentSuggestions(form.department);
+
+  const handleVerifySubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedStudentNumber = studentNumber.trim();
+    const normalizedBirth = verifyBirth.trim();
+    if (!normalizedStudentNumber || !normalizedBirth) {
+      const message = '학번과 생년월일을 모두 입력해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
       return;
     }
+
+    if (!/^\d{6}$/.test(normalizedBirth)) {
+      const message = '생년월일은 6자리 숫자로 입력해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+      return;
+    }
+
+    setIsVerifying(true);
+    setErrorMessage('');
 
     try {
-      const parsed = JSON.parse(raw) as { loginId?: unknown; password?: unknown; birth?: unknown };
-      const prefilledLoginId = typeof parsed.loginId === 'string' ? parsed.loginId.trim() : '';
-      const prefilledPassword = typeof parsed.password === 'string' ? parsed.password : '';
-      const prefilledBirth = typeof parsed.birth === 'string' ? parsed.birth.replace(/\D/g, '').slice(0, 6) : '';
+      const response = await fetch('/api/auth/inje-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          studentNumber: normalizedStudentNumber,
+          birth: normalizedBirth,
+        }),
+      });
 
-      if (!prefilledLoginId && !prefilledPassword && !prefilledBirth) {
+      let payload: InjeCheckResponse = {};
+      try {
+        payload = await response.json() as InjeCheckResponse;
+      } catch {
+        payload = {};
+      }
+
+      if (!response.ok || !payload.success) {
+        const message = payload.error?.message ?? '인증에 실패했습니다. 다시 시도해주세요.';
+        setErrorMessage(message);
+        showToast(message, 'error');
+        return;
+      }
+
+      if (payload.data?.nextStep === 'login') {
+        const message = '이미 가입된 학번입니다. 로그인해주세요.';
+        setErrorMessage(message);
+        showToast(message, 'error');
         return;
       }
 
       setForm((prev) => ({
         ...prev,
-        loginId: prev.loginId || prefilledLoginId,
-        password: prev.password || prefilledPassword,
-        birth: prev.birth || prefilledBirth,
+        birth: normalizedBirth,
       }));
+      setStep('profile');
+      showToast('인증되었습니다. 회원가입 정보를 입력해주세요.', 'success');
     } catch {
-      window.sessionStorage.removeItem(PRE_AUTH_CREDENTIALS_STORAGE_KEY);
+      const message = '인증 요청 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+    } finally {
+      setIsVerifying(false);
     }
-  }, []);
+  };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+
+    const canonicalDepartment = findCanonicalDepartment(form.department);
+    if (!canonicalDepartment) {
+      const message = '학과는 목록에서 선택해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+      setIsDepartmentListOpen(true);
+      return;
+    }
+
     setIsSubmitting(true);
     setErrorMessage('');
 
@@ -114,6 +382,7 @@ export function RegisterPageClient() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          department: canonicalDepartment,
           age: Number(form.age),
           studentYear: Number(form.studentYear),
           birth: form.birth.trim(),
@@ -134,18 +403,10 @@ export function RegisterPageClient() {
         return;
       }
 
-      if (typeof window !== 'undefined') {
-        window.sessionStorage.removeItem(PRE_AUTH_CREDENTIALS_STORAGE_KEY);
-      }
-
-      showToast('회원가입이 완료되었습니다. 로그인해주세요.', 'success');
-      const apiNextPath = payload.data?.nextPath?.startsWith('/') ? payload.data.nextPath : '/login';
-      const nextPath = apiNextPath === '/login'
-        ? resolveLoginPath(searchParams.get('next'))
-        : apiNextPath;
-
+      showToast('회원가입이 완료되었습니다. 성향을 선택해주세요.', 'success');
+      setStep('categories');
       startTransition(() => {
-        router.replace(nextPath);
+        router.replace(`/register?step=categories${getNextQuery(searchParams.get('next'))}`);
       });
     } catch {
       const message = '회원가입 요청 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.';
@@ -156,173 +417,412 @@ export function RegisterPageClient() {
     }
   };
 
+  const handlePreferenceSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const missingCategory = PROFILE_CATEGORIES.find((category) => (
+      toSelectionArray(selectedPreferences[category.id]).length === 0
+    ));
+    if (missingCategory) {
+      const message = `${missingCategory.label} 항목을 선택해주세요.`;
+      setErrorMessage(message);
+      showToast(message, 'error');
+      return;
+    }
+
+    setIsSavingPreferences(true);
+    setErrorMessage('');
+
+    try {
+      const keywordSelections = buildKeywordSelections(taxonomyCategories, selectedPreferences);
+      const response = await fetch('/api/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          profile: { onboardingCompleted: true },
+          ...(keywordSelections.length > 0 ? { keywordSelections } : {}),
+        }),
+      });
+
+      let payload: SavePreferencesResponse = {};
+      try {
+        payload = await response.json() as SavePreferencesResponse;
+      } catch {
+        payload = {};
+      }
+
+      if (!response.ok || !payload.success) {
+        const message = payload.error?.message ?? '성향 저장에 실패했습니다.';
+        setErrorMessage(message);
+        showToast(message, 'error');
+        return;
+      }
+
+      showToast('성향이 저장되었습니다.', 'success');
+      const nextPath = resolveNextPath(searchParams.get('next'));
+      startTransition(() => {
+        router.replace(nextPath);
+      });
+    } catch {
+      const message = '성향 저장 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+    } finally {
+      setIsSavingPreferences(false);
+    }
+  };
+
   const updateField = <K extends keyof RegisterFormState>(key: K, value: RegisterFormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleDepartmentChange = (value: string) => {
+    updateField('department', value);
+    setIsDepartmentListOpen(true);
+  };
+
+  const handleDepartmentSelect = (department: string) => {
+    updateField('department', department);
+    setIsDepartmentListOpen(false);
+    setErrorMessage('');
+  };
+
+  const handleCategoryChange = (categoryId: string, value: string | string[]) => {
+    setSelectedPreferences((prev) => ({
+      ...prev,
+      [categoryId]: value,
+    }));
+  };
+
   return (
-    <PageContainer withBottomNav={false} className="flex min-h-dvh flex-col bg-[var(--color-bg)]">
+    <PageContainer withBottomNav={false} className="flex min-h-dvh flex-col bg-[radial-gradient(circle_at_top,#e9f7fb_0%,#f3f7f8_45%,#eef3f4_100%)]">
       <main className="flex flex-1 items-center px-[var(--page-padding-x)] py-10">
-        <Card variant="elevated" padding="lg" className="w-full border-[color-mix(in_srgb,var(--color-pink-cta)_18%,var(--color-border-light))] bg-[var(--color-surface)] backdrop-blur">
+        <Card variant="elevated" padding="lg" className="w-full border-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-border-light))] bg-white/95 backdrop-blur">
           <div className="mb-7">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
               {APP_NAME}
             </p>
-            <h1 className="mt-2 break-keep text-[26px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
+            <h1 className="mt-2 break-keep text-[26px] font-semibold text-[var(--color-text-primary)]">
               회원가입
             </h1>
             <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-              인증된 학번 정보와 생년월일로 계정을 생성합니다.
+              {step === 'verify' && '학번 인증을 먼저 완료하면 가입 정보를 입력할 수 있습니다.'}
+              {step === 'profile' && '인증된 학번 정보로 계정을 생성합니다.'}
+              {step === 'categories' && '프로필 수정과 이상형 설정에서 쓰는 항목을 선택해주세요.'}
             </p>
           </div>
 
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <LabeledInput label="아이디">
-              <input
-                type="text"
-                value={form.loginId}
-                onChange={(event) => updateField('loginId', event.target.value)}
-                placeholder="아이디"
-                autoComplete="username"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
+          <StepIndicator step={step} />
 
-            <LabeledInput label="비밀번호">
-              <input
-                type="password"
-                value={form.password}
-                onChange={(event) => updateField('password', event.target.value)}
-                placeholder="비밀번호"
-                autoComplete="new-password"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
+          {step === 'verify' && (
+            <form className="mt-6 space-y-4" onSubmit={handleVerifySubmit}>
+              <LabeledInput label="학번">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={studentNumber}
+                  onChange={(event) => setStudentNumber(event.target.value)}
+                  placeholder="예: 20231234"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
 
-            <LabeledInput label="닉네임">
-              <input
-                type="text"
-                value={form.nickname}
-                onChange={(event) => updateField('nickname', event.target.value)}
-                placeholder="닉네임"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
+              <LabeledInput label="생년월일 (6자리)">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={verifyBirth}
+                  onChange={(event) => setVerifyBirth(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="예: 020408"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
 
-            <LabeledInput label="생년월일 (6자리)">
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={form.birth}
-                onChange={(event) => updateField('birth', event.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="예: 020408"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
+              <Button type="submit" fullWidth size="lg" loading={isVerifying}>
+                인증
+              </Button>
 
-            <LabeledInput label="나이">
-              <input
-                type="number"
-                min={1}
-                max={100}
-                value={form.age}
-                onChange={(event) => updateField('age', event.target.value)}
-                placeholder="나이"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
-
-            <LabeledInput label="학년">
-              <input
-                type="number"
-                min={1}
-                max={8}
-                value={form.studentYear}
-                onChange={(event) => updateField('studentYear', event.target.value)}
-                placeholder="1~8"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
-
-            <LabeledInput label="학과">
-              <input
-                type="text"
-                value={form.department}
-                onChange={(event) => updateField('department', event.target.value)}
-                placeholder="학과"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
-
-            <LabeledInput label="성별">
-              <select
-                value={form.gender}
-                onChange={(event) => updateField('gender', event.target.value as 'male' | 'female')}
-                className={inputClassName}
-                disabled={isSubmitting}
+              <Button
+                type="button"
+                variant="ghost"
+                fullWidth
+                disabled={isBusy}
+                onClick={() => router.push('/login')}
               >
-                <option value="male">남성</option>
-                <option value="female">여성</option>
-              </select>
-            </LabeledInput>
+                로그인으로 돌아가기
+              </Button>
+            </form>
+          )}
 
-            <LabeledInput label="이름">
-              <input
-                type="text"
-                value={form.realName}
-                onChange={(event) => updateField('realName', event.target.value)}
-                placeholder="이름"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
+          {step === 'profile' && (
+            <form className="mt-6 space-y-4" onSubmit={handleRegisterSubmit}>
+              <div className="rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary-light)]/55 px-3 py-2 text-sm text-[var(--color-primary-dark)]">
+                학번 {studentNumber.trim()} 인증이 완료되었습니다.
+              </div>
 
-            <LabeledInput label="이메일">
-              <input
-                type="email"
-                value={form.email}
-                onChange={(event) => updateField('email', event.target.value)}
-                placeholder="이메일"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
+              <LabeledInput label="아이디">
+                <input
+                  type="text"
+                  value={form.loginId}
+                  onChange={(event) => updateField('loginId', event.target.value)}
+                  placeholder="아이디"
+                  autoComplete="username"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
 
-            <LabeledInput label="대학교">
-              <input
-                type="text"
-                value={form.university}
-                onChange={(event) => updateField('university', event.target.value)}
-                placeholder="대학교"
-                className={inputClassName}
-                disabled={isSubmitting}
-              />
-            </LabeledInput>
+              <LabeledInput label="비밀번호">
+                <input
+                  type="password"
+                  value={form.password}
+                  onChange={(event) => updateField('password', event.target.value)}
+                  placeholder="비밀번호"
+                  autoComplete="new-password"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
 
-            {errorMessage && (
-              <p
-                role="alert"
-                className="rounded-xl border border-[var(--color-pink-cta)]/25 bg-[var(--color-brand-pink)] px-3 py-2 text-sm text-[var(--color-text-primary)]"
-              >
-                {errorMessage}
-              </p>
-            )}
+              <LabeledInput label="닉네임">
+                <input
+                  type="text"
+                  value={form.nickname}
+                  onChange={(event) => updateField('nickname', event.target.value)}
+                  placeholder="닉네임"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
 
-            <Button type="submit" fullWidth size="lg" loading={isSubmitting}>
-              회원가입
-            </Button>
-          </form>
+              <LabeledInput label="생년월일 (6자리)">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={6}
+                  value={form.birth}
+                  readOnly
+                  placeholder="예: 020408"
+                  className={`${inputClassName} cursor-not-allowed bg-[var(--color-surface-secondary)]`}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="나이">
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={form.age}
+                  onChange={(event) => updateField('age', event.target.value)}
+                  placeholder="나이"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="학년">
+                <input
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={form.studentYear}
+                  onChange={(event) => updateField('studentYear', event.target.value)}
+                  placeholder="1~8"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="학과">
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={form.department}
+                    onChange={(event) => handleDepartmentChange(event.target.value)}
+                    onFocus={() => setIsDepartmentListOpen(true)}
+                    onBlur={() => {
+                      window.setTimeout(() => setIsDepartmentListOpen(false), 120);
+                    }}
+                    placeholder="학과를 입력하거나 선택해주세요"
+                    className={inputClassName}
+                    autoComplete="off"
+                    disabled={isBusy}
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={isDepartmentListOpen}
+                    aria-controls="department-options"
+                  />
+
+                  {isDepartmentListOpen && !isBusy && (
+                    <div
+                      id="department-options"
+                      role="listbox"
+                      className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-60 overflow-y-auto rounded-xl border border-[var(--color-border)] bg-white py-1 shadow-[0_16px_40px_rgba(15,23,42,0.14)]"
+                    >
+                      {departmentSuggestions.length > 0 ? (
+                        departmentSuggestions.map((department) => (
+                          <button
+                            key={department}
+                            type="button"
+                            role="option"
+                            aria-selected={form.department === department}
+                            className="block w-full px-4 py-2.5 text-left text-sm font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-primary-light)] focus:bg-[var(--color-primary-light)] focus:outline-none"
+                            onMouseDown={(event) => {
+                              event.preventDefault();
+                              handleDepartmentSelect(department);
+                            }}
+                          >
+                            {department}
+                          </button>
+                        ))
+                      ) : (
+                        <p className="px-4 py-3 text-sm text-[var(--color-text-tertiary)]">
+                          일치하는 학과가 없습니다.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs text-[var(--color-text-tertiary)]">
+                  목록에서 선택한 학과명으로 저장됩니다.
+                </p>
+              </LabeledInput>
+
+              <LabeledInput label="성별">
+                <select
+                  value={form.gender}
+                  onChange={(event) => updateField('gender', event.target.value as Gender)}
+                  className={inputClassName}
+                  disabled={isBusy}
+                >
+                  <option value="male">남성</option>
+                  <option value="female">여성</option>
+                </select>
+              </LabeledInput>
+
+              <LabeledInput label="이름">
+                <input
+                  type="text"
+                  value={form.realName}
+                  onChange={(event) => updateField('realName', event.target.value)}
+                  placeholder="이름"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="이메일">
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(event) => updateField('email', event.target.value)}
+                  placeholder="이메일"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
+
+              <LabeledInput label="대학교">
+                <input
+                  type="text"
+                  value={form.university}
+                  onChange={(event) => updateField('university', event.target.value)}
+                  placeholder="대학교"
+                  className={inputClassName}
+                  disabled={isBusy}
+                />
+              </LabeledInput>
+
+              <Button type="submit" fullWidth size="lg" loading={isSubmitting}>
+                다음
+              </Button>
+            </form>
+          )}
+
+          {step === 'categories' && (
+            <form className="mt-6 space-y-6" onSubmit={handlePreferenceSubmit}>
+              {isLoadingTaxonomy && (
+                <p className="rounded-xl bg-[var(--color-surface-secondary)] px-4 py-3 text-sm text-[var(--color-text-secondary)]">
+                  저장 연결을 준비하는 중입니다. 선택은 바로 진행할 수 있습니다.
+                </p>
+              )}
+
+              <ProfileSection title="내 성향">
+                {aboutMeCategories.map((category) => (
+                  <KeywordSelector
+                    key={category.id}
+                    category={category}
+                    selected={selectedPreferences[category.id] ?? (category.type === 'multi' ? [] : '')}
+                    onChange={(value) => handleCategoryChange(category.id, value)}
+                    disabled={isBusy}
+                  />
+                ))}
+              </ProfileSection>
+
+              <ProfileSection title="이상형">
+                {partnerCategories.map((category) => (
+                  <KeywordSelector
+                    key={category.id}
+                    category={category}
+                    selected={selectedPreferences[category.id] ?? (category.type === 'multi' ? [] : '')}
+                    onChange={(value) => handleCategoryChange(category.id, value)}
+                    disabled={isBusy}
+                  />
+                ))}
+              </ProfileSection>
+
+              <Button type="submit" fullWidth size="lg" loading={isSavingPreferences}>
+                성향 저장
+              </Button>
+            </form>
+          )}
+
+          {errorMessage && (
+            <p
+              role="alert"
+              className="mt-5 rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary-light)]/70 px-3 py-2 text-sm text-[var(--color-secondary-dark)]"
+            >
+              {errorMessage}
+            </p>
+          )}
         </Card>
       </main>
     </PageContainer>
+  );
+}
+
+function StepIndicator({ step }: { step: RegisterStep }) {
+  const steps: Array<{ id: RegisterStep; label: string }> = [
+    { id: 'verify', label: '인증' },
+    { id: 'profile', label: '정보' },
+    { id: 'categories', label: '성향' },
+  ];
+  const activeIndex = steps.findIndex((item) => item.id === step);
+
+  return (
+    <ol className="grid grid-cols-3 gap-2">
+      {steps.map((item, index) => {
+        const isActive = item.id === step;
+        const isComplete = index < activeIndex;
+
+        return (
+          <li
+            key={item.id}
+            className={`rounded-xl px-3 py-2 text-center text-sm font-semibold ${
+              isActive || isComplete
+                ? 'bg-[var(--color-primary)] text-white'
+                : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)]'
+            }`}
+          >
+            {item.label}
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -341,4 +841,4 @@ function LabeledInput({
   );
 }
 
-const inputClassName = 'w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20';
+const inputClassName = 'w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 disabled:cursor-not-allowed disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)]';
