@@ -32,19 +32,20 @@ export async function replaceUserKeywordSelections(
     keyword_id: number;
   }>,
 ) {
-  await prisma.userKeywordSelection.deleteMany({
-    where: { user_id: userId },
-  });
-
-  if (rows.length === 0) {
-    return;
-  }
-
-  await prisma.userKeywordSelection.createMany({
-    data: rows.map((row) => ({
-      user_id: userId,
-      category_id: row.category_id,
-      keyword_id: row.keyword_id,
-    })),
-  });
+  await prisma.$transaction([
+    prisma.userKeywordSelection.deleteMany({
+      where: { user_id: userId },
+    }),
+    ...(rows.length > 0
+      ? [
+          prisma.userKeywordSelection.createMany({
+            data: rows.map((row) => ({
+              user_id: userId,
+              category_id: row.category_id,
+              keyword_id: row.keyword_id,
+            })),
+          }),
+        ]
+      : []),
+  ]);
 }
