@@ -52,7 +52,7 @@ const categorySeeds = [
     max_select_count: 3,
     keywords: [
       "Warm", "Calm", "Humorous", "Energetic",
-      "Honest", "Thoughtful", "Ambitious", "Romantic",
+      "Serious", "Thoughtful", "Ambitious", "Romantic",
     ],
   },
   {
@@ -60,21 +60,21 @@ const categorySeeds = [
     name: "Interests",
     selection_type: "multi",
     max_select_count: 5,
-    keywords: ["Movies", "Music", "Cafe", "Travel", "Exercise", "Games", "Books", "Food"],
+    keywords: ["Movies", "Music", "Cafe", "Travel", "Exercise", "Games", "Books", "Food", "Walk", "Drive"],
   },
   {
     category_code: "desired_vibe",
     name: "Desired Vibe",
     selection_type: "single",
     max_select_count: 1,
-    keywords: ["Comfortable", "Exciting", "Serious", "Casual", "Romantic"],
+    keywords: ["Calm", "Energetic", "Serious", "Humorous", "Romantic"],
   },
   {
     category_code: "date_style",
     name: "Date Style",
     selection_type: "single",
     max_select_count: 1,
-    keywords: ["Cafe Talk", "Good Food", "Walk", "Activity", "Drive"],
+    keywords: ["Cafe", "Food", "Walk", "Exercise", "Drive"],
   },
   {
     category_code: "deal_breakers",
@@ -138,10 +138,10 @@ const testKeywordCategorySeeds = [
     selection_type: "single",
     max_select_count: 1,
     keywords: [
-      { code: "comfortable", label: "Comfortable" },
-      { code: "exciting", label: "Exciting" },
+      { code: "calm", label: "Calm" },
+      { code: "energetic", label: "Energetic" },
       { code: "serious", label: "Serious" },
-      { code: "casual", label: "Casual" },
+      { code: "humorous", label: "Humorous" },
       { code: "romantic", label: "Romantic" },
     ],
   },
@@ -151,10 +151,10 @@ const testKeywordCategorySeeds = [
     selection_type: "single",
     max_select_count: 1,
     keywords: [
-      { code: "cafe_talk", label: "Cafe Talk" },
-      { code: "good_food", label: "Good Food" },
+      { code: "cafe", label: "Cafe" },
+      { code: "food", label: "Food" },
       { code: "walk", label: "Walk" },
-      { code: "activity", label: "Activity" },
+      { code: "exercise", label: "Exercise" },
       { code: "drive", label: "Drive" },
     ],
   },
@@ -384,14 +384,14 @@ const testUserSeeds = [
 const testUserKeywordSeeds = [
   { email: "test_a@inje.ac.kr", keywords: ["Romantic", "Walk", "Smoking"] },
   { email: "test_b@inje.ac.kr", keywords: ["Romantic", "Walk", "Smoking"] },
-  { email: "test_c@inje.ac.kr", keywords: ["Comfortable", "Cafe Talk"] },
-  { email: "test_d@inje.ac.kr", keywords: ["Exciting", "Activity"] },
+  { email: "test_c@inje.ac.kr", keywords: ["Calm", "Cafe"] },
+  { email: "test_d@inje.ac.kr", keywords: ["Energetic", "Exercise"] },
   { email: "test_e@inje.ac.kr", keywords: ["Serious", "Drive"] },
-  { email: "test_f@inje.ac.kr", keywords: ["Casual", "Good Food"] },
-  { email: "test_g@inje.ac.kr", keywords: ["Comfortable", "Rude"] },
-  { email: "test_h@inje.ac.kr", keywords: ["Exciting", "Late Reply"] },
+  { email: "test_f@inje.ac.kr", keywords: ["Humorous", "Food"] },
+  { email: "test_g@inje.ac.kr", keywords: ["Calm", "Rude"] },
+  { email: "test_h@inje.ac.kr", keywords: ["Energetic", "Late Reply"] },
   { email: "test_i@inje.ac.kr", keywords: ["Serious", "Ghosting"] },
-  { email: "test_j@inje.ac.kr", keywords: ["Casual", "Heavy Drinking"] },
+  { email: "test_j@inje.ac.kr", keywords: ["Humorous", "Heavy Drinking"] },
 ];
 
 // ─────────────────────────────────────────────

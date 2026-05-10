@@ -16,6 +16,8 @@ import {
 interface KeywordSelectionInput {
   categoryId?: unknown;
   keywordIds?: unknown;
+  categoryCode?: unknown; // 신규: 코드 기반 지원
+  keywordCodes?: unknown;  // 신규: 코드 기반 지원
 }
 
 export interface UserPatchBody {
@@ -39,7 +41,7 @@ function toOptionalString(value: unknown): string | undefined {
   }
 
   const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : '';
+  return trimmed.length > 0 ? trimmed : undefined; // 빈 문자열은 undefined로 처리
 }
 
 function toOptionalNumber(value: unknown): number | undefined {
@@ -120,59 +122,86 @@ async function normalizeKeywordSelections(rawValue: unknown) {
     throw new ApiError(ERROR.VALIDATION_ERROR, 'keywordSelections는 배열이어야 합니다.');
   }
 
-  const normalized = rawValue.map((item) => {
-    const selection = item as KeywordSelectionInput;
-    const categoryId = toOptionalNumber(selection.categoryId);
-    const rawKeywordIds = selection.keywordIds;
+  // 1. 모든 가용한 카테고리 및 키워드 마스터 데이터 로드 (코드 변환용)
+  const allCategories = await findAllCategoriesWithKeywords();
+  const categoryCodeMap = new Map(allCategories.map((c: any) => [c.category_code, c]));
+  const categoryIdMap = new Map(allCategories.map((c: any) => [c.category_id, c]));
 
-    if (!categoryId || !Array.isArray(rawKeywordIds)) {
-      throw new ApiError(ERROR.VALIDATION_ERROR, 'categoryId와 keywordIds 형식을 확인해주세요.');
+  const normalized = rawValue.map((item) => {
+    const input = item as KeywordSelectionInput;
+    let targetCategory: any = null;
+    let keywordIds: number[] = [];
+
+    // Case A: 코드 기반 (categoryCode, keywordCodes)
+    if (input.categoryCode) {
+      const code = toOptionalString(input.categoryCode);
+      targetCategory = categoryCodeMap.get(code ?? '');
+      if (!targetCategory) {
+        throw new ApiError(ERROR.VALIDATION_ERROR, `존재하지 않는 카테고리 코드입니다: ${code}`);
+      }
+
+      const codes = Array.isArray(input.keywordCodes) ? input.keywordCodes : [];
+      const kwMap = new Map(targetCategory.keywords.map((k: any) => [k.keyword_code, k.keyword_id]));
+      
+      keywordIds = codes
+        .map(c => kwMap.get(toOptionalString(c) ?? ''))
+        .filter((id): id is number => id !== undefined);
+
+      if (keywordIds.length !== codes.length) {
+        throw new ApiError(ERROR.VALIDATION_ERROR, `카테고리(${code}) 내에 존재하지 않는 키워드 코드가 포함되어 있습니다.`);
+      }
+    } 
+    // Case B: ID 기반 (categoryId, keywordIds) - 레거시 지원
+    else {
+      const categoryId = toOptionalNumber(input.categoryId);
+      targetCategory = categoryIdMap.get(categoryId ?? -1);
+      if (!targetCategory) {
+        throw new ApiError(ERROR.VALIDATION_ERROR, `존재하지 않는 카테고리 ID입니다: ${categoryId}`);
+      }
+
+      const rawIds = Array.isArray(input.keywordIds) ? input.keywordIds : [];
+      keywordIds = [...new Set(
+        rawIds
+          .map((id) => (typeof id === 'number' ? id : Number.NaN))
+          .filter((id) => !Number.isNaN(id)),
+      )];
     }
 
-    const keywordIds = [...new Set(
-      rawKeywordIds
-        .map((keywordId) => (typeof keywordId === 'number' ? keywordId : Number.NaN))
-        .filter((keywordId) => !Number.isNaN(keywordId)),
-    )];
-
-    return { categoryId, keywordIds };
+    return { 
+      categoryId: targetCategory.category_id, 
+      keywordIds,
+      categoryName: targetCategory.name,
+      selectionType: targetCategory.selection_type,
+      maxSelectCount: targetCategory.max_select_count,
+      validKeywordIds: new Set(targetCategory.keywords.map((k: any) => k.keyword_id))
+    };
   });
 
+  // 중복 카테고리 검증
   const categoryIds = normalized.map((item) => item.categoryId);
-  const uniqueCategoryCount = new Set(categoryIds).size;
-  if (uniqueCategoryCount !== categoryIds.length) {
+  if (new Set(categoryIds).size !== categoryIds.length) {
     throw new ApiError(ERROR.VALIDATION_ERROR, '중복된 카테고리는 허용되지 않습니다.');
   }
 
-  const categories = await findCategoriesWithKeywordsByIds(categoryIds);
-  const categoryMap = new Map(categories.map((category: any) => [category.category_id, category]));
-  if (categoryMap.size !== categoryIds.length) {
-    throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 카테고리가 포함되어 있습니다.');
-  }
-
+  // 비즈니스 로직 검증
   for (const item of normalized) {
-    const category = categoryMap.get(item.categoryId);
-    if (!category) {
-      throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 카테고리가 포함되어 있습니다.');
-    }
-
-    const validKeywordIds = new Set((category as any).keywords.map((keyword: any) => keyword.keyword_id));
-    const hasInvalidKeyword = item.keywordIds.some((keywordId) => !validKeywordIds.has(keywordId));
-
+    // 키워드 소속 검증
+    const hasInvalidKeyword = item.keywordIds.some((id) => !item.validKeywordIds.has(id));
     if (hasInvalidKeyword) {
-      throw new ApiError(ERROR.VALIDATION_ERROR, '카테고리와 맞지 않는 키워드가 포함되어 있습니다.');
+      throw new ApiError(ERROR.VALIDATION_ERROR, `카테고리(${item.categoryName})와 맞지 않는 키워드가 포함되어 있습니다.`);
     }
 
-    if (item.keywordIds.length > (category as any).max_select_count) {
-      throw new ApiError(ERROR.VALIDATION_ERROR, `${(category as any).name} 선택 개수를 초과했습니다.`);
+    // 개수 검증
+    if (item.keywordIds.length > item.maxSelectCount) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, `${item.categoryName} 선택 개수를 초과했습니다.`);
     }
 
-    if ((category as any).selection_type === 'single' && item.keywordIds.length > 1) {
-      throw new ApiError(ERROR.VALIDATION_ERROR, `${(category as any).name}는 하나만 선택할 수 있습니다.`);
+    if (item.selectionType === 'single' && item.keywordIds.length > 1) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, `${item.categoryName}는 하나만 선택할 수 있습니다.`);
     }
   }
 
-  return normalized;
+  return normalized.map(n => ({ categoryId: n.categoryId, keywordIds: n.keywordIds }));
 }
 
 export async function getCurrentUserProfile(userId: number) {
@@ -341,6 +370,9 @@ export async function updateCurrentUserProfile(userId: number, body: UserPatchBo
   }
 
   if (keywordSelections !== null) {
+    // 업데이트 대상 카테고리 ID 추출 (원자적 업데이트를 위함)
+    const targetCategoryIds = [...new Set(keywordSelections.map((s) => s.categoryId))];
+
     const rows = keywordSelections.flatMap((selection) => (
       selection.keywordIds.map((keywordId) => ({
         category_id: selection.categoryId,
@@ -348,7 +380,8 @@ export async function updateCurrentUserProfile(userId: number, body: UserPatchBo
       }))
     ));
 
-    await replaceUserKeywordSelections(userId, rows);
+    // 지정된 카테고리 내에서만 교체 (병합 로직의 핵심)
+    await replaceUserKeywordSelections(userId, rows, targetCategoryIds);
   }
 
   if (shouldGenerateTodayRecommendations) {
