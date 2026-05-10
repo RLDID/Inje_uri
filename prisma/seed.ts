@@ -11,122 +11,264 @@ const prisma = new PrismaClient({ adapter });
 // ─────────────────────────────────────────────
 // 카테고리 / 키워드 seed 데이터
 // ─────────────────────────────────────────────
-const categorySeeds = [
+type CategorySeed = {
+  category_code: string;
+  name: string;
+  selection_type: "single" | "multi";
+  max_select_count: number;
+  keywords: Array<{ code: string; label: string }>;
+};
+
+const categorySeeds: CategorySeed[] = [
+  {
+    category_code: "lifestyle",
+    name: "라이프스타일",
+    selection_type: "single",
+    max_select_count: 1,
+    keywords: [
+      { code: "active", label: "활동적인 편이에요" },
+      { code: "homebody", label: "집에서 쉬는 걸 좋아해요" },
+      { code: "balanced", label: "밖과 집이 적당히 좋아요" },
+    ],
+  },
+  {
+    category_code: "drinking",
+    name: "음주",
+    selection_type: "single",
+    max_select_count: 1,
+    keywords: [
+      { code: "often", label: "술자리를 좋아해요" },
+      { code: "sometimes", label: "가볍게 마셔요" },
+      { code: "never", label: "술은 거의 마시지 않아요" },
+    ],
+  },
+  {
+    category_code: "smoking",
+    name: "흡연",
+    selection_type: "single",
+    max_select_count: 1,
+    keywords: [
+      { code: "yes", label: "흡연해요" },
+      { code: "no", label: "비흡연이에요" },
+    ],
+  },
   {
     category_code: "mbti",
     name: "MBTI",
     selection_type: "single",
     max_select_count: 1,
     keywords: [
-      "INTJ", "INTP", "ENTJ", "ENTP",
-      "INFJ", "INFP", "ENFJ", "ENFP",
-      "ISTJ", "ISFJ", "ESTJ", "ESFJ",
-      "ISTP", "ISFP", "ESTP", "ESFP",
+      { code: "intj", label: "INTJ" },
+      { code: "intp", label: "INTP" },
+      { code: "entj", label: "ENTJ" },
+      { code: "entp", label: "ENTP" },
+      { code: "infj", label: "INFJ" },
+      { code: "infp", label: "INFP" },
+      { code: "enfj", label: "ENFJ" },
+      { code: "enfp", label: "ENFP" },
+      { code: "istj", label: "ISTJ" },
+      { code: "isfj", label: "ISFJ" },
+      { code: "estj", label: "ESTJ" },
+      { code: "esfj", label: "ESFJ" },
+      { code: "istp", label: "ISTP" },
+      { code: "isfp", label: "ISFP" },
+      { code: "estp", label: "ESTP" },
+      { code: "esfp", label: "ESFP" },
     ],
   },
   {
-    category_code: "lifestyle",
-    name: "Lifestyle",
-    selection_type: "single",
-    max_select_count: 1,
-    keywords: ["Homebody", "Outdoor", "Early Bird", "Night Owl"],
-  },
-  {
-    category_code: "drinking",
-    name: "Drinking",
-    selection_type: "single",
-    max_select_count: 1,
-    keywords: ["Never", "Social", "Occasional", "Frequent"],
-  },
-  {
-    category_code: "smoking",
-    name: "Smoking",
-    selection_type: "single",
-    max_select_count: 1,
-    keywords: ["Non Smoker", "Outside Only", "Occasional", "Smoker"],
-  },
-  {
     category_code: "personality",
-    name: "Personality",
+    name: "성격 키워드",
     selection_type: "multi",
-    max_select_count: 3,
+    max_select_count: 5,
     keywords: [
-      "Warm", "Calm", "Humorous", "Energetic",
-      "Honest", "Thoughtful", "Ambitious", "Romantic",
+      { code: "humorous", label: "유머러스해요" },
+      { code: "calm", label: "차분한 편이에요" },
+      { code: "passionate", label: "열정적인 편이에요" },
+      { code: "affectionate", label: "다정한 편이에요" },
+      { code: "honest", label: "솔직한 편이에요" },
+      { code: "positive", label: "긍정적인 편이에요" },
+      { code: "careful", label: "신중한 편이에요" },
+      { code: "social", label: "사람 만나는 걸 좋아해요" },
+      { code: "independent", label: "혼자만의 시간도 중요해요" },
+      { code: "emotional", label: "감수성이 풍부해요" },
+      { code: "rational", label: "이성적으로 생각해요" },
+      { code: "considerate", label: "배려심이 있어요" },
+    ],
+  },
+  {
+    category_code: "conversation",
+    name: "대화 스타일",
+    selection_type: "single",
+    max_select_count: 1,
+    keywords: [
+      { code: "talkative", label: "대화가 자연스럽게 이어져요" },
+      { code: "listener", label: "잘 들어주는 편이에요" },
+      { code: "depends", label: "상황에 따라 달라요" },
     ],
   },
   {
     category_code: "interests",
-    name: "Interests",
+    name: "관심사",
     selection_type: "multi",
-    max_select_count: 5,
-    keywords: ["Movies", "Music", "Cafe", "Travel", "Exercise", "Games", "Books", "Food"],
+    max_select_count: 7,
+    keywords: [
+      { code: "exercise", label: "운동" },
+      { code: "music", label: "음악" },
+      { code: "movies", label: "영화/드라마" },
+      { code: "reading", label: "독서" },
+      { code: "travel", label: "여행" },
+      { code: "gaming", label: "게임" },
+      { code: "food", label: "맛집 탐방" },
+      { code: "cafe", label: "카페" },
+      { code: "photography", label: "사진" },
+      { code: "cooking", label: "요리" },
+      { code: "pets", label: "반려동물" },
+      { code: "selfdev", label: "자기계발" },
+      { code: "fashion", label: "패션" },
+      { code: "art", label: "전시/예술" },
+    ],
   },
   {
     category_code: "desired_vibe",
-    name: "Desired Vibe",
-    selection_type: "single",
-    max_select_count: 1,
-    keywords: ["Comfortable", "Exciting", "Serious", "Casual", "Romantic"],
+    name: "원하는 만남 분위기",
+    selection_type: "multi",
+    max_select_count: 3,
+    keywords: [
+      { code: "comfortable", label: "편안한 분위기" },
+      { code: "exciting", label: "설레는 분위기" },
+      { code: "intellectual", label: "대화가 잘 통하는 분위기" },
+      { code: "funny", label: "웃음이 많은 분위기" },
+      { code: "serious", label: "진지한 만남도 괜찮아요" },
+      { code: "casual", label: "가볍게 알아가고 싶어요" },
+    ],
   },
   {
     category_code: "date_style",
-    name: "Date Style",
+    name: "선호하는 데이트",
     selection_type: "single",
     max_select_count: 1,
-    keywords: ["Cafe Talk", "Good Food", "Walk", "Activity", "Drive"],
+    keywords: [
+      { code: "restaurant", label: "맛집 데이트" },
+      { code: "cafe", label: "카페 데이트" },
+      { code: "movie", label: "영화/공연 데이트" },
+      { code: "walk", label: "산책 데이트" },
+      { code: "activity", label: "액티비티 데이트" },
+      { code: "home", label: "집 근처 가벼운 데이트" },
+      { code: "concert", label: "콘서트 데이트" },
+      { code: "bookstore", label: "서점 데이트" },
+    ],
   },
   {
     category_code: "deal_breakers",
-    name: "Deal Breakers",
+    name: "피하고 싶은 조건",
     selection_type: "multi",
     max_select_count: 3,
-    keywords: ["Rude", "Smoking", "Heavy Drinking", "Ghosting", "Late Reply"],
+    keywords: [
+      { code: "slow-replier", label: "답장이 너무 느리면 아쉬워요" },
+      { code: "no-plans", label: "약속을 자주 미루면 아쉬워요" },
+      { code: "too-fast", label: "너무 빠른 진도는 부담돼요" },
+    ],
   },
 ];
 
 // ─────────────────────────────────────────────
-// 테스트용 한국어 키워드 카테고리
+// 정적 taxonomy 계약 검증
 // ─────────────────────────────────────────────
-const testKeywordCategorySeeds = [
-  {
-    category_code: "personality_kr",
-    name: "성격",
-    selection_type: "multi",
-    max_select_count: 3,
-    keywords: [
-      { code: "active",    label: "활발함" },
-      { code: "calm",      label: "차분함" },
-      { code: "humorous",  label: "유머러스" },
-      { code: "serious",   label: "진지함" },
-    ],
-  },
-  {
-    category_code: "hobby_kr",
-    name: "취미",
-    selection_type: "multi",
-    max_select_count: 5,
-    keywords: [
-      { code: "exercise", label: "운동" },
-      { code: "reading",  label: "독서" },
-      { code: "gaming",   label: "게임" },
-      { code: "cooking",  label: "요리" },
-      { code: "travel",   label: "여행" },
-    ],
-  },
-  {
-    category_code: "love_style",
-    name: "연애스타일",
-    selection_type: "multi",
-    max_select_count: 3,
-    keywords: [
-      { code: "caring",       label: "다정함" },
-      { code: "independent",  label: "독립적" },
-      { code: "expressive",   label: "표현적" },
-      { code: "considerate",  label: "배려심" },
-    ],
-  },
+const EXPECTED_KEYWORD_COUNTS: Record<string, number> = {
+  lifestyle: 3,
+  drinking: 3,
+  smoking: 2,
+  mbti: 16,
+  personality: 12,
+  conversation: 3,
+  interests: 14,
+  desired_vibe: 6,
+  date_style: 8,
+  deal_breakers: 3,
+};
+
+function assertTaxonomyContract() {
+  const categoryCodes = categorySeeds.map((c) => c.category_code);
+  const dupCategory = categoryCodes.find((code, i) => categoryCodes.indexOf(code) !== i);
+  if (dupCategory) throw new Error(`[taxonomy] 중복 category_code: ${dupCategory}`);
+
+  for (const cat of categorySeeds) {
+    const codes = cat.keywords.map((k) => k.code);
+    const dupCode = codes.find((c, i) => codes.indexOf(c) !== i);
+    if (dupCode) throw new Error(`[taxonomy] ${cat.category_code}: 중복 keyword_code: ${dupCode}`);
+
+    const expected = EXPECTED_KEYWORD_COUNTS[cat.category_code];
+    if (expected !== undefined && cat.keywords.length !== expected) {
+      throw new Error(
+        `[taxonomy] ${cat.category_code}: keyword 수 불일치 (expected ${expected}, got ${cat.keywords.length})`
+      );
+    }
+  }
+
+  for (const code of Object.keys(EXPECTED_KEYWORD_COUNTS)) {
+    if (!categoryCodes.includes(code)) {
+      throw new Error(`[taxonomy] 누락된 category_code: ${code}`);
+    }
+  }
+
+  console.log("[taxonomy] 계약 검증 통과 ✓");
+}
+
+// ─────────────────────────────────────────────
+// Cleanup 함수
+// ─────────────────────────────────────────────
+const MANAGED_PROFILE_CATEGORY_CODES = [
+  "lifestyle", "drinking", "smoking", "mbti", "personality",
+  "conversation", "interests", "desired_vibe", "date_style", "deal_breakers",
 ];
+
+const OBSOLETE_KOREAN_CATEGORY_CODES = ["personality_kr", "hobby_kr", "love_style"];
+
+async function cleanupObsoleteKoreanCategories() {
+  for (const categoryCode of OBSOLETE_KOREAN_CATEGORY_CODES) {
+    const category = await prisma.category.findUnique({ where: { category_code: categoryCode } });
+    if (!category) continue;
+
+    const keywords = await prisma.keyword.findMany({
+      where: { category_id: category.category_id },
+      select: { keyword_id: true },
+    });
+    const keywordIds = keywords.map((k) => k.keyword_id);
+
+    if (keywordIds.length > 0) {
+      await prisma.userKeywordSelection.deleteMany({ where: { keyword_id: { in: keywordIds } } });
+      await prisma.keyword.deleteMany({ where: { keyword_id: { in: keywordIds } } });
+    }
+    await prisma.category.delete({ where: { category_id: category.category_id } });
+    console.log(`[cleanup] 구 테스트 카테고리 삭제: ${categoryCode}`);
+  }
+}
+
+async function cleanupObsoleteProfileKeywords() {
+  for (const categorySeed of categorySeeds) {
+    const category = await prisma.category.findUnique({
+      where: { category_code: categorySeed.category_code },
+    });
+    if (!category) continue;
+
+    const currentCodes = new Set(categorySeed.keywords.map((k) => k.code));
+    const existingKeywords = await prisma.keyword.findMany({
+      where: { category_id: category.category_id },
+      select: { keyword_id: true, keyword_code: true },
+    });
+
+    const obsolete = existingKeywords.filter((k) => !currentCodes.has(k.keyword_code));
+    if (obsolete.length === 0) continue;
+
+    const obsoleteIds = obsolete.map((k) => k.keyword_id);
+    await prisma.userKeywordSelection.deleteMany({ where: { keyword_id: { in: obsoleteIds } } });
+    await prisma.keyword.deleteMany({ where: { keyword_id: { in: obsoleteIds } } });
+    console.log(
+      `[cleanup] ${categorySeed.category_code}: 구 keyword 삭제 → ${obsolete.map((k) => k.keyword_code).join(", ")}`
+    );
+  }
+}
 
 // ─────────────────────────────────────────────
 // Feed 키워드 seed 데이터
@@ -320,17 +462,90 @@ const testUserSeeds = [
 // ─────────────────────────────────────────────
 // 테스트 유저 키워드 할당
 // ─────────────────────────────────────────────
-const testUserKeywordSeeds = [
-  { email: "test_a@inje.ac.kr", keywords: ["활발함", "운동", "다정함"] },
-  { email: "test_b@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
-  { email: "test_c@inje.ac.kr", keywords: ["차분함", "독서", "배려심"] },
-  { email: "test_d@inje.ac.kr", keywords: ["유머러스", "게임", "표현적"] },
-  { email: "test_e@inje.ac.kr", keywords: ["활발함", "운동", "표현적"] },
-  { email: "test_f@inje.ac.kr", keywords: ["차분함", "요리", "배려심"] },
-  { email: "test_g@inje.ac.kr", keywords: ["진지함", "독서", "다정함"] },
-  { email: "test_h@inje.ac.kr", keywords: ["활발함", "여행", "다정함"] },
-  { email: "test_i@inje.ac.kr", keywords: ["유머러스", "운동", "표현적"] },
-  { email: "test_j@inje.ac.kr", keywords: ["차분함", "여행", "배려심"] },
+const testUserKeywordSeeds: Array<{
+  email: string;
+  keywords: Array<{ categoryCode: string; keywordCode: string }>;
+}> = [
+  {
+    email: "test_a@inje.ac.kr",
+    keywords: [
+      { categoryCode: "lifestyle", keywordCode: "active" },
+      { categoryCode: "interests", keywordCode: "exercise" },
+      { categoryCode: "personality", keywordCode: "affectionate" },
+    ],
+  },
+  {
+    email: "test_b@inje.ac.kr",
+    keywords: [
+      { categoryCode: "lifestyle", keywordCode: "active" },
+      { categoryCode: "interests", keywordCode: "travel" },
+      { categoryCode: "personality", keywordCode: "affectionate" },
+    ],
+  },
+  {
+    email: "test_c@inje.ac.kr",
+    keywords: [
+      { categoryCode: "lifestyle", keywordCode: "balanced" },
+      { categoryCode: "interests", keywordCode: "reading" },
+      { categoryCode: "personality", keywordCode: "considerate" },
+    ],
+  },
+  {
+    email: "test_d@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality", keywordCode: "humorous" },
+      { categoryCode: "interests", keywordCode: "gaming" },
+      { categoryCode: "personality", keywordCode: "emotional" },
+    ],
+  },
+  {
+    email: "test_e@inje.ac.kr",
+    keywords: [
+      { categoryCode: "lifestyle", keywordCode: "active" },
+      { categoryCode: "interests", keywordCode: "exercise" },
+      { categoryCode: "personality", keywordCode: "emotional" },
+    ],
+  },
+  {
+    email: "test_f@inje.ac.kr",
+    keywords: [
+      { categoryCode: "lifestyle", keywordCode: "balanced" },
+      { categoryCode: "interests", keywordCode: "cooking" },
+      { categoryCode: "personality", keywordCode: "considerate" },
+    ],
+  },
+  {
+    email: "test_g@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality", keywordCode: "calm" },
+      { categoryCode: "interests", keywordCode: "reading" },
+      { categoryCode: "personality", keywordCode: "affectionate" },
+    ],
+  },
+  {
+    email: "test_h@inje.ac.kr",
+    keywords: [
+      { categoryCode: "lifestyle", keywordCode: "active" },
+      { categoryCode: "interests", keywordCode: "travel" },
+      { categoryCode: "personality", keywordCode: "affectionate" },
+    ],
+  },
+  {
+    email: "test_i@inje.ac.kr",
+    keywords: [
+      { categoryCode: "personality", keywordCode: "humorous" },
+      { categoryCode: "interests", keywordCode: "exercise" },
+      { categoryCode: "personality", keywordCode: "emotional" },
+    ],
+  },
+  {
+    email: "test_j@inje.ac.kr",
+    keywords: [
+      { categoryCode: "lifestyle", keywordCode: "balanced" },
+      { categoryCode: "interests", keywordCode: "travel" },
+      { categoryCode: "personality", keywordCode: "considerate" },
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────
@@ -350,7 +565,7 @@ const testSessionSeeds = [
 ];
 
 // ─────────────────────────────────────────────
-// 헬퍼
+// Seed 함수
 // ─────────────────────────────────────────────
 function toKeywordCode(label: string) {
   return label
@@ -359,9 +574,6 @@ function toKeywordCode(label: string) {
     .replace(/^_+|_+$/g, "");
 }
 
-// ─────────────────────────────────────────────
-// Seed 함수
-// ─────────────────────────────────────────────
 async function seedCategories() {
   for (const categorySeed of categorySeeds) {
     const category = await prisma.category.upsert({
@@ -379,56 +591,19 @@ async function seedCategories() {
       },
     });
 
-    for (const [index, label] of categorySeed.keywords.entries()) {
+    for (const [index, keyword] of categorySeed.keywords.entries()) {
       await prisma.keyword.upsert({
         where: {
           category_id_keyword_code: {
             category_id: category.category_id,
-            keyword_code: toKeywordCode(label),
+            keyword_code: keyword.code,
           },
         },
-        update: { label, sort_order: index + 1 },
+        update: { label: keyword.label, sort_order: index + 1 },
         create: {
           category_id: category.category_id,
-          keyword_code: toKeywordCode(label),
-          label,
-          sort_order: index + 1,
-        },
-      });
-    }
-  }
-}
-
-async function seedTestKeywordCategories() {
-  for (const categorySeed of testKeywordCategorySeeds) {
-    const category = await prisma.category.upsert({
-      where: { category_code: categorySeed.category_code },
-      update: {
-        name: categorySeed.name,
-        selection_type: categorySeed.selection_type,
-        max_select_count: categorySeed.max_select_count,
-      },
-      create: {
-        category_code: categorySeed.category_code,
-        name: categorySeed.name,
-        selection_type: categorySeed.selection_type,
-        max_select_count: categorySeed.max_select_count,
-      },
-    });
-
-    for (const [index, kw] of categorySeed.keywords.entries()) {
-      await prisma.keyword.upsert({
-        where: {
-          category_id_keyword_code: {
-            category_id: category.category_id,
-            keyword_code: kw.code,
-          },
-        },
-        update: { label: kw.label, sort_order: index + 1 },
-        create: {
-          category_id: category.category_id,
-          keyword_code: kw.code,
-          label: kw.label,
+          keyword_code: keyword.code,
+          label: keyword.label,
           sort_order: index + 1,
         },
       });
@@ -510,18 +685,26 @@ async function seedTestFeedAndComment() {
 
 async function seedTestUserKeywords() {
   const allKeywords = await prisma.keyword.findMany({
-    select: { keyword_id: true, label: true, category_id: true },
+    select: {
+      keyword_id: true,
+      keyword_code: true,
+      category_id: true,
+      category: { select: { category_code: true } },
+    },
   });
-  const labelToKeyword = new Map(allKeywords.map((k) => [k.label, k]));
+  const codeToKeyword = new Map(
+    allKeywords.map((k) => [`${k.category.category_code}:${k.keyword_code}`, k])
+  );
 
   for (const seed of testUserKeywordSeeds) {
     const user = await prisma.user.findUnique({ where: { email: seed.email } });
     if (!user) continue;
 
-    for (const label of seed.keywords) {
-      const kw = labelToKeyword.get(label);
+    for (const ref of seed.keywords) {
+      const compositeKey = `${ref.categoryCode}:${ref.keywordCode}`;
+      const kw = codeToKeyword.get(compositeKey);
       if (!kw) {
-        console.warn(`키워드 없음: "${label}"`);
+        console.warn(`키워드 없음: "${compositeKey}"`);
         continue;
       }
 
@@ -595,10 +778,12 @@ async function seedCampusPlaces() {
 // main
 // ─────────────────────────────────────────────
 async function main() {
+  assertTaxonomyContract();
+  await cleanupObsoleteKoreanCategories();
+  await cleanupObsoleteProfileKeywords();
   await seedCategories();
   await seedFeedKeywords();
   await seedPlaceCategories();
-  await seedTestKeywordCategories();
   await seedTestUsers();
   await seedTestInterests();
   await seedTestFeedAndComment();
