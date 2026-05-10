@@ -33,12 +33,12 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-[60] pointer-events-auto" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[150] pointer-events-auto" role="dialog" aria-modal="true">
       {/* 배경 오버레이 */}
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
       {/* 시트 본체 - 앱 컨테이너 내부 정렬 */}
-      <div className="absolute bottom-0 left-1/2 w-full max-w-[430px] -translate-x-1/2 overflow-hidden rounded-t-[24px] bg-[var(--color-surface)] shadow-xl">
+      <div className="absolute bottom-0 left-1/2 w-full max-w-[430px] -translate-x-1/2 overflow-hidden rounded-t-[var(--radius-2xl)] bg-[var(--color-surface)] shadow-xl">
         {/* 헤더: 닫기 버튼 + 제목 */}
         <div className="flex items-center justify-between border-b border-[var(--color-border-light)] px-4 py-3">
           <div className="w-10" />
@@ -47,7 +47,7 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
           )}
           <button
             onClick={onClose}
-            className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-secondary)]"
+            className="flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-chip-background)]"
             aria-label="닫기"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -58,7 +58,7 @@ export function BottomSheet({ isOpen, onClose, title, children }: BottomSheetPro
         </div>
 
         {/* 콘텐츠 영역 - 충분한 하단 패딩 */}
-        <div className="max-h-[70vh] overflow-y-auto pb-8">{children}</div>
+        <div className="max-h-[70vh] overflow-y-auto pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">{children}</div>
       </div>
     </div>
   );
@@ -94,10 +94,10 @@ export function CenteredModal({ isOpen, onClose, title, children }: CenteredModa
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center px-6" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[150] flex items-center justify-center px-6" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
 
-      <div className="relative w-full max-w-xs overflow-hidden rounded-[24px] border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-lg">
+      <div className="relative w-full max-w-xs overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-lg">
         {title && (
           <div className="border-b border-[var(--color-border)] px-4 py-4">
             <h2 className="text-center text-lg font-semibold">{title}</h2>
@@ -173,7 +173,7 @@ export function ConfirmSheet({
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value.slice(0, inputMaxLength))}
               placeholder={inputPlaceholder}
-              className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] transition-colors focus:border-[var(--color-primary)] focus:outline-none"
+              className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] transition-colors focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
               maxLength={inputMaxLength}
             />
             <div className="mt-1 flex justify-end">

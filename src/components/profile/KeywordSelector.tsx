@@ -18,7 +18,7 @@ export function KeywordSelector({ category, selected, onChange, disabled = false
       <div className="mobile-split-row">
         <h3 className="text-base font-semibold break-keep text-[var(--color-text-primary)]">{category.label}</h3>
         {category.type === 'multi' && category.maxSelections && (
-          <span className={`text-sm ${selectedCount >= category.maxSelections ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-tertiary)]'}`}>
+          <span className={`text-sm ${selectedCount >= category.maxSelections ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-tertiary)]'}`}>
             {selectedCount}/{category.maxSelections}
           </span>
         )}
@@ -51,7 +51,7 @@ export function ProfileSection({ id, title, description, required, className = '
       <div className="mb-4">
         <div className="flex items-center gap-1">
           <h2 className="text-lg font-bold break-keep text-[var(--color-text-primary)]">{title}</h2>
-          {required && <span className="text-sm text-[var(--color-secondary)]">*</span>}
+          {required && <span className="text-sm text-[var(--color-text-primary)]">*</span>}
         </div>
         {description && (
           <p className="mt-1 text-sm leading-6 break-keep text-[var(--color-text-secondary)]">{description}</p>

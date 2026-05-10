@@ -18,8 +18,8 @@ export const Chip = forwardRef<HTMLButtonElement, ChipProps>(
           min-h-9 rounded-full border px-3.5 py-2 text-left text-sm leading-5 font-medium whitespace-normal break-keep
           transition-all duration-150
           ${selected
-            ? 'border-[var(--color-primary)] bg-[var(--color-primary-light)] text-[var(--color-primary)]'
-            : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]'}
+            ? 'border-[var(--color-pink-cta)] bg-[var(--color-brand-pink)] text-[var(--color-text-primary)] shadow-sm'
+            : 'border-transparent bg-[var(--color-chip-background)] text-[var(--color-text-secondary)] hover:border-[var(--color-border)] hover:bg-[var(--color-surface)]'}
           disabled:cursor-not-allowed disabled:opacity-50
           ${className}
         `}

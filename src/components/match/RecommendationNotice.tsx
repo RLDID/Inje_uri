@@ -11,9 +11,9 @@ export function RecommendationNotice() {
       <button
         type="button"
         onClick={() => setShowPolicyModal(true)}
-        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)] shadow-[0_4px_12px_rgba(15,23,42,0.03)] transition-colors hover:border-[color-mix(in_srgb,var(--color-primary)_14%,var(--color-border-light))] hover:text-[var(--color-primary)]"
+        className="inline-flex h-8 items-center gap-1.5 rounded-full border border-[var(--color-border-light)] bg-[var(--color-surface)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)] shadow-sm transition-colors hover:border-[color-mix(in_srgb,var(--color-pink-cta)_24%,var(--color-border-light))] hover:bg-[var(--color-brand-pink)] hover:text-[var(--color-text-primary)]"
       >
-        <svg className="h-3.5 w-3.5 text-[var(--color-primary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <svg className="h-3.5 w-3.5 text-[var(--color-pink-icon-active)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <circle cx="12" cy="12" r="10" />
           <path d="M12 16v-4" />
           <path d="M12 8h.01" />
@@ -76,9 +76,9 @@ function PolicyItem({
   tone: 'primary' | 'neutral' | 'secondary';
 }) {
   const toneClass = {
-    primary: 'bg-[var(--color-primary-light)] text-[var(--color-primary)]',
+    primary: 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]',
     neutral: 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]',
-    secondary: 'bg-[var(--color-secondary-light)] text-[var(--color-secondary)]',
+    secondary: 'bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]',
   }[tone];
 
   return (

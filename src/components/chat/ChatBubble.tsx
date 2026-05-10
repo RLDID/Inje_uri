@@ -28,20 +28,20 @@ export function ChatBubble({ message }: ChatBubbleProps) {
   }
   
   return (
-    <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-2`}>
+    <div className={`flex ${isMine ? 'justify-end' : 'justify-start'} mb-1.5`}>
       <div
         className={`
-          max-w-[75%] px-4 py-2.5 rounded-2xl
+          max-w-[75%] rounded-[16px] px-3.5 py-2
           ${isMine 
-            ? 'bg-[var(--color-primary)] text-white rounded-br-md' 
-            : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-primary)] rounded-bl-md'
+            ? 'rounded-br-[6px] bg-[var(--color-action-primary)] text-white'
+            : 'rounded-bl-[6px] bg-[#EEF2F6] text-[var(--color-text-primary)]'
           }
         `}
       >
-        <p className="text-[15px] leading-relaxed whitespace-pre-wrap break-words">
+        <p className="text-[15px] leading-5 whitespace-pre-wrap break-words">
           {message.content}
         </p>
-        <p suppressHydrationWarning className={`text-[10px] mt-1 ${isMine ? 'text-white/70' : 'text-[var(--color-text-tertiary)]'}`}>
+        <p suppressHydrationWarning className={`mt-0.5 text-[10px] leading-[14px] ${isMine ? 'text-white/75' : 'text-[var(--color-text-tertiary)]'}`}>
           {formatMessageTime(new Date(message.createdAt))}
           {isMine && message.isRead && ' ✓'}
         </p>

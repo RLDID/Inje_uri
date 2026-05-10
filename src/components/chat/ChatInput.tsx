@@ -56,7 +56,7 @@ export function ChatInput({ onSend, disabled = false, placeholder = '메시지�
           className="
             max-h-32 min-h-12 w-full resize-none rounded-2xl border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] px-4 py-3
             text-[15px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)]
-            focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30
+            focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/30
             disabled:opacity-50
           "
           onKeyDown={(e) => {
@@ -73,7 +73,7 @@ export function ChatInput({ onSend, disabled = false, placeholder = '메시지�
         disabled={disabled}
         className="
           flex h-12 w-12 shrink-0 items-center justify-center rounded-full
-          bg-[var(--color-primary)] text-white shadow-sm
+          bg-[var(--color-action-primary)] text-white shadow-sm
           disabled:cursor-not-allowed disabled:opacity-50
           transition-transform active:scale-95
         "

@@ -4,21 +4,26 @@ import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { PageContainer, PageContent, PageHeader } from '@/components/layout';
+import { BrandLogo } from '@/components/brand';
+import { PageContainer, PageContent } from '@/components/layout';
 import { FeedCard } from '@/components/self-date/FeedCard';
 import { NoStories, BottomSheet, useToast } from '@/components/ui';
 import { getActiveStories } from '@/lib/data';
 import {
   buildProfileDetailHref,
   buildSelfDateDetailHref,
-  buildSelfDateMyPostsHref,
   readRouteViewState,
   useCurrentRouteContext,
   writeRouteViewState,
 } from '@/lib/navigation';
 import { shuffleFeeds, getMoreFeeds, isValidFeed, matchesStoryFilter } from '@/lib/utils/feed';
 import { FEED_FILTER_CATEGORIES, type FeedFilterCategoryId } from '@/lib/constants';
-import { getUserAcademicLabel, readSelfDateLikedFeedIds, writeSelfDateLikedFeedIds } from '@/lib/utils';
+import {
+  readSelfDateHiddenUserIds,
+  readSelfDateLikedFeedIds,
+  readSelfDateReportedFeedIds,
+  writeSelfDateLikedFeedIds,
+} from '@/lib/utils';
 import type { Story } from '@/lib/types';
 
 const INITIAL_FEED_COUNT = 8;
@@ -51,6 +56,36 @@ function getSavedViewState(): SelfDateViewState {
   });
 }
 
+function SlidersIcon({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors active:bg-[var(--color-chip-background)]"
+      aria-label="내 글 보기"
+    >
+      <svg
+        width="26"
+        height="26"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M4 7h5" />
+        <path d="M15 7h5" />
+        <circle cx="12" cy="7" r="2" />
+        <path d="M4 17h9" />
+        <path d="M19 17h1" />
+        <circle cx="16" cy="17" r="2" />
+      </svg>
+    </button>
+  );
+}
+
 function SelfDatePageContent() {
   const router = useRouter();
   const pathname = usePathname();
@@ -75,6 +110,7 @@ function SelfDatePageContent() {
   const [pendingLikeFeedId, setPendingLikeFeedId] = useState<string | null>(null);
   const [pullDistance, setPullDistance] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const persistViewState = useCallback(
     (nextScrollY = typeof window !== 'undefined' ? window.scrollY : 0) => {
@@ -90,7 +126,14 @@ function SelfDatePageContent() {
 
   useEffect(() => {
     const likedFeedIdSet = new Set(readSelfDateLikedFeedIds());
-    const stories = getActiveStories().filter((story) => isValidFeed(story) && !likedFeedIdSet.has(story.id));
+    const reportedFeedIdSet = new Set(readSelfDateReportedFeedIds());
+    const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
+    const stories = getActiveStories().filter((story) => (
+      isValidFeed(story)
+      && !likedFeedIdSet.has(story.id)
+      && !reportedFeedIdSet.has(story.id)
+      && !hiddenUserIdSet.has(story.author.id)
+    ));
     const savedViewState = getSavedViewState();
     const savedSelectedFilter = isValidFilter(savedViewState.selectedFilter)
       ? savedViewState.selectedFilter
@@ -101,15 +144,22 @@ function SelfDatePageContent() {
     const restoredFeeds = savedViewState.shownIds
       .map((id) => stories.find((story) => story.id === id))
       .filter((story): story is Story => !!story && isValidFeed(story));
+    const restoredFeedIds = new Set(restoredFeeds.map((story) => story.id));
+    const restoredFeedFillers = restoredFeeds.length > 0
+      ? shuffleFeeds(stories.filter((story) => !restoredFeedIds.has(story.id))).slice(
+        0,
+        Math.max(INITIAL_FEED_COUNT - restoredFeeds.length, 0),
+      )
+      : [];
     const initialFeeds =
       restoredFeeds.length > 0
-        ? restoredFeeds
+        ? [...restoredFeeds, ...restoredFeedFillers]
         : shuffleFeeds(stories).slice(0, INITIAL_FEED_COUNT);
 
     setSelectedFilter(initialFilter);
     setFeeds(initialFeeds);
     setShownIds(initialFeeds.map((story) => story.id));
-    setHasReachedEnd(restoredFeeds.length > 0 ? savedViewState.hasReachedEnd : false);
+    setHasReachedEnd(restoredFeeds.length > 0 ? savedViewState.hasReachedEnd && restoredFeedFillers.length === 0 : false);
     appliedFilterParamRef.current = initialFilterParamRef.current;
     setIsHydrated(true);
 
@@ -174,7 +224,14 @@ function SelfDatePageContent() {
   };
 
   const handleRefresh = useCallback(() => {
-    const stories = getActiveStories().filter((story) => isValidFeed(story) && !likedFeedIds.has(story.id));
+    const reportedFeedIdSet = new Set(readSelfDateReportedFeedIds());
+    const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
+    const stories = getActiveStories().filter((story) => (
+      isValidFeed(story)
+      && !likedFeedIds.has(story.id)
+      && !reportedFeedIdSet.has(story.id)
+      && !hiddenUserIdSet.has(story.author.id)
+    ));
     const shuffled = shuffleFeeds(stories).slice(0, INITIAL_FEED_COUNT);
     setFeeds(shuffled);
     setShownIds(shuffled.map((feed) => feed.id));
@@ -209,7 +266,14 @@ function SelfDatePageContent() {
           setIsLoadingMore(true);
 
           setTimeout(() => {
-            const allStories = getActiveStories().filter((story) => isValidFeed(story) && !likedFeedIds.has(story.id));
+            const reportedFeedIdSet = new Set(readSelfDateReportedFeedIds());
+            const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
+            const allStories = getActiveStories().filter((story) => (
+              isValidFeed(story)
+              && !likedFeedIds.has(story.id)
+              && !reportedFeedIdSet.has(story.id)
+              && !hiddenUserIdSet.has(story.author.id)
+            ));
             const moreFeeds = getMoreFeeds(allStories, shownIds, LOAD_MORE_COUNT);
 
             if (moreFeeds.length > 0) {
@@ -232,7 +296,13 @@ function SelfDatePageContent() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      setFeeds((prevFeeds) => prevFeeds.filter(isValidFeed));
+      const reportedFeedIdSet = new Set(readSelfDateReportedFeedIds());
+      const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
+      setFeeds((prevFeeds) => prevFeeds.filter((feed) => (
+        isValidFeed(feed)
+        && !reportedFeedIdSet.has(feed.id)
+        && !hiddenUserIdSet.has(feed.author.id)
+      )));
     }, 60000);
 
     return () => clearInterval(interval);
@@ -307,14 +377,14 @@ function SelfDatePageContent() {
     );
   };
 
-  const filteredFeeds = feeds.filter((feed) => !likedFeedIds.has(feed.id) && matchesStoryFilter(feed, selectedFilter));
-
-  const myPostsHref = buildSelfDateMyPostsHref({
-    sourcePath: currentPath,
-    sourceSection: ownerSection,
-    fallbackPath: currentPath,
-  });
-
+  const reportedFeedIds = new Set(readSelfDateReportedFeedIds());
+  const hiddenUserIds = new Set(readSelfDateHiddenUserIds());
+  const filteredFeeds = feeds.filter((feed) => (
+    !likedFeedIds.has(feed.id)
+    && !reportedFeedIds.has(feed.id)
+    && !hiddenUserIds.has(feed.author.id)
+    && matchesStoryFilter(feed, selectedFilter)
+  ));
   const handleTouchStart = (event: React.TouchEvent<HTMLElement>) => {
     if (typeof window === 'undefined' || window.scrollY > 0 || isPullRefreshing) {
       return;
@@ -357,7 +427,14 @@ function SelfDatePageContent() {
 
   return (
     <PageContainer>
-      <PageHeader
+      <header className="sticky top-0 z-40 flex min-h-[76px] items-center justify-between bg-[var(--color-surface)]/95 px-5 py-3 backdrop-blur-xl">
+        <BrandLogo
+          variant="lg"
+          framed={false}
+          logoClassName="drop-shadow-[0_2px_2px_rgba(34,34,34,0.12)]"
+        />
+        <SlidersIcon onClick={() => setIsFilterOpen((prevIsFilterOpen) => !prevIsFilterOpen)} />
+        {/*
         title="지금 우리"
         subtitle="2시간 동안만 열리는 가벼운 피드를 둘러보세요."
         action={(
@@ -372,19 +449,28 @@ function SelfDatePageContent() {
             </svg>
           </Link>
         )}
-      />
+        */}
+      </header>
 
-      <div className="sticky top-[72px] z-30 border-b border-[var(--color-border-light)] bg-[var(--color-surface)]">
+      <div
+        className={`sticky top-[76px] z-30 overflow-hidden bg-[var(--color-surface)] transition-[max-height,opacity,transform] duration-300 ease-out ${
+          isFilterOpen
+            ? 'max-h-20 translate-y-0 opacity-100'
+            : 'pointer-events-none max-h-0 -translate-y-2 opacity-0'
+        }`}
+        aria-hidden={!isFilterOpen}
+      >
         <div className="flex gap-2 overflow-x-auto px-5 py-2.5 scrollbar-hide">
           {FEED_FILTER_CATEGORIES.map((category) => (
             <button
               key={category.id}
               type="button"
               onClick={() => updateFilter(category.id)}
-              className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
-                selectedFilter === category.id
-                  ? 'bg-[var(--color-primary)] text-white'
-                  : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
+              tabIndex={isFilterOpen ? 0 : -1}
+              className={`shrink-0 rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
+                category.id === selectedFilter
+                  ? 'bg-[var(--color-pink-cta)] text-white shadow-sm'
+                  : 'bg-[#F3F4F6] text-[var(--color-text-secondary)]'
               }`}
             >
               {category.label}
@@ -392,6 +478,75 @@ function SelfDatePageContent() {
           ))}
         </div>
       </div>
+
+      {!isFilterOpen && (
+        <div className="relative px-5 pb-1 pt-2">
+          <Image
+            src="/brand/bear-hero-hand2.png"
+            alt=""
+            width={52}
+            height={52}
+            className="pointer-events-none absolute right-[123px] top-[51px] z-[120] h-[30px] w-[30px] rotate-0 object-contain drop-shadow-[0_2px_1px_rgba(34,34,34,0.18)] max-[357px]:right-[117px] max-[357px]:top-[54px] max-[357px]:h-[27px] max-[357px]:w-[27px] max-[340px]:right-[91px] max-[340px]:h-[23px] max-[340px]:w-[23px]"
+            aria-hidden="true"
+          />
+          <Image
+            src="/brand/bear-hero-hand2.png"
+            alt=""
+            width={52}
+            height={52}
+            className="pointer-events-none absolute right-[37px] top-[51px] z-[120] h-[30px] w-[30px] rotate-0 scale-x-[-1] object-contain drop-shadow-[0_2px_1px_rgba(34,34,34,0.18)] max-[357px]:top-[54px] max-[357px]:h-[27px] max-[357px]:w-[27px] max-[340px]:right-[28px] max-[340px]:h-[23px] max-[340px]:w-[23px]"
+            aria-hidden="true"
+          />
+          <div
+            className="relative min-h-[60px] overflow-hidden rounded-[20px] px-4 py-2 shadow-[0_3px_7px_rgba(34,34,34,0.04)]"
+            style={{
+              background: 'linear-gradient(104deg, #FFDCE8 0%, #F8EEF4 28%, #C2E9FF 58%, #C2E9FF 100%)',
+            }}
+          >
+            <Image
+              src="/brand/bear-hero-face2.png"
+              alt=""
+              width={96}
+              height={96}
+              className="pointer-events-none absolute right-[34px] top-0 z-30 h-[84px] w-[84px] object-contain drop-shadow-[0_3px_5px_rgba(34,34,34,0.06)] max-[357px]:top-2 max-[357px]:h-[74px] max-[357px]:w-[74px] max-[340px]:right-[18px] max-[340px]:h-[68px] max-[340px]:w-[68px]"
+              aria-hidden="true"
+            />
+            <Image
+              src="/brand/bear-hero-hand2.png"
+              alt=""
+              width={52}
+              height={52}
+              className="hidden"
+              aria-hidden="true"
+            />
+            <Image
+              src="/brand/bear-hero-hand2.png"
+              alt=""
+              width={52}
+              height={52}
+              className="hidden"
+              aria-hidden="true"
+            />
+            <div className="relative z-40 flex min-h-[44px] items-center gap-3 pr-[128px] max-[364px]:pr-[100px] max-[340px]:pr-[79px]">
+              <span className="shrink-0 rounded-full bg-[var(--color-pink-cta)] px-2.5 py-0.5 text-[12px] font-semibold text-white shadow-[0_2px_5px_rgba(243,167,192,0.18)] max-[369px]:text-[11px]">
+                지금 우리
+              </span>
+              <span className="hidden">
+                지금 우리
+              </span>
+              <p className="ml-1 min-w-0 break-keep text-[11px] font-medium leading-[15px] text-[var(--color-text-primary)] max-[364px]:ml-0 max-[340px]:text-[10px] max-[340px]:leading-[13px]">
+                지금 만나고 싶은 우리,
+                <br />
+                하트를 눌러보세요
+              </p>
+              <p className="hidden">
+                <span className="text-[10px]">지금 만나고 싶은 우리, 하트를 눌러보세요</span>
+                지금 만나고 싶은 사람에게 하트를 눌러보세요.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <PageContent className="px-5 pb-36 pt-4" noPadding>
         <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}>
@@ -448,7 +603,7 @@ function SelfDatePageContent() {
           <NoStories />
           ) : (
           <div className="content-stack">
-            {filteredFeeds.map((story) => (
+            {filteredFeeds.map((story, index) => (
               <FeedCard
                 key={story.id}
                 story={story}
@@ -457,6 +612,7 @@ function SelfDatePageContent() {
                 onProfileClick={() => handleProfileClick(story)}
                 isLiked={likedFeedIds.has(story.id)}
                 isLikePending={pendingLikeFeedId === story.id}
+                priorityImage={index === 0}
               />
             ))}
 
@@ -478,13 +634,13 @@ function SelfDatePageContent() {
         </div>
       </PageContent>
 
-      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+12px)] right-4 z-40">
+      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
         <Link
           href="/self-date/create"
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg transition-transform active:scale-95"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
           aria-label="새 피드 작성"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
@@ -494,26 +650,10 @@ function SelfDatePageContent() {
       <BottomSheet
         isOpen={heartTargetFeed !== null}
         onClose={() => setHeartTargetFeed(null)}
-        title="호감 보내기"
+        title="좋아요 보내기"
       >
         {heartTargetFeed && (
           <div className="px-5 pb-6 pt-2">
-            <div className="section-card-muted mb-4 flex items-center gap-3 p-3">
-              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-full">
-                <Image
-                  src={heartTargetFeed.author.profileImages[0]}
-                  alt={heartTargetFeed.author.nickname}
-                  width={40}
-                  height={40}
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-[var(--color-text-primary)]">{heartTargetFeed.author.nickname}</p>
-                <p className="text-xs text-[var(--color-text-secondary)]">{getUserAcademicLabel(heartTargetFeed.author)}</p>
-              </div>
-            </div>
-
             <p className="mb-2 text-sm leading-6 text-[var(--color-text-secondary)]">
               짧은 인사를 함께 보내도 좋고, 비워두면 하트만 전달돼요.
             </p>
@@ -521,7 +661,7 @@ function SelfDatePageContent() {
               value={interestMessage}
               onChange={(event) => setInterestMessage(event.target.value.slice(0, 50))}
               placeholder="예: 안녕하세요, 저도 카페 좋아해요 :)"
-              className="h-24 w-full resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-[15px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none"
+              className="h-24 w-full resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-[15px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none"
               maxLength={50}
             />
             <div className="mb-4 mt-1 text-right text-xs text-[var(--color-text-tertiary)]">
@@ -534,7 +674,7 @@ function SelfDatePageContent() {
                 onClick={() => {
                   void handleSendInterest();
                 }}
-                className="w-full rounded-xl bg-[var(--color-secondary)] py-3 text-[15px] font-medium text-white"
+                className="w-full rounded-xl bg-[var(--color-action-primary)] py-3 text-[15px] font-medium text-[var(--color-action-primary-text)]"
               >
                 보내기
               </button>

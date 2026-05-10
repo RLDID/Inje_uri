@@ -212,16 +212,16 @@ export function InjeCheckPageClient() {
   return (
     <PageContainer
       withBottomNav={false}
-      className="flex min-h-dvh flex-col bg-[radial-gradient(circle_at_top,#e9f7fb_0%,#f3f7f8_45%,#eef3f4_100%)]"
+      className="flex min-h-dvh flex-col bg-[var(--color-bg)]"
     >
       <main className="flex flex-1 items-center px-[var(--page-padding-x)] py-10">
         <Card
           variant="elevated"
           padding="lg"
-          className="w-full border-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-border-light))] bg-white/95 backdrop-blur"
+          className="w-full border-[color-mix(in_srgb,var(--color-pink-cta)_18%,var(--color-border-light))] bg-[var(--color-surface)] backdrop-blur"
         >
           <div className="mb-7">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-text-secondary)]">
               {APP_NAME}
             </p>
             <h1 className="mt-2 break-keep text-[26px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
@@ -248,7 +248,7 @@ export function InjeCheckPageClient() {
                   value={studentNumber}
                   onChange={(event) => setStudentNumber(event.target.value)}
                   placeholder="예: 20231234"
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
                   disabled={isSubmitting}
                 />
               </div>
@@ -266,7 +266,7 @@ export function InjeCheckPageClient() {
                   value={birth}
                   onChange={(event) => setBirth(event.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="예: 020408"
-                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                  className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
                   disabled={isSubmitting}
                 />
               </div>
@@ -274,7 +274,7 @@ export function InjeCheckPageClient() {
               {errorMessage && (
                 <p
                   role="alert"
-                  className="rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary-light)]/70 px-3 py-2 text-sm text-[var(--color-secondary-dark)]"
+                  className="rounded-xl border border-[var(--color-pink-cta)]/25 bg-[var(--color-brand-pink)] px-3 py-2 text-sm text-[var(--color-text-primary)]"
                 >
                   {errorMessage}
                 </p>
@@ -286,7 +286,7 @@ export function InjeCheckPageClient() {
             </form>
           ) : (
             <div className="space-y-4">
-              <p className="rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary-light)]/55 px-3 py-2 text-sm text-[var(--color-primary-dark)]">
+              <p className="rounded-xl border border-[var(--color-blue-secondary)]/40 bg-[var(--color-chip-background)] px-3 py-2 text-sm text-[var(--color-text-primary)]">
                 {recommendedNextStep === 'login'
                   ? '등록된 계정이 있으면 로그인, 신규 계정이면 회원가입을 진행하세요.'
                   : '신규 회원가입 또는 기존 계정 로그인을 진행할 수 있습니다.'}
@@ -305,7 +305,7 @@ export function InjeCheckPageClient() {
                     value={loginId}
                     onChange={(event) => setLoginId(event.target.value)}
                     placeholder="아이디"
-                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
                     disabled={isSubmitting}
                   />
                 </div>
@@ -322,7 +322,7 @@ export function InjeCheckPageClient() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="비밀번호"
-                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
+                    className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
                     disabled={isSubmitting}
                   />
                 </div>
@@ -330,7 +330,7 @@ export function InjeCheckPageClient() {
                 {errorMessage && (
                   <p
                     role="alert"
-                    className="rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary-light)]/70 px-3 py-2 text-sm text-[var(--color-secondary-dark)]"
+                    className="rounded-xl border border-[var(--color-pink-cta)]/25 bg-[var(--color-brand-pink)] px-3 py-2 text-sm text-[var(--color-text-primary)]"
                   >
                     {errorMessage}
                   </p>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { ProfileCard } from './ProfileCard';
 import type { User } from '@/lib/types';
 
@@ -21,6 +21,9 @@ export function ProfileCardCarousel({
   isSelectionMade = false,
   onSelect,
 }: ProfileCardCarouselProps) {
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const suppressClickRef = useRef(false);
   const canGoPrev = currentIndex > 0;
   const canGoNext = currentIndex < users.length - 1;
 
@@ -36,10 +39,10 @@ export function ProfileCardCarousel({
   }, [canGoPrev, currentIndex, goToIndex]);
 
   const handleNext = useCallback(() => {
-    if (canGoNext) {
-      goToIndex(currentIndex + 1);
+    if (users.length > 1) {
+      goToIndex((currentIndex + 1) % users.length);
     }
-  }, [canGoNext, currentIndex, goToIndex]);
+  }, [currentIndex, goToIndex, users.length]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -61,7 +64,47 @@ export function ProfileCardCarousel({
   }
 
   return (
-    <div className="relative select-none">
+    <div
+      className="relative mx-auto w-full max-w-none select-none"
+      onTouchStart={(event) => {
+        const touch = event.touches[0];
+        touchStartXRef.current = touch.clientX;
+        touchStartYRef.current = touch.clientY;
+        suppressClickRef.current = false;
+      }}
+      onTouchEnd={(event) => {
+        if (touchStartXRef.current === null || touchStartYRef.current === null) {
+          return;
+        }
+
+        const touch = event.changedTouches[0];
+        const deltaX = touch.clientX - touchStartXRef.current;
+        const deltaY = touch.clientY - touchStartYRef.current;
+        touchStartXRef.current = null;
+        touchStartYRef.current = null;
+
+        if (Math.abs(deltaX) < 48 || Math.abs(deltaX) < Math.abs(deltaY) * 1.2) {
+          return;
+        }
+
+        suppressClickRef.current = true;
+
+        if (deltaX < 0) {
+          handleNext();
+        } else {
+          handlePrev();
+        }
+      }}
+      onClickCapture={(event) => {
+        if (!suppressClickRef.current) {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        suppressClickRef.current = false;
+      }}
+    >
       <ProfileCard
         key={currentUser.id}
         user={currentUser}

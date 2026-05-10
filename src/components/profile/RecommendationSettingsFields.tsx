@@ -2,7 +2,13 @@
 
 import type { RecommendationSettings } from '@/lib/types';
 
-const AGE_OPTIONS = Array.from({ length: 10 }, (_, index) => index + 19);
+const MIN_AGE_OPTIONS = Array.from({ length: 10 }, (_, index) => index + 20);
+const MAX_AGE_OPTIONS = Array.from({ length: 10 }, (_, index) => index + 20);
+type RecommendationToggleKey =
+  | 'excludeSameDepartment'
+  | 'reduceSameYear'
+  | 'excludeSmokers'
+  | 'excludeFrequentDrinkers';
 
 interface RecommendationSettingsFieldsProps {
   settings: RecommendationSettings;
@@ -22,29 +28,30 @@ export function RecommendationSettingsFields({
     });
   };
 
-  const handleToggle = (key: 'excludeSameDepartment' | 'reduceSameYear', value: boolean) => {
-    updateSettings(
-      key === 'excludeSameDepartment'
-        ? { excludeSameDepartment: value }
-        : { reduceSameYear: value },
-    );
+  const handleToggle = (key: RecommendationToggleKey, value: boolean) => {
+    updateSettings({ [key]: value } as Partial<RecommendationSettings>);
   };
 
   const handleAgeRangeChange = (key: 'min' | 'max', value: number) => {
     const currentRange = settings.preferredAgeRange;
+    const currentMin = Math.min(Math.max(currentRange.min, 20), 29);
+    const currentMax = Math.min(Math.max(currentRange.max, currentMin), 29);
     const nextRange =
       key === 'min'
         ? {
             min: value,
-            max: Math.max(value, currentRange.max),
+            max: Math.max(value, currentMax),
           }
         : {
-            min: Math.min(currentRange.min, value),
+            min: Math.min(currentMin, value),
             max: value,
           };
 
     updateSettings({ preferredAgeRange: nextRange });
   };
+
+  const minAgeValue = Math.min(Math.max(settings.preferredAgeRange.min, 20), 29);
+  const maxAgeValue = Math.min(Math.max(settings.preferredAgeRange.max, minAgeValue), 29);
 
   return (
     <div className="content-stack">
@@ -61,25 +68,34 @@ export function RecommendationSettingsFields({
           checked={settings.reduceSameYear}
           onChange={(checked) => handleToggle('reduceSameYear', checked)}
         />
+        <ToggleRow
+          title="흡연자는 제외하기"
+          description="흡연한다고 표시한 사람은 추천에서 제외해요."
+          checked={settings.excludeSmokers}
+          onChange={(checked) => handleToggle('excludeSmokers', checked)}
+        />
+        <ToggleRow
+          title="음주 잦은 사람 제외하기"
+          description="술자리를 자주 즐긴다고 표시한 사람은 추천에서 제외해요."
+          checked={settings.excludeFrequentDrinkers}
+          onChange={(checked) => handleToggle('excludeFrequentDrinkers', checked)}
+        />
       </div>
 
-      <div className="section-card-muted p-4">
+      <div className="section-card-muted !border-0 p-4">
         <div className="mb-3">
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">선호 나이대</p>
-          <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
-            추천에서 우선적으로 보고 싶은 나이 범위를 정할 수 있어요.
-          </p>
+          <p className="text-base font-medium break-keep text-[var(--color-text-primary)]">선호 나이대</p>
         </div>
 
         <div className="grid grid-cols-[1fr_auto_1fr] items-end gap-3">
           <div>
             <label className="mb-2 block text-sm font-medium text-[var(--color-text-secondary)]">최소 나이</label>
             <select
-              value={settings.preferredAgeRange.min}
+              value={minAgeValue}
               onChange={(event) => handleAgeRangeChange('min', Number(event.target.value))}
-              className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-4 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/25"
+              className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/25"
             >
-              {AGE_OPTIONS.map((age) => (
+              {MIN_AGE_OPTIONS.map((age) => (
                 <option key={age} value={age}>
                   {age}세
                 </option>
@@ -92,11 +108,11 @@ export function RecommendationSettingsFields({
           <div>
             <label className="mb-2 block text-sm font-medium text-[var(--color-text-secondary)]">최대 나이</label>
             <select
-              value={settings.preferredAgeRange.max}
+              value={maxAgeValue}
               onChange={(event) => handleAgeRangeChange('max', Number(event.target.value))}
-              className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-4 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/25"
+              className="h-12 w-full rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 text-sm text-[var(--color-text-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/25"
             >
-              {AGE_OPTIONS.map((age) => (
+              {MAX_AGE_OPTIONS.map((age) => (
                 <option key={age} value={age}>
                   {age}세
                 </option>
@@ -128,7 +144,7 @@ function ToggleRow({
     <div className="border-b border-[var(--color-border-light)] px-4 py-4 last:border-b-0">
       <div className="mobile-split-row gap-4">
         <div className="min-w-0">
-          <p className="font-medium break-keep text-[var(--color-text-primary)]">{title}</p>
+          <p className="text-base font-medium break-keep text-[var(--color-text-primary)]">{title}</p>
           <p className="mt-1 text-sm leading-6 break-keep text-[var(--color-text-secondary)]">{description}</p>
         </div>
 
@@ -140,7 +156,7 @@ function ToggleRow({
               onChange={(event) => onChange(event.target.checked)}
               className="peer sr-only"
             />
-            <div className="h-6 w-11 rounded-full bg-[var(--color-border)] transition-colors peer-checked:bg-[var(--color-primary)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--color-primary)]/25 peer-checked:after:translate-x-full after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform after:content-['']" />
+            <div className="h-6 w-11 rounded-full bg-[var(--color-border)] transition-colors peer-checked:bg-[var(--color-pink-cta)] peer-focus-visible:ring-2 peer-focus-visible:ring-[var(--color-focus)]/25 peer-checked:after:translate-x-full after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:bg-white after:transition-transform after:content-['']" />
           </label>
         </div>
       </div>

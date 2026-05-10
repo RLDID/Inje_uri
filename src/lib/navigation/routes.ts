@@ -138,7 +138,11 @@ export function resolveOwnerSection(pathname: string, searchParams?: SearchParam
     return getSectionFromProfileSource(source);
   }
 
-  if (pathname.startsWith('/interest') || pathname.startsWith('/my')) {
+  if (pathname.startsWith('/my')) {
+    return 'my';
+  }
+
+  if (pathname.startsWith('/interest')) {
     return 'match';
   }
 

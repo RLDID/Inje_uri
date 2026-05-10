@@ -67,6 +67,8 @@ export interface DailyRecommendation {
 export interface RecommendationSettings {
   excludeSameDepartment: boolean;
   reduceSameYear: boolean;
+  excludeSmokers: boolean;
+  excludeFrequentDrinkers: boolean;
   preferredAgeRange: { min: number; max: number };
   pendingChanges?: Partial<RecommendationSettings>;
   lastUpdated: Date;

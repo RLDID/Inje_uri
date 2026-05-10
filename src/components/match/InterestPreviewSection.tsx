@@ -34,7 +34,7 @@ function InterestPreviewCard({ interest, onViewProfile }: InterestPreviewCardPro
           onError={() => setImgError(true)}
         />
         {!interest.isRead && (
-          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-secondary)]" />
+          <span className="absolute -right-0.5 -top-0.5 h-3 w-3 rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-like-active)]" />
         )}
       </div>
 
@@ -86,7 +86,7 @@ export function InterestPreviewSection({ interests, onViewProfile }: InterestPre
 
         <Link
           href="/interest"
-          className="flex items-center gap-1 text-sm font-medium text-[var(--color-primary)]"
+          className="flex items-center gap-1 text-sm font-medium text-[var(--color-text-primary)]"
         >
           전체 보기
           <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

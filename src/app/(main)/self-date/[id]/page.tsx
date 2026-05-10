@@ -16,11 +16,15 @@ import {
 import {
   getUserAcademicLabel,
   readSelfDateLikedFeedIds,
+  readSelfDateReportedFeedIds,
   writeSelfDateLikedFeedIds,
+  writeSelfDateReportedFeedIds,
 } from '@/lib/utils';
 import { getFeedRemainingTime, getStoryCategories, markFeedAsViewed } from '@/lib/utils/feed';
 
 type OverlayState = 'none' | 'menu' | 'report' | 'interest';
+
+const PRIMARY_DETAIL_CATEGORIES = new Set(['walk', 'cafe', 'food', 'study']);
 
 function SelfDateDetailPageContent() {
   const params = useParams();
@@ -34,7 +38,9 @@ function SelfDateDetailPageContent() {
   const [overlayState, setOverlayState] = useState<OverlayState>('none');
   const [interestMessage, setInterestMessage] = useState('');
   const [imgError, setImgError] = useState(false);
-  const [contentImgError, setContentImgError] = useState(false);
+  const [contentImgErrorIndexes, setContentImgErrorIndexes] = useState<Set<number>>(() => new Set());
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
   const [likedFeedIds, setLikedFeedIds] = useState<Set<string>>(
     () => new Set(readSelfDateLikedFeedIds()),
   );
@@ -93,7 +99,10 @@ function SelfDateDetailPageContent() {
   const profileImage = imgError
     ? PLACEHOLDER_PROFILE_IMAGE
     : (author.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE);
-  const contentImage = story.content.images[0];
+  const contentImages = story.content.images;
+  const activeContentImage = contentImages[activeImageIndex] ?? contentImages[0] ?? PLACEHOLDER_PROFILE_IMAGE;
+  const hasActiveImageError = contentImgErrorIndexes.has(activeImageIndex);
+  const previewImage = previewImageIndex !== null ? contentImages[previewImageIndex] : null;
   const isInterestSent = likedFeedIds.has(story.id);
   const isHeartDisabled = timeRemaining.isExpired || isInterestSent;
   const detailKeywords = getStoryCategories(story);
@@ -130,6 +139,9 @@ function SelfDateDetailPageContent() {
   };
 
   const handleReport = () => {
+    const nextReportedFeedIds = new Set(readSelfDateReportedFeedIds());
+    nextReportedFeedIds.add(story.id);
+    writeSelfDateReportedFeedIds(Array.from(nextReportedFeedIds));
     setOverlayState('none');
     showToast('신고가 접수되었어요.', 'success');
     router.replace(fallbackPath);
@@ -149,9 +161,9 @@ function SelfDateDetailPageContent() {
             aria-label="더보기"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-              <circle cx="12" cy="6" r="2" />
+              <circle cx="5" cy="12" r="2" />
               <circle cx="12" cy="12" r="2" />
-              <circle cx="12" cy="18" r="2" />
+              <circle cx="19" cy="12" r="2" />
             </svg>
           </button>
         )}
@@ -192,8 +204,8 @@ function SelfDateDetailPageContent() {
                           timeRemaining.isExpired
                             ? 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
                             : timeRemaining.isExpiringSoon
-                              ? 'bg-[var(--color-secondary-light)] text-[var(--color-secondary)]'
-                              : 'bg-[var(--color-primary-light)] text-[var(--color-primary)]'
+                              ? 'bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]'
+                              : 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
                         }`}
                       >
                         {timeRemaining.formatted}
@@ -208,10 +220,10 @@ function SelfDateDetailPageContent() {
                     type="button"
                     onClick={openInterestSheet}
                     disabled={isHeartDisabled}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition-all active:scale-95 disabled:cursor-default ${
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-pink)] transition-all active:scale-95 disabled:cursor-default ${
                       isInterestSent
-                        ? 'bg-[var(--color-secondary)] text-white'
-                        : 'border border-[var(--color-secondary)]/30 bg-[var(--color-surface-secondary)] text-[var(--color-secondary)]'
+                        ? 'text-[var(--color-pink-cta)] opacity-60'
+                        : 'text-[var(--color-pink-cta)]'
                     }`}
                     aria-label={
                       isInterestSent
@@ -223,9 +235,9 @@ function SelfDateDetailPageContent() {
                     <svg
                       className="h-[18px] w-[18px]"
                       viewBox="0 0 24 24"
-                      fill={isInterestSent ? 'currentColor' : 'none'}
+                      fill="currentColor"
                       stroke="currentColor"
-                      strokeWidth={isInterestSent ? 0 : 2}
+                      strokeWidth={0}
                       aria-hidden="true"
                     >
                       <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -236,54 +248,232 @@ function SelfDateDetailPageContent() {
             </div>
           </div>
 
-          <div className="chip-wrap">
+          <div className="hidden">
             {detailKeywords.map((category) => (
               <span
                 key={category}
-                className="rounded-full border border-[var(--color-primary)]/10 bg-[var(--color-primary-light)] px-3 py-1 text-xs font-semibold text-[var(--color-primary)]"
+                className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                  PRIMARY_DETAIL_CATEGORIES.has(category)
+                    ? 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
+                    : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
+                }`}
               >
                 {getFeedCategoryLabel(category)}
               </span>
             ))}
           </div>
 
-          {contentImage && (
-            <div className="relative aspect-square overflow-hidden rounded-2xl bg-[var(--color-surface-secondary)]">
-              {!contentImgError ? (
-                <Image
-                  src={contentImage}
-                  alt="피드 이미지"
-                  fill
-                  sizes="(max-width: 430px) 100vw, 400px"
-                  className="object-cover"
-                  onError={() => setContentImgError(true)}
-                />
-              ) : (
-                <div className="flex h-full w-full items-center justify-center">
-                  <svg
-                    width="48"
-                    height="48"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    className="text-[var(--color-text-tertiary)]"
-                    aria-hidden="true"
-                  >
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                    <circle cx="8.5" cy="8.5" r="1.5" />
-                    <polyline points="21 15 16 10 5 21" />
-                  </svg>
-                </div>
+          {contentImages.length > 0 && (
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!hasActiveImageError) {
+                    setPreviewImageIndex(activeImageIndex);
+                  }
+                }}
+                className="relative aspect-[16/10] w-full overflow-hidden rounded-[10px] bg-[var(--color-surface-secondary)]"
+                aria-label={`피드 이미지 ${activeImageIndex + 1} 크게 보기`}
+              >
+                {!hasActiveImageError ? (
+                  <Image
+                    src={activeContentImage}
+                    alt={`피드 이미지 ${activeImageIndex + 1}`}
+                    fill
+                    sizes="(max-width: 430px) 100vw, 400px"
+                    className="object-cover"
+                    onError={() => {
+                      setContentImgErrorIndexes((prevIndexes) => {
+                        const nextIndexes = new Set(prevIndexes);
+                        nextIndexes.add(activeImageIndex);
+                        return nextIndexes;
+                      });
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center">
+                    <svg
+                      width="48"
+                      height="48"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      className="text-[var(--color-text-tertiary)]"
+                      aria-hidden="true"
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <polyline points="21 15 16 10 5 21" />
+                    </svg>
+                  </div>
+                )}
+              </button>
+
+              {contentImages.length > 1 && (
+                <>
+                  <div className="flex items-center justify-center gap-1.5">
+                    {contentImages.map((image, index) => (
+                      <button
+                        key={`${image}-dot-${index}`}
+                        type="button"
+                        onClick={() => setActiveImageIndex(index)}
+                        className={`h-2 w-2 rounded-full transition-colors ${
+                          index === activeImageIndex
+                            ? 'bg-[var(--color-pink-cta)]'
+                            : 'bg-[var(--color-border)]'
+                        }`}
+                        aria-label={`피드 이미지 ${index + 1} 선택`}
+                      />
+                    ))}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-3">
+                    {contentImages.map((image, index) => {
+                      const hasImageError = contentImgErrorIndexes.has(index);
+
+                      return (
+                        <button
+                          key={`${image}-${index}`}
+                          type="button"
+                          onClick={() => setActiveImageIndex(index)}
+                          className={`relative aspect-square w-full overflow-hidden rounded-[10px] bg-[var(--color-surface-secondary)] transition-all ${
+                            index === activeImageIndex
+                              ? 'ring-2 ring-[var(--color-pink-cta)]'
+                              : 'ring-1 ring-[var(--color-border-light)]'
+                          }`}
+                          aria-label={`피드 이미지 ${index + 1} 보기`}
+                        >
+                          {!hasImageError ? (
+                            <Image
+                              src={image}
+                              alt={`피드 이미지 ${index + 1}`}
+                              fill
+                              sizes="64px"
+                              className="object-cover"
+                              onError={() => {
+                                setContentImgErrorIndexes((prevIndexes) => {
+                                  const nextIndexes = new Set(prevIndexes);
+                                  nextIndexes.add(index);
+                                  return nextIndexes;
+                                });
+                              }}
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center">
+                              <svg
+                                width="26"
+                                height="26"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.5"
+                                className="text-[var(--color-text-tertiary)]"
+                                aria-hidden="true"
+                              >
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                                <circle cx="8.5" cy="8.5" r="1.5" />
+                                <polyline points="21 15 16 10 5 21" />
+                              </svg>
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
               )}
             </div>
           )}
 
-          <p className="whitespace-pre-wrap text-base leading-relaxed text-[var(--color-text-primary)]">
-            {story.content.text}
-          </p>
+          {false && contentImages.length > 0 && (
+            <div className="space-y-2">
+              <div className="-mx-5 flex gap-3 overflow-x-auto px-5 pb-1 scrollbar-hide">
+                {contentImages.map((image, index) => {
+                  const hasImageError = contentImgErrorIndexes.has(index);
 
-          <div className="inline-flex items-center gap-1.5 text-[11px] text-[var(--color-text-tertiary)]">
+                  return (
+                    <button
+                      key={`${image}-${index}`}
+                      type="button"
+                      onClick={() => {
+                        if (!hasImageError) {
+                          setPreviewImageIndex(index);
+                        }
+                      }}
+                      className={`relative shrink-0 overflow-hidden rounded-2xl bg-[var(--color-surface-secondary)] ${
+                        contentImages.length === 1 ? 'aspect-square w-full' : 'h-44 w-44'
+                      }`}
+                      aria-label={`피드 이미지 ${index + 1} 크게 보기`}
+                    >
+                      {!hasImageError ? (
+                        <Image
+                          src={image}
+                          alt={`피드 이미지 ${index + 1}`}
+                          fill
+                          sizes={contentImages.length === 1 ? '(max-width: 430px) 100vw, 400px' : '176px'}
+                          className="object-cover"
+                          onError={() => {
+                            setContentImgErrorIndexes((prevIndexes) => {
+                              const nextIndexes = new Set(prevIndexes);
+                              nextIndexes.add(index);
+                              return nextIndexes;
+                            });
+                          }}
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center">
+                          <svg
+                            width="44"
+                            height="44"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="1.5"
+                            className="text-[var(--color-text-tertiary)]"
+                            aria-hidden="true"
+                          >
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                          </svg>
+                        </div>
+                      )}
+
+                      {contentImages.length > 1 && (
+                        <span className="absolute bottom-2 right-2 rounded-full bg-black/45 px-2 py-0.5 text-[11px] font-semibold text-white">
+                          {index + 1}/{contentImages.length}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          <div className="rounded-[10px] bg-[var(--color-surface)] p-4 shadow-[0_4px_12px_rgba(34,34,34,0.055)]">
+            <p className="whitespace-pre-wrap text-base leading-relaxed text-[var(--color-text-primary)]">
+              {story.content.text}
+            </p>
+
+            <div className="mt-4 chip-wrap">
+              {detailKeywords.map((category) => (
+                <span
+                  key={category}
+                  className={`rounded-full px-4 py-1.5 text-[14px] font-semibold ${
+                    PRIMARY_DETAIL_CATEGORIES.has(category)
+                      ? 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
+                      : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
+                  }`}
+                >
+                  {getFeedCategoryLabel(category)}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="hidden">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
               <circle cx="12" cy="12" r="3" />
@@ -294,7 +484,7 @@ function SelfDateDetailPageContent() {
       </PageContent>
 
       {overlayState === 'menu' && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-6">
+        <div className="fixed inset-0 z-[140] flex items-center justify-center px-6">
           <button
             type="button"
             className="absolute inset-0 bg-black/40"
@@ -303,6 +493,7 @@ function SelfDateDetailPageContent() {
           />
           <div className="relative w-full max-w-xs overflow-hidden rounded-[24px] border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-lg">
             <div className="py-2">
+              {false && (
               <button
                 type="button"
                 onClick={() => {
@@ -313,11 +504,13 @@ function SelfDateDetailPageContent() {
               >
                 프로필 보기
               </button>
+              )}
               <button
                 type="button"
                 onClick={() => setOverlayState('report')}
-                className="w-full px-6 py-4 text-left text-[var(--color-error)] transition-colors hover:bg-rose-50"
+                className="w-full px-6 py-4 text-left text-[0px] text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]"
               >
+                <span className="text-base">피드 신고</span>
                 글 신고
               </button>
             </div>
@@ -326,7 +519,7 @@ function SelfDateDetailPageContent() {
       )}
 
       {overlayState === 'report' && (
-        <div className="fixed inset-0 z-[55] flex items-end">
+        <div className="fixed inset-0 z-[145] flex items-end">
           <button
             type="button"
             className="absolute inset-0 bg-black/40"
@@ -354,6 +547,78 @@ function SelfDateDetailPageContent() {
                 취소
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {previewImage && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 px-4 py-8">
+          <button
+            type="button"
+            className="absolute inset-0"
+            aria-label="이미지 크게 보기 닫기"
+            onClick={() => setPreviewImageIndex(null)}
+          />
+
+          <div className="relative z-10 flex w-full max-w-[430px] flex-col items-center gap-4">
+            <div className="flex w-full items-center justify-between text-white">
+              <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
+                {(previewImageIndex ?? 0) + 1}/{contentImages.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewImageIndex(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur"
+                aria-label="닫기"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[24px] bg-black">
+              <Image
+                src={previewImage}
+                alt={`확대된 피드 이미지 ${(previewImageIndex ?? 0) + 1}`}
+                fill
+                sizes="(max-width: 430px) 100vw, 430px"
+                className="object-contain"
+              />
+            </div>
+
+            {contentImages.length > 1 && (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewImageIndex((currentIndex) => (
+                      currentIndex === null ? null : (currentIndex + contentImages.length - 1) % contentImages.length
+                    ));
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur"
+                  aria-label="이전 이미지"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewImageIndex((currentIndex) => (
+                      currentIndex === null ? null : (currentIndex + 1) % contentImages.length
+                    ));
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur"
+                  aria-label="다음 이미지"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -390,7 +655,7 @@ function SelfDateDetailPageContent() {
             value={interestMessage}
             onChange={(event) => setInterestMessage(event.target.value.slice(0, 50))}
             placeholder="예: 분위기가 편안해서 반가웠어요 :)"
-            className="h-24 w-full resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-[15px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none"
+            className="h-24 w-full resize-none rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-[15px] text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none"
             maxLength={50}
           />
           <div className="mb-4 mt-1 text-right text-xs text-[var(--color-text-tertiary)]">
@@ -401,7 +666,7 @@ function SelfDateDetailPageContent() {
             <button
               type="button"
               onClick={handleSubmitInterest}
-              className="w-full rounded-xl bg-[var(--color-secondary)] py-3 text-[15px] font-medium text-white"
+              className="w-full rounded-xl bg-[var(--color-action-primary)] py-3 text-[15px] font-medium text-[var(--color-action-primary-text)]"
             >
               보내기
             </button>

@@ -100,8 +100,6 @@ export const DATE_STYLE_OPTIONS: KeywordOption[] = [
 ];
 
 export const DEALBREAKER_OPTIONS: KeywordOption[] = [
-  { id: 'smoker', label: '흡연은 피하고 싶어요', emoji: '🚭' },
-  { id: 'heavy-drinker', label: '과한 음주는 부담돼요', emoji: '🥃' },
   { id: 'slow-replier', label: '답장이 너무 느리면 아쉬워요', emoji: '⏳' },
   { id: 'no-plans', label: '약속을 자주 미루면 아쉬워요', emoji: '🗓️' },
   { id: 'too-fast', label: '너무 빠른 진도는 부담돼요', emoji: '🐢' },

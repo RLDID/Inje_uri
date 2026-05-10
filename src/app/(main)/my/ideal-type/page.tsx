@@ -18,7 +18,15 @@ function IdealTypePageContent() {
     dealBreakers: [...currentUser.dealBreakers],
   });
 
-  const partnerCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'desiredPartner');
+  const partnerCategories = PROFILE_CATEGORIES
+    .filter((category) => category.belongsTo === 'desiredPartner')
+    .map((category) => ({
+      ...category,
+      options: category.options.map((option) => ({
+        id: option.id,
+        label: option.label,
+      })),
+    }));
 
   const handleCategoryChange = (categoryId: string, value: string | string[]) => {
     setProfile((prevProfile) => ({ ...prevProfile, [categoryId]: value }));
@@ -33,13 +41,12 @@ function IdealTypePageContent() {
     <PageContainer>
       <PageHeader
         title="이상형 키워드"
-        subtitle="내 프로필 소개와 분리해서, 원하는 만남 분위기와 상대 취향만 따로 정리해요."
         showBack
         onBack={goBack}
       />
 
       <PageContent className="app-section-stack pb-36">
-        <ProfileSection title="이런 만남을 원해요">
+        <ProfileSection title="이런 만남을 원해요" className="!border-0 !px-0 !shadow-none">
           {partnerCategories.map((category) => (
             <KeywordSelector
               key={category.id}
@@ -51,14 +58,14 @@ function IdealTypePageContent() {
         </ProfileSection>
       </PageContent>
 
-      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+12px)] right-4 z-40">
+      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
         <button
           type="button"
           onClick={handleSave}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg transition-transform active:scale-95"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
           aria-label="저장하기"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </button>

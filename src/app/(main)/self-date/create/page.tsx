@@ -3,7 +3,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState, type ChangeEvent, type DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { PageContainer, PageContent, PageHeader } from '@/components/layout';
+import { PageContainer, PageContent } from '@/components/layout';
 import { BottomSheet, CenteredModal, useToast } from '@/components/ui';
 import { SELFDATE_KEYWORD_OPTIONS, getFeedFilterCategoryId } from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
@@ -20,6 +20,7 @@ type PickerSource = 'camera' | 'library';
 type CameraPermissionState = PermissionState | 'unknown' | 'unsupported';
 
 const MAX_SELECTED_KEYWORDS = 4;
+const MAX_SELECTED_IMAGES = 4;
 const IMAGE_EDITOR_FRAME_SIZE = 280;
 const IMAGE_EDITOR_MIN_ZOOM = 1;
 const IMAGE_EDITOR_MAX_ZOOM = 2.6;
@@ -46,8 +47,9 @@ function CreateStoryPageContent() {
 
   const [text, setText] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<FeedCategory[]>([]);
-  const [selectedImage, setSelectedImage] = useState<FeedImageAsset | null>(null);
+  const [selectedImages, setSelectedImages] = useState<FeedImageAsset[]>([]);
   const [draftImage, setDraftImage] = useState<FeedImageAsset | null>(null);
+  const [pendingImageQueue, setPendingImageQueue] = useState<FeedImageAsset[]>([]);
   const [cropDraft, setCropDraft] = useState<FeedImageCrop>(INITIAL_IMAGE_CROP);
   const [showImageOptions, setShowImageOptions] = useState(false);
   const [showImageCropEditor, setShowImageCropEditor] = useState(false);
@@ -154,12 +156,19 @@ function CreateStoryPageContent() {
   const resetCropEditor = () => {
     imageDragStateRef.current = null;
     setDraftImage(null);
+    setPendingImageQueue([]);
     setCropDraft(INITIAL_IMAGE_CROP);
     setShowImageCropEditor(false);
     setIsApplyingCrop(false);
   };
 
   const openPicker = (source: PickerSource) => {
+    if (selectedImages.length >= MAX_SELECTED_IMAGES) {
+      showToast(`이미지는 ${MAX_SELECTED_IMAGES}개까지만 등록할 수 있어요.`, 'info');
+      setShowImageOptions(false);
+      return;
+    }
+
     const input = source === 'camera' ? cameraInputRef.current : libraryInputRef.current;
     if (!input) {
       showToast('이 환경에서는 사진 선택을 지원하지 않아요.', 'error');
@@ -179,13 +188,32 @@ function CreateStoryPageContent() {
     setShowImageCropEditor(true);
   };
 
-  const processSelectedFile = async (file: File, source: PickerSource) => {
+  const processSelectedFiles = async (files: File[], source: PickerSource) => {
     resetPickerState();
+    const remainingSlots = MAX_SELECTED_IMAGES - selectedImages.length;
+
+    if (remainingSlots <= 0) {
+      showToast(`이미지는 ${MAX_SELECTED_IMAGES}개까지만 등록할 수 있어요.`, 'info');
+      return;
+    }
+
+    const filesToProcess = files.slice(0, remainingSlots);
+    if (files.length > remainingSlots) {
+      showToast(`이미지는 최대 ${MAX_SELECTED_IMAGES}개까지 등록할 수 있어요.`, 'info');
+    }
+
     setIsProcessingImage(true);
 
     try {
-      const nextImage = await analyzeFeedImage(file);
-      beginCropFlow(nextImage);
+      const nextImages = await Promise.all(filesToProcess.map((file) => analyzeFeedImage(file)));
+      const [firstImage, ...queuedImages] = nextImages;
+
+      if (!firstImage) {
+        return;
+      }
+
+      setPendingImageQueue(queuedImages);
+      beginCropFlow(firstImage);
       showToast(
         source === 'camera'
           ? '촬영한 사진을 불러왔어요. 정사각형 안에서 위치를 맞춰주세요.'
@@ -193,9 +221,6 @@ function CreateStoryPageContent() {
         'info',
       );
 
-      if (nextImage.warnings.length > 0) {
-        showToast(nextImage.warnings[0], 'warning', 4500);
-      }
     } catch (error) {
       showToast(
         error instanceof Error ? error.message : '이미지를 불러오지 못했어요. 다시 시도해주세요.',
@@ -223,13 +248,13 @@ function CreateStoryPageContent() {
   };
 
   const handleImageSelection = async (event: ChangeEvent<HTMLInputElement>, source: PickerSource) => {
-    const file = event.target.files?.[0];
-    if (!file) {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) {
       return;
     }
 
     try {
-      await processSelectedFile(file, source);
+      await processSelectedFiles(files, source);
     } finally {
       event.target.value = '';
     }
@@ -239,17 +264,16 @@ function CreateStoryPageContent() {
     event.preventDefault();
     setIsImageDropActive(false);
 
-    const file = event.dataTransfer.files?.[0];
-    if (!file) {
+    const files = Array.from(event.dataTransfer.files ?? []);
+    if (files.length === 0) {
       return;
     }
 
-    await processSelectedFile(file, 'library');
+    await processSelectedFiles(files, 'library');
   };
 
-  const handleRemoveImage = () => {
-    setSelectedImage(null);
-    setShowImageOptions(false);
+  const handleRemoveImage = (index: number) => {
+    setSelectedImages((prevImages) => prevImages.filter((_, imageIndex) => imageIndex !== index));
   };
 
   const handleCategoryToggle = (category: FeedCategory) => {
@@ -333,10 +357,21 @@ function CreateStoryPageContent() {
 
     try {
       const nextImage = await cropFeedImageToSquare(draftImage, cropDraft, IMAGE_EDITOR_FRAME_SIZE);
-      setSelectedImage(nextImage);
+      setSelectedImages((prevImages) => [...prevImages, nextImage]);
+      setCropDraft(INITIAL_IMAGE_CROP);
+
+      const [nextDraftImage, ...nextQueue] = pendingImageQueue;
+
+      if (nextDraftImage) {
+        setPendingImageQueue(nextQueue);
+        setDraftImage(nextDraftImage);
+        showToast('다음 이미지 위치를 맞춰주세요.', 'info');
+        return;
+      }
+
       setShowImageCropEditor(false);
       setDraftImage(null);
-      setCropDraft(INITIAL_IMAGE_CROP);
+      setPendingImageQueue([]);
       showToast('대표 이미지를 추가했어요.', 'success');
     } catch (error) {
       showToast(
@@ -365,17 +400,37 @@ function CreateStoryPageContent() {
 
   return (
     <PageContainer withBottomNav={false}>
-      <PageHeader title="새 피드 생성" showBack onBack={goBack} />
+      <header className="sticky top-0 z-40 flex min-h-[76px] items-center bg-[var(--color-surface)]/95 px-5 py-3 backdrop-blur-xl">
+        <button
+          type="button"
+          onClick={goBack}
+          className="-ml-2 flex h-10 w-10 items-center justify-center rounded-full text-[var(--color-text-secondary)] transition-colors hover:bg-[var(--color-surface-secondary)]"
+          aria-label="뒤로가기"
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+              d="M15 6 9 12l6 6"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+        <h1 className="absolute left-1/2 -translate-x-1/2 text-[20px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
+          새 피드 생성
+        </h1>
+      </header>
 
       <PageContent className="app-section-stack pb-36">
         <div
-          className="rounded-[24px] px-4 py-3.5"
+          className="rounded-[24px] px-4 py-3.5 shadow-[0_3px_8px_rgba(34,34,34,0.055)]"
           style={{
-            background: 'linear-gradient(135deg, #f8fcfc 0%, #eff7f8 52%, #f9fcfc 100%)',
+            background: 'var(--color-chip-background)',
           }}
         >
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[var(--color-primary)] shadow-[0_8px_18px_rgba(16,152,173,0.08)] ring-1 ring-[color-mix(in_srgb,var(--color-primary)_8%,white)]">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-surface)] text-[var(--color-text-primary)] shadow-sm">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M12 7v5l3 2" />
@@ -387,14 +442,14 @@ function CreateStoryPageContent() {
           </div>
         </div>
 
-        <section className="section-card p-5 content-stack">
+        <section className="section-card p-5 content-stack" style={{ border: 0, boxShadow: '0 4px 12px rgba(34,34,34,0.055)' }}>
           <div className="mobile-split-row">
             <div className="min-w-0">
               <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
-                대표 이미지
+                대표이미지
               </h2>
               <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
-                사진을 고른 뒤 정사각형 안에서 보일 위치를 맞춰주세요.
+                사진을 여러 장 선택하고, 각 사진의 보일 위치를 맞춰주세요.
               </p>
             </div>
           </div>
@@ -412,62 +467,79 @@ function CreateStoryPageContent() {
             }}
             disabled={isProcessingImage}
             className={`relative flex aspect-square w-full max-w-[320px] overflow-hidden rounded-[28px] transition-all ${
-              selectedImage
-                ? 'bg-[var(--color-surface-secondary)] shadow-[0_18px_40px_rgba(15,23,42,0.08)] ring-1 ring-black/5'
-                : 'border bg-[linear-gradient(180deg,rgba(249,252,252,1)_0%,rgba(243,249,249,1)_100%)]'
-            } mx-auto ${isImageDropActive ? 'border-[var(--color-primary)] ring-2 ring-[var(--color-primary)]/15' : 'border-[rgba(16,152,173,0.12)]'} ${isProcessingImage ? 'cursor-wait opacity-80' : 'active:scale-[0.99]'}`}
+              selectedImages.length > 0
+                ? 'bg-[var(--color-surface)] shadow-[0_4px_12px_rgba(34,34,34,0.055)] ring-1 ring-[var(--color-border)]'
+                : 'border border-dashed bg-[var(--color-surface)]'
+            } mx-auto ${selectedImages.length === 0 ? 'mb-1' : ''} ${isImageDropActive ? 'border-[var(--color-focus)] ring-2 ring-[var(--color-focus)]/15' : 'border-[var(--color-border)]'} ${isProcessingImage ? 'cursor-wait opacity-80' : 'active:scale-[0.99]'}`}
           >
-            {selectedImage ? (
+            {selectedImages.length > 0 ? (
               <>
                 <Image
-                  src={selectedImage.previewUrl}
-                  alt="피드 대표 이미지 미리보기"
+                  src={selectedImages[0].previewUrl}
+                  alt="첨부 이미지 미리보기"
                   fill
                   unoptimized
                   className="object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
-                <div className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-[11px] font-semibold text-[var(--color-text-primary)] backdrop-blur-sm">
-                  대표 이미지
-                </div>
-                <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between gap-3">
-                  <p className="text-left text-sm font-medium leading-6 text-white">
-                    정사각형 기준으로 보여질 이미지를 맞췄어요
-                  </p>
-                  <span className="shrink-0 rounded-full bg-white/92 px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)]">
-                    다시 편집
-                  </span>
-                </div>
               </>
             ) : (
               <>
-                <div className="absolute inset-4 rounded-[24px] border border-dashed border-[rgba(16,152,173,0.22)]" />
                 <div className="relative z-10 flex h-full w-full flex-col items-center justify-center px-8 text-center">
-                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-[var(--color-primary)] shadow-sm">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                  <span className="flex h-16 w-16 items-center justify-center text-[var(--color-blue-secondary)]">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7">
                       <rect x="3" y="3" width="18" height="18" rx="2.5" />
                       <path d="M12 8v8M8 12h8" />
                     </svg>
                   </span>
-                  <p className="mt-5 text-[17px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
-                    대표 이미지를 추가해보세요
+                  <p className="mt-2.5 text-[17px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
+                    사진을 여러 장 추가해보세요
                   </p>
-                  <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-                    사진 찍기 또는 사진 보관함에서 고른 뒤 1:1로 맞출 수 있어요.
+                  <p className="mt-1 rounded-full bg-white px-3.5 py-1.5 text-sm leading-5 text-[var(--color-text-secondary)]">
+                    최대 4장까지 등록할 수 있어요.
                   </p>
                 </div>
               </>
             )}
           </button>
 
-          {selectedImage?.warnings.map((warning) => (
-            <div
-              key={warning}
-              className="rounded-2xl bg-[var(--color-primary-light)]/45 px-4 py-3 text-sm leading-6 text-[var(--color-primary-dark)]"
-            >
-              {warning}
+          {selectedImages.length > 0 && (
+            <div className="mx-auto grid w-full max-w-[320px] grid-cols-4 gap-2" style={{ marginTop: 20 }}>
+              {selectedImages.map((image, index) => (
+                <div key={`${image.fileName}-${index}`} className="relative aspect-square overflow-hidden rounded-xl bg-[var(--color-surface)] ring-1 ring-[var(--color-border)]">
+                  <Image
+                    src={image.previewUrl}
+                    alt={`첨부 이미지 ${index + 1}`}
+                    fill
+                    unoptimized
+                    className="object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(index)}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white/90 text-[var(--color-text-secondary)] shadow-[0_2px_6px_rgba(34,34,34,0.18)] ring-1 ring-black/5"
+                    aria-label={`첨부 이미지 ${index + 1} 삭제`}
+                  >
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
+              {selectedImages.length < MAX_SELECTED_IMAGES && (
+                <button
+                  type="button"
+                  onClick={() => setShowImageOptions(true)}
+                  disabled={isProcessingImage}
+                  className="flex aspect-square flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-secondary)] transition-colors active:bg-[var(--color-surface-secondary)] disabled:cursor-wait disabled:opacity-60"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span className="text-[11px] font-medium">추가</span>
+                </button>
+              )}
             </div>
-          ))}
+          )}
 
           {cameraPermission === 'denied' && (
             <div className="compact-note-muted text-sm leading-6 text-[var(--color-text-secondary)]">
@@ -476,7 +548,7 @@ function CreateStoryPageContent() {
           )}
         </section>
 
-        <section className="section-card p-5 content-stack">
+        <section className="section-card p-5 content-stack" style={{ border: 0, boxShadow: '0 4px 12px rgba(34,34,34,0.055)' }}>
           <div className="mobile-split-row">
             <div className="min-w-0">
               <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
@@ -484,7 +556,7 @@ function CreateStoryPageContent() {
               </h2>
             </div>
             <div className="shrink-0 self-start">
-              <span className={`text-sm ${selectedCategories.length >= MAX_SELECTED_KEYWORDS ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-tertiary)]'}`}>
+              <span className={`text-sm ${selectedCategories.length >= MAX_SELECTED_KEYWORDS ? 'text-[var(--color-text-primary)]' : 'text-[var(--color-text-tertiary)]'}`}>
                 {selectedCategories.length}/{MAX_SELECTED_KEYWORDS}
               </span>
             </div>
@@ -501,8 +573,8 @@ function CreateStoryPageContent() {
                   onClick={() => handleCategoryToggle(option.id)}
                   className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
                     isSelected
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white shadow-sm'
-                      : 'border-transparent bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)] hover:bg-[var(--color-border-light)]'
+                      ? 'border-[var(--color-blue-secondary)] bg-[var(--color-blue-secondary)] text-white shadow-sm'
+                      : 'border-transparent bg-[var(--color-chip-background)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]'
                   }`}
                   aria-pressed={isSelected}
                 >
@@ -513,7 +585,7 @@ function CreateStoryPageContent() {
           </div>
         </section>
 
-        <section className="section-card p-5 content-stack">
+        <section className="section-card p-5 content-stack" style={{ border: 0, boxShadow: '0 4px 12px rgba(34,34,34,0.055)' }}>
           <div className="mobile-split-row">
             <div className="min-w-0">
               <h2 className="text-[17px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
@@ -531,27 +603,27 @@ function CreateStoryPageContent() {
             placeholder="예: 중앙도서관 1층 테이블이 조용해서 같이 공부하기 좋아요. 끝나고 바로 앞 카페 가도 좋을 것 같아요."
             maxLength={200}
             rows={5}
-            className="w-full resize-none rounded-2xl bg-[var(--color-surface-secondary)] px-4 py-4 text-base leading-7 text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/25"
+            className="w-full resize-none rounded-2xl bg-[var(--color-surface)] px-4 py-4 text-base leading-7 text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/25"
           />
           <p className="text-right text-xs text-[var(--color-text-tertiary)]">{text.length}/200</p>
         </section>
       </PageContent>
 
-      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+12px)] right-4 z-40">
+      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
         <button
           type="button"
           onClick={handleSubmit}
           disabled={!isValid}
-          className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--color-primary)] text-white shadow-lg transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
           aria-label="피드 올리기"
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="20 6 9 17 4 12" />
           </svg>
         </button>
       </div>
 
-      <BottomSheet isOpen={showImageOptions} onClose={() => setShowImageOptions(false)} title="대표 이미지 선택">
+      <BottomSheet isOpen={showImageOptions} onClose={() => setShowImageOptions(false)} title="사진 첨부">
         <div className="px-4 pb-6">
           <button
             type="button"
@@ -559,7 +631,7 @@ function CreateStoryPageContent() {
             disabled={isProcessingImage}
             className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-[var(--color-surface-secondary)] active:bg-[var(--color-border-light)] disabled:cursor-wait disabled:opacity-60"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-primary-light)] text-[var(--color-primary)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-chip-background)] text-[var(--color-text-primary)]">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
                 <circle cx="12" cy="13" r="4" />
@@ -568,7 +640,7 @@ function CreateStoryPageContent() {
             <div>
               <p className="font-medium text-[var(--color-text-primary)]">사진 찍기</p>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                바로 촬영한 사진으로 대표 이미지를 만들어요.
+                바로 촬영한 사진을 첨부해요.
               </p>
             </div>
           </button>
@@ -579,7 +651,7 @@ function CreateStoryPageContent() {
             disabled={isProcessingImage}
             className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-[var(--color-surface-secondary)] active:bg-[var(--color-border-light)] disabled:cursor-wait disabled:opacity-60"
           >
-            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-secondary-light)] text-[var(--color-secondary)]">
+            <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
                 <circle cx="8.5" cy="8.5" r="1.5" />
@@ -589,34 +661,10 @@ function CreateStoryPageContent() {
             <div>
               <p className="font-medium text-[var(--color-text-primary)]">사진 보관함</p>
               <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                저장한 사진을 불러와 정사각형으로 맞춰볼 수 있어요.
+                최대 4장까지 불러와 정사각형으로 맞춰볼 수 있어요.
               </p>
             </div>
           </button>
-
-          {selectedImage && (
-            <>
-              <div className="my-2 border-t border-[var(--color-border-light)]" />
-              <button
-                type="button"
-                onClick={handleRemoveImage}
-                className="flex w-full items-center gap-4 rounded-xl px-4 py-4 text-left transition-colors hover:bg-[var(--color-secondary-light)]/50 active:bg-[var(--color-secondary-light)]"
-              >
-                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--color-secondary-light)] text-[var(--color-secondary)]">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="3 6 5 6 21 6" />
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="font-medium text-[var(--color-text-primary)]">이미지 제거</p>
-                  <p className="mt-0.5 text-xs text-[var(--color-text-secondary)]">
-                    선택한 대표 이미지를 제거할 수 있어요.
-                  </p>
-                </div>
-              </button>
-            </>
-          )}
         </div>
       </BottomSheet>
 
@@ -628,7 +676,7 @@ function CreateStoryPageContent() {
           }
           resetCropEditor();
         }}
-        title="대표 이미지 편집"
+        title="대표이미지 편집"
       >
         <div className="px-4 pb-5 pt-4">
           <p className="text-center text-sm leading-6 text-[var(--color-text-secondary)]">
@@ -642,7 +690,7 @@ function CreateStoryPageContent() {
               onPointerMove={handleCropPointerMove}
               onPointerUp={handleCropPointerRelease}
               onPointerCancel={handleCropPointerRelease}
-              className="relative h-[280px] w-[280px] overflow-hidden rounded-[28px] bg-[var(--color-surface-secondary)] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.35)]"
+              className="relative h-[280px] w-[280px] overflow-hidden rounded-[28px] bg-[var(--color-surface-secondary)] ring-1 ring-[var(--color-border-light)]"
               style={{ touchAction: 'none' }}
             >
               {draftImage && editorMetrics && (
@@ -654,7 +702,7 @@ function CreateStoryPageContent() {
                 >
                   <Image
                     src={draftImage.previewUrl}
-                    alt="대표 이미지 편집 미리보기"
+                    alt="첨부 이미지 편집 미리보기"
                     width={draftImage.width}
                     height={draftImage.height}
                     unoptimized
@@ -688,7 +736,7 @@ function CreateStoryPageContent() {
               step="0.01"
               value={cropDraft.zoom}
               onChange={(event) => handleCropZoomChange(Number(event.target.value))}
-              className="w-full accent-[var(--color-primary)]"
+              className="w-full accent-[var(--color-pink-cta)]"
             />
           </div>
 
@@ -707,7 +755,7 @@ function CreateStoryPageContent() {
                 void handleConfirmCrop();
               }}
               disabled={isApplyingCrop}
-              className="flex h-11 items-center justify-center rounded-2xl bg-[var(--color-primary)] text-sm font-semibold text-white transition-transform active:scale-[0.99] disabled:opacity-60"
+              className="flex h-11 items-center justify-center rounded-2xl bg-[var(--color-action-primary)] text-sm font-semibold text-[var(--color-action-primary-text)] transition-transform active:scale-[0.99] disabled:opacity-60"
             >
               {isApplyingCrop ? '적용 중...' : '확인'}
             </button>
@@ -731,6 +779,7 @@ function CreateStoryPageContent() {
         ref={libraryInputRef}
         type="file"
         accept="image/jpeg,image/png,image/gif"
+        multiple
         className="sr-only"
         tabIndex={-1}
         aria-hidden="true"

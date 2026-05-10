@@ -8,7 +8,7 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
 
 const variantStyles = {
   default: 'bg-[var(--color-surface)] border border-[var(--color-border-light)] shadow-sm',
-  outline: 'bg-[var(--color-surface)] border border-[var(--color-border)]',
+  outline: 'bg-[var(--color-surface)] border border-[var(--color-border)] shadow-none',
   elevated: 'bg-[var(--color-surface)] border border-[var(--color-border-light)] shadow-md',
 };
 
@@ -25,7 +25,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       <div
         ref={ref}
         className={`
-          overflow-hidden rounded-[24px]
+          overflow-hidden rounded-[var(--radius-2xl)]
           ${variantStyles[variant]}
           ${paddingStyles[padding]}
           ${clickable ? 'cursor-pointer transition duration-150 active:scale-[0.99]' : ''}

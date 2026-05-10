@@ -1,6 +1,6 @@
 import { HTMLAttributes, forwardRef } from 'react';
 
-type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info' | 'secondary';
+type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'error' | 'info' | 'secondary' | 'profilePink' | 'profileBlue';
 type BadgeSize = 'sm' | 'md' | 'lg';
 
 interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -10,13 +10,15 @@ interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: 'border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]',
-  primary: 'border border-[var(--color-primary)]/10 bg-[var(--color-primary-light)] text-[var(--color-primary)]',
-  secondary: 'border border-[var(--color-secondary)]/10 bg-[var(--color-secondary-light)] text-[var(--color-secondary)]',
-  success: 'border border-emerald-200 bg-emerald-50 text-emerald-700',
-  warning: 'border border-[var(--color-secondary)]/10 bg-[var(--color-secondary-light)] text-[var(--color-secondary)]',
-  error: 'border border-rose-200 bg-rose-50 text-rose-700',
-  info: 'border border-sky-200 bg-sky-50 text-sky-700',
+  default: 'border border-transparent bg-[var(--color-chip-background)] text-[var(--color-text-secondary)]',
+  primary: 'border border-[var(--color-pink-cta)]/20 bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]',
+  secondary: 'border border-[var(--color-blue-secondary)]/30 bg-[var(--color-chip-background)] text-[var(--color-text-primary)]',
+  success: 'border border-[var(--color-blue-secondary)]/30 bg-[var(--color-chip-background)] text-[var(--color-text-primary)]',
+  warning: 'border border-[var(--color-pink-cta)]/20 bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]',
+  error: 'border border-[var(--color-pink-cta)]/20 bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]',
+  info: 'border border-[var(--color-blue-secondary)]/30 bg-[var(--color-chip-background)] text-[var(--color-text-primary)]',
+  profilePink: 'border border-transparent bg-[var(--color-pink-cta)] text-white',
+  profileBlue: 'border border-transparent bg-[var(--color-chip-background)] text-[var(--color-text-secondary)]',
 };
 
 const sizeStyles: Record<BadgeSize, string> = {
@@ -53,6 +55,7 @@ interface CategoryBadgeGroupProps {
   variant?: BadgeVariant;
   size?: BadgeSize;
   maxDisplay?: number;
+  layout?: 'stack' | 'inline';
 }
 
 export function CategoryBadgeGroup({
@@ -61,6 +64,7 @@ export function CategoryBadgeGroup({
   variant = 'default',
   size = 'md',
   maxDisplay,
+  layout = 'stack',
 }: CategoryBadgeGroupProps) {
   const displayItems = maxDisplay ? items.slice(0, maxDisplay) : items;
   const remainingCount = maxDisplay ? items.length - maxDisplay : 0;
@@ -68,16 +72,26 @@ export function CategoryBadgeGroup({
   if (items.length === 0) return null;
 
   return (
-    <div className="space-y-2.5">
-      <span className="text-xs font-semibold text-[var(--color-text-tertiary)]">{category}</span>
-      <div className="chip-wrap">
+    <div className={layout === 'inline' ? 'flex items-start gap-3.5' : 'space-y-2.5'}>
+      <span className={layout === 'inline'
+        ? 'w-[82px] shrink-0 pt-1 text-[14px] font-semibold text-[var(--color-text-secondary)]'
+        : 'text-xs font-semibold text-[var(--color-text-tertiary)]'}
+      >
+        {category}
+      </span>
+      <div className={`chip-wrap ${layout === 'inline' ? 'min-w-0 flex-1 gap-2.5' : ''}`}>
         {displayItems.map((item, index) => (
-          <Badge key={index} variant={variant} size={size}>
+          <Badge
+            key={index}
+            variant={variant}
+            size={size}
+            className={layout === 'inline' ? 'px-3.5 py-1.5 text-[13px]' : ''}
+          >
             {item}
           </Badge>
         ))}
         {remainingCount > 0 && (
-          <Badge variant="default" size={size}>
+          <Badge variant="default" size={size} className={layout === 'inline' ? 'px-3.5 py-1.5 text-[13px]' : ''}>
             +{remainingCount}
           </Badge>
         )}
@@ -97,7 +111,7 @@ export function CountBadge({ count, max = 99 }: CountBadgeProps) {
   const displayCount = count > max ? `${max}+` : count;
 
   return (
-    <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--color-secondary)] px-1 text-xs font-bold text-white shadow-sm">
+    <span className="absolute -top-1 -right-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-[var(--color-pink-icon-active)] px-1 text-xs font-bold text-white shadow-sm">
       {displayCount}
     </span>
   );
