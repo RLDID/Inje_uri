@@ -13,6 +13,8 @@ interface UpdateSettingInput {
   reduce_same_year?: boolean;
   preferred_age_min?: number | null;
   preferred_age_max?: number | null;
+  filter_drinking?: boolean;
+  filter_smoking?: boolean;
 }
 
 const DEFAULT_SETTINGS: RecommendationSettingsResponse = {
@@ -20,6 +22,8 @@ const DEFAULT_SETTINGS: RecommendationSettingsResponse = {
   reduce_same_year: false,
   preferred_age_min: null,
   preferred_age_max: null,
+  filter_drinking: false,
+  filter_smoking: false,
   updated_at: null,
 };
 
@@ -40,6 +44,8 @@ export async function getRecommendationSetting(
     reduce_same_year: setting.reduce_same_year,
     preferred_age_min: setting.preferred_age_min,
     preferred_age_max: setting.preferred_age_max,
+    filter_drinking: setting.filter_drinking,
+    filter_smoking: setting.filter_smoking,
     updated_at: setting.updated_at.toISOString(),
   };
 }
@@ -51,7 +57,14 @@ export async function updateRecommendationSetting(
   userId: number,
   patch: UpdateSettingInput,
 ): Promise<RecommendationSettingsResponse> {
-  const { exclude_same_department, reduce_same_year, preferred_age_min, preferred_age_max } = patch;
+  const {
+    exclude_same_department,
+    reduce_same_year,
+    preferred_age_min,
+    preferred_age_max,
+    filter_drinking,
+    filter_smoking,
+  } = patch;
 
   // 나이 범위 검증
   if (
@@ -83,6 +96,14 @@ export async function updateRecommendationSetting(
       preferred_age_max !== undefined
         ? preferred_age_max
         : (existing?.preferred_age_max ?? null),
+    filter_drinking:
+      filter_drinking !== undefined
+        ? filter_drinking
+        : (existing?.filter_drinking ?? false),
+    filter_smoking:
+      filter_smoking !== undefined
+        ? filter_smoking
+        : (existing?.filter_smoking ?? false),
     updated_at: new Date(),
   };
 
@@ -93,6 +114,8 @@ export async function updateRecommendationSetting(
     reduce_same_year: setting.reduce_same_year,
     preferred_age_min: setting.preferred_age_min,
     preferred_age_max: setting.preferred_age_max,
+    filter_drinking: setting.filter_drinking,
+    filter_smoking: setting.filter_smoking,
     updated_at: setting.updated_at.toISOString(),
   };
 }

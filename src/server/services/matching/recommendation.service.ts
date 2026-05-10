@@ -218,6 +218,7 @@ export async function generateRecommendationsForUser(
   userId: number,
   date: string,
 ): Promise<void> {
+  // 1. 유저 기본 정보 조회
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -225,13 +226,30 @@ export async function generateRecommendationsForUser(
       department: true,
       student_year: true,
       age: true,
-      recommendationSetting: true,
     },
   });
 
-  if (!user) return;
+  if (!user) {
+    console.error(`[generateRecommendationsForUser] 유저를 찾을 수 없음: ${userId}`);
+    return;
+  }
 
-  const settings = user.recommendationSetting;
+  // 2. 추천 설정 별도 조회 (관계 로딩 이슈 방지 및 정확성 확보)
+  const settings = await prisma.recommendationSetting.findUnique({
+    where: { user_id: userId },
+  });
+
+  // [디버깅] DB에서 가져온 로우 데이터 전체 확인
+  console.log(`[generateRecommendationsForUser] 유저 ID: ${userId} DB 조회 결과:`, settings);
+
+  // 값이 없을 경우를 대비한 기본값(false) 처리 포함 (명시적 할당)
+  const isFilterDrinkingActive = settings?.filter_drinking ?? false;
+  const isFilterSmokingActive = settings?.filter_smoking ?? false;
+
+  console.log(`[generateRecommendationsForUser] 필터 활성화 상태 확정:`, {
+    isFilterDrinkingActive,
+    isFilterSmokingActive,
+  });
 
   // 후보 풀 제외 조건
   const blockedIds = await getBlockedUserIds(userId);
@@ -280,9 +298,7 @@ export async function generateRecommendationsForUser(
   `;
   const excludeByDismiss = new Set(dismissRows.map((r) => r.dismissed_user_id));
 
-  // 선호/비선호 키워드 분리 조회
-  // - 선호: desired_vibe, date_style (가산 매칭)
-  // - 비선호: deal_breakers (하드 제외) + 의미 기반 다른 카테고리 연계 제외
+  // 선호 키워드 조회 (가산 매칭용: desired_vibe, date_style)
   const preferredKeywordRows = await prisma.$queryRaw<{ keyword_id: number }[]>`
     SELECT uks.keyword_id
     FROM user_keyword_selections uks
@@ -290,54 +306,35 @@ export async function generateRecommendationsForUser(
     WHERE uks.user_id = ${userId}
       AND c.category_code IN ('desired_vibe', 'date_style')
   `;
+  const preferredKeywordIds = preferredKeywordRows.map((r) => r.keyword_id);
+  const safePreferredIds = preferredKeywordIds.length > 0 ? preferredKeywordIds : [-1];
 
-  const dispreferredKeywordRowsWithLabels = await prisma.$queryRaw<{ keyword_id: number, label: string }[]>`
-    SELECT k.keyword_id, k.label
-    FROM user_keyword_selections uks
-    JOIN keywords k ON uks.keyword_id = k.keyword_id
+  // 하드 필터링용 제외 키워드 ID 조회 (음주/흡연 다중 카테고리 대응)
+  const targetKeywords = await prisma.$queryRaw<{ keyword_id: number; cat: string; code: string }[]>`
+    SELECT k.keyword_id, c.category_code as cat, k.keyword_code as code
+    FROM keyword k
     JOIN categories c ON k.category_id = c.category_id
-    WHERE uks.user_id = ${userId}
-      AND c.category_code = 'deal_breakers'
+    WHERE (c.category_code = 'drinking' AND k.keyword_code != 'never')
+       OR (c.category_code = 'smoking' AND k.keyword_code != 'non_smoker')
+       OR (c.category_code = 'deal_breakers' AND k.keyword_code IN ('smoking', 'heavy_drinking'))
   `;
 
-  const preferredKeywordIds = preferredKeywordRows.map((r) => r.keyword_id);
+  const drinkingExcludeIds = targetKeywords
+    .filter(k => (k.cat === 'drinking' && k.code !== 'never') || (k.cat === 'deal_breakers' && k.code === 'heavy_drinking'))
+    .map(k => k.keyword_id);
+  
+  const smokingExcludeIds = targetKeywords
+    .filter(k => (k.cat === 'smoking' && k.code !== 'non_smoker') || (k.cat === 'deal_breakers' && k.code === 'smoking'))
+    .map(k => k.keyword_id);
 
-  // Only treat mapped dealbreakers as exclusions. Keep drinking/smoking mappings as-is.
-  const mappedDealbreakerLabels = new Set(["Smoking", "Heavy Drinking"]);
-  const mappedDispreferredRows = dispreferredKeywordRowsWithLabels.filter((d) => mappedDealbreakerLabels.has(d.label));
-  const dispreferredKeywordIds = mappedDispreferredRows.map((r) => r.keyword_id);
+  // 안전장치: 빈 배열일 경우 존재하지 않는 ID(0)를 넣어 IN 연산자 오류 방지
+  const safeDrinkingExcludeIds = drinkingExcludeIds.length > 0 ? drinkingExcludeIds : [0];
+  const safeSmokingExcludeIds = smokingExcludeIds.length > 0 ? smokingExcludeIds : [0];
 
-  // deal_breaker의 의미에 맞는 다른 카테고리 키워드도 함께 제외 (매핑된 항목에 한함)
-  const additionalExcludeKeywordIds = new Set<number>();
-
-  // "Smoking" dealbreaker → smoking 카테고리의 "Smoker" 제외
-  if (mappedDispreferredRows.some((d) => d.label === "Smoking")) {
-    const smokerKeyword = await prisma.$queryRaw<{ keyword_id: number }[]>`
-      SELECT k.keyword_id
-      FROM keywords k
-      JOIN categories c ON k.category_id = c.category_id
-      WHERE c.category_code = 'smoking' AND k.label = 'Smoker'
-      LIMIT 1
-    `;
-    if (smokerKeyword.length > 0) {
-      additionalExcludeKeywordIds.add(smokerKeyword[0].keyword_id);
-    }
-  }
-
-  // "Heavy Drinking" dealbreaker → drinking 카테고리의 "Social" 제외
-  if (mappedDispreferredRows.some((d) => d.label === "Heavy Drinking")) {
-    const heavyDrinkingKeywords = await prisma.$queryRaw<{ keyword_id: number }[]>`
-      SELECT k.keyword_id
-      FROM keywords k
-      JOIN categories c ON k.category_id = c.category_id
-      WHERE c.category_code = 'drinking' AND k.label = 'Social'
-    `;
-    heavyDrinkingKeywords.forEach((kw) => additionalExcludeKeywordIds.add(kw.keyword_id));
-  }
-
-  const allExcludeKeywordIds = [...dispreferredKeywordIds, ...Array.from(additionalExcludeKeywordIds)];
-  const safePreferredIds = preferredKeywordIds.length > 0 ? preferredKeywordIds : [-1];
-  const safeDispreferredIds = allExcludeKeywordIds.length > 0 ? allExcludeKeywordIds : [-1];
+  console.log('[generateRecommendationsForUser] 최종 차단 ID 목록:', {
+    drinking: safeDrinkingExcludeIds,
+    smoking: safeSmokingExcludeIds,
+  });
 
   // 추천 조건 완화 단계별 시도
   const fallbackSteps = [
@@ -364,42 +361,7 @@ export async function generateRecommendationsForUser(
       ...recentIds,
     ]);
 
-    // const activeUsers = await prisma.$queryRaw<{
-    //   id: number;
-    //   gender: string;
-    //   department: string;
-    //   student_year: number;
-    //   age: number | null;
-    //   keyword_match_count: bigint;
-    //   keyword_count: bigint;
-    //   image_count: bigint;
-    //   has_bio: boolean;
-    //   created_at: Date;
-    // }[]>
-    // //COUNT(DISTINCT CASE WHEN uks.keyword_id IN (${Prisma.join(safeKeywordIds)}) THEN uks.id END) AS keyword_match_count,
-    // //여기서 `safeKeywordIds`는 **나(유저 B)가 선택한 모든 키워드**입니다. 여기에는 나의 성격도 있고, 내 이상형 조건도 섞여 있습니다. 이 쿼리는 상대방(유저 A)이 이 ID 중 하나라도 가지고 있으면 점수를 주기 때문에, 결국 **"나랑 똑같은 키워드를 고른 사람"**을 찾게 됩니다.
-    // `
-    //   SELECT
-    //     u.id,
-    //     u.gender,
-    //     u.department,
-    //     u.student_year,
-    //     u.age,
-    //     u.created_at,
-    //     COUNT(DISTINCT uks.id) AS keyword_count,
-    //     COUNT(DISTINCT upi.id) AS image_count,
-    //     (u.bio IS NOT NULL AND u.bio != '') AS has_bio
-    //   FROM users u
-    //   LEFT JOIN user_keyword_selections uks ON uks.user_id = u.id
-    //   LEFT JOIN user_profile_images upi ON upi.user_id = u.id
-    //   WHERE u.status = 'active'
-    //     AND u.onboarding_completed = true
-    //     AND u.gender != ${user.gender}
-    //     AND u.id NOT IN (${Prisma.join(excludeIds.size > 0 ? [...excludeIds] : [-1])})
-    //   GROUP BY u.id
-    // `;
-    
-    // 선호 키워드는 점수에 반영하고, 비선호 키워드는 SQL 단계에서 후보를 제외합니다.
+    // 선호 키워드는 점수에 반영하고, 하드 필터(음주/흡연)는 SQL 단계에서 후보를 제외합니다.
     const activeUsers = await prisma.$queryRaw<{
       id: number;
       gender: string;
@@ -430,11 +392,21 @@ export async function generateRecommendationsForUser(
         AND u.onboarding_completed = true
         AND u.gender != ${user.gender}
         AND u.id NOT IN (${Prisma.join(excludeIds.size > 0 ? [...excludeIds] : [-1])})
-        AND NOT EXISTS (
-          SELECT 1
-          FROM user_keyword_selections bad_uks
-          WHERE bad_uks.user_id = u.id
-            AND bad_uks.keyword_id IN (${Prisma.join(safeDispreferredIds)})
+        -- 음주 필터: 필터가 활성화된 경우에만 NOT EXISTS 체크
+        AND (
+          NOT ${isFilterDrinkingActive}
+          OR NOT EXISTS (
+            SELECT 1 FROM user_keyword_selections uks_d
+            WHERE uks_d.user_id = u.id AND uks_d.keyword_id IN (${Prisma.join(safeDrinkingExcludeIds)})
+          )
+        )
+        -- 흡연 필터: 필터가 활성화된 경우에만 NOT EXISTS 체크
+        AND (
+          NOT ${isFilterSmokingActive}
+          OR NOT EXISTS (
+            SELECT 1 FROM user_keyword_selections uks_s
+            WHERE uks_s.user_id = u.id AND uks_s.keyword_id IN (${Prisma.join(safeSmokingExcludeIds)})
+          )
         )
       GROUP BY u.id
     `;

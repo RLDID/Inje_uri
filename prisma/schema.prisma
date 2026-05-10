@@ -207,6 +207,8 @@ model RecommendationSetting {
   reduce_same_year        Boolean  @default(false)
   preferred_age_min       Int?
   preferred_age_max       Int?
+  filter_drinking         Boolean  @default(false)
+  filter_smoking          Boolean  @default(false)
   updated_at              DateTime @default(now()) @db.Timestamptz(6)
   user                    User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
