@@ -65,6 +65,7 @@ export async function getTodayRecommendations(
         item_id: c.item_id,
         candidate_user_id: c.candidate_user_id,
         rank_order: c.rank_order,
+        keyword_match_count: c.keyword_match_count,
         is_passed: c.passed_at !== null,
         blocked: isBlocked,
         profile: isBlocked
@@ -298,16 +299,17 @@ export async function generateRecommendationsForUser(
   `;
   const excludeByDismiss = new Set(dismissRows.map((r) => r.dismissed_user_id));
 
-  // 선호 키워드 조회 (가산 매칭용: desired_vibe, date_style)
-  const preferredKeywordRows = await prisma.$queryRaw<{ keyword_id: number }[]>`
-    SELECT uks.keyword_id
+  // 선호 키워드 조회 (가산 매칭용: 성향 관련 모든 카테고리 포함)
+  const preferredKeywordRows = await prisma.$queryRaw<{ keyword_code: string }[]>`
+    SELECT k.keyword_code
     FROM user_keyword_selections uks
+    JOIN keyword k ON uks.keyword_id = k.keyword_id
     JOIN categories c ON uks.category_id = c.category_id
     WHERE uks.user_id = ${userId}
-      AND c.category_code IN ('desired_vibe', 'date_style')
+      AND c.category_code IN ('personality', 'mbti', 'lifestyle', 'interests', 'desired_vibe', 'date_style')
   `;
-  const preferredKeywordIds = preferredKeywordRows.map((r) => r.keyword_id);
-  const safePreferredIds = preferredKeywordIds.length > 0 ? preferredKeywordIds : [-1];
+  const preferredKeywordCodes = preferredKeywordRows.map((r) => r.keyword_code);
+  const safePreferredCodes = preferredKeywordCodes.length > 0 ? preferredKeywordCodes : ['__NONE__'];
 
   // 하드 필터링용 제외 키워드 ID 조회 (음주/흡연 다중 카테고리 대응)
   const targetKeywords = await prisma.$queryRaw<{ keyword_id: number; cat: string; code: string }[]>`
@@ -347,7 +349,7 @@ export async function generateRecommendationsForUser(
     { recentDays: 0, relaxSameYear: true, agePad: 2, relaxDept: true },
   ];
 
-  let candidates: number[] = [];
+  let candidates: { id: number; matchCount: number }[] = [];
 
   for (const step of fallbackSteps) {
     const recentIds = await getRecentlyRecommendedUserIds(userId, step.recentDays, date);
@@ -381,12 +383,14 @@ export async function generateRecommendationsForUser(
         u.student_year,
         u.age,
         u.created_at,
-        COUNT(DISTINCT CASE WHEN uks.keyword_id IN (${Prisma.join(safePreferredIds)}) THEN uks.id END) AS keyword_match_count,
+        -- [수정] ID가 아닌 Code 기반으로 매칭 카운트 산정 (k.keyword_code 사용)
+        COUNT(DISTINCT CASE WHEN k.keyword_code IN (${Prisma.join(safePreferredCodes)}) THEN uks.id END) AS keyword_match_count,
         COUNT(DISTINCT uks.id) AS keyword_count,
         COUNT(DISTINCT upi.id) AS image_count,
         (u.bio IS NOT NULL AND u.bio != '') AS has_bio
       FROM users u
       LEFT JOIN user_keyword_selections uks ON uks.user_id = u.id
+      LEFT JOIN keyword k ON k.keyword_id = uks.keyword_id
       LEFT JOIN user_profile_images upi ON upi.user_id = u.id
       WHERE u.status = 'active'
         AND u.onboarding_completed = true
@@ -461,8 +465,8 @@ export async function generateRecommendationsForUser(
       .sort((a, b) => a.rand - b.rand);
 
     candidates = [
-      ...scoredMatch.map((s) => s.id),
-      ...shuffledZero.map((s) => s.id),
+      ...scoredMatch.map((s) => ({ id: s.id, matchCount: s.keywordMatch })),
+      ...shuffledZero.map((s) => ({ id: s.id, matchCount: 0 })),
     ].slice(0, RECOMMEND_COUNT);
 
     if (candidates.length >= RECOMMEND_COUNT) break;

@@ -7,6 +7,7 @@ export interface CandidateRow {
   item_id: number;
   candidate_user_id: number;
   rank_order: number;
+  keyword_match_count: number;
   passed_at: Date | null;
   nickname: string;
   age: number | null;
@@ -30,6 +31,7 @@ export interface RecommendationItemRow {
   daily_recommendation_id: number;
   candidate_user_id: number;
   rank_order: number;
+  keyword_match_count: number;
   passed_at: Date | null;
 }
 
@@ -58,6 +60,7 @@ export async function findCandidatesWithProfile(
       dri.id        AS item_id,
       dri.candidate_user_id,
       dri.rank_order,
+      dri.keyword_match_count,
       dri.passed_at,
       u.nickname,
       u.age,
@@ -82,7 +85,7 @@ export async function findItemInTodayRecommendation(
 ): Promise<RecommendationItemRow | null> {
   const rows = await prisma.$queryRaw<RecommendationItemRow[]>`
     SELECT dri.id, dri.daily_recommendation_id, dri.candidate_user_id,
-           dri.rank_order, dri.passed_at
+           dri.rank_order, dri.keyword_match_count, dri.passed_at
     FROM daily_recommendation_items dri
     JOIN daily_recommendations dr ON dr.id = dri.daily_recommendation_id
     WHERE dri.id = ${itemId}
@@ -186,7 +189,7 @@ export async function passMatchedCandidateItem(
 export async function createDailyRecommendation(
   userId: number,
   today: string,
-  candidateIds: number[],
+  candidates: { id: number; matchCount: number }[],
 ): Promise<number> {
   return prisma.$transaction(async (tx) => {
     const recRows = await tx.$queryRaw<{ id: number }[]>`
@@ -197,7 +200,7 @@ export async function createDailyRecommendation(
     `;
 
     if (recRows.length === 0) {
-      const existingRows = await tx.$queryRaw<{ id: number }[]>`
+      const existingRows = await tx.$queryRaw<{ id: number; selected_candidate_user_id: number | null }[]>`
         SELECT id, selected_candidate_user_id FROM daily_recommendations
         WHERE user_id = ${userId}
           AND recommendation_date = ${today}::date
@@ -222,11 +225,11 @@ export async function createDailyRecommendation(
         WHERE id = ${existingRec.id}
       `;
 
-      for (let i = 0; i < candidateIds.length; i++) {
+      for (let i = 0; i < candidates.length; i++) {
         await tx.$executeRaw`
           INSERT INTO daily_recommendation_items
-            (daily_recommendation_id, candidate_user_id, rank_order)
-          VALUES (${existingRec.id}, ${candidateIds[i]}, ${i + 1})
+            (daily_recommendation_id, candidate_user_id, rank_order, keyword_match_count)
+          VALUES (${existingRec.id}, ${candidates[i].id}, ${i + 1}, ${candidates[i].matchCount})
         `;
       }
 
@@ -235,11 +238,11 @@ export async function createDailyRecommendation(
 
     const recId = recRows[0].id;
 
-    for (let i = 0; i < candidateIds.length; i++) {
+    for (let i = 0; i < candidates.length; i++) {
       await tx.$executeRaw`
         INSERT INTO daily_recommendation_items
-          (daily_recommendation_id, candidate_user_id, rank_order)
-        VALUES (${recId}, ${candidateIds[i]}, ${i + 1})
+          (daily_recommendation_id, candidate_user_id, rank_order, keyword_match_count)
+        VALUES (${recId}, ${candidates[i].id}, ${i + 1}, ${candidates[i].matchCount})
       `;
     }
 

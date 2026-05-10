@@ -236,6 +236,7 @@ model DailyRecommendationItem {
   daily_recommendation_id Int
   candidate_user_id       Int
   rank_order              Int
+  keyword_match_count     Int                 @default(0)
   passed_at               DateTime?           @db.Timestamptz(6)
   daily_recommendation    DailyRecommendation @relation(fields: [daily_recommendation_id], references: [id], onDelete: Cascade)
   candidate_user          User                @relation("daily_recommendation_items_candidate_user_idTousers", fields: [candidate_user_id], references: [id], onDelete: Cascade)

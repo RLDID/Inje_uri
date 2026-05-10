@@ -14,6 +14,7 @@ export interface RecommendationCandidate {
   item_id: number;
   candidate_user_id: number;
   rank_order: number;
+  keyword_match_count: number;
   is_passed: boolean;
   blocked: boolean;
   profile: CandidateProfile | null; // null when blocked
