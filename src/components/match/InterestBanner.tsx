@@ -3,15 +3,15 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { currentUser } from '@/lib/data';
 import { appendNavigationContext, useCurrentRouteContext } from '@/lib/navigation';
 import type { Interest } from '@/lib/types';
 
 interface InterestBannerProps {
   interests: Interest[];
+  currentUserNickname?: string;
 }
 
-export function InterestBanner({ interests }: InterestBannerProps) {
+export function InterestBanner({ interests, currentUserNickname = '' }: InterestBannerProps) {
   const { currentPath, ownerSection } = useCurrentRouteContext();
   const pendingInterests = interests.filter((interest) => interest.status === 'pending');
   const count = pendingInterests.length;
@@ -110,7 +110,7 @@ export function InterestBanner({ interests }: InterestBannerProps) {
 
           <div className="mt-3">
             <p className="break-keep text-[16px] font-semibold leading-6 text-[var(--color-text-primary)]">
-              {currentUser.nickname}님에게 도착한 호감이 있어요
+              {currentUserNickname}님에게 도착한 호감이 있어요
             </p>
             <p className="mt-1 break-keep text-[13px] leading-5 text-[var(--color-text-secondary)]">
               지금 확인해보세요

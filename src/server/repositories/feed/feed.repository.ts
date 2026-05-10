@@ -29,8 +29,7 @@ const feedListSelect = {
   },
   images: {
     orderBy: { sort_order: "asc" as const },
-    select: { image_url: true },
-    take: 1,
+    select: { id: true, image_url: true, sort_order: true },
   },
   _count: { select: { comments: true } },
 } satisfies Prisma.SelfDateFeedSelect;
@@ -197,6 +196,69 @@ export class FeedRepository {
         feed_keyword_id: feedKeywordId,
       })),
     });
+  }
+
+  async createFeedImages(
+    tx: Prisma.TransactionClient,
+    feedId: number,
+    images: Array<{ imageUrl: string; sortOrder: number }>,
+  ) {
+    if (images.length === 0) {
+      return;
+    }
+
+    await tx.selfDateFeedImage.createMany({
+      data: images.map((image) => ({
+        feed_id: feedId,
+        image_url: image.imageUrl,
+        sort_order: image.sortOrder,
+      })),
+    });
+  }
+
+  async findFeedImagesByIds(
+    tx: Prisma.TransactionClient,
+    feedId: number,
+    imageIds: number[],
+  ) {
+    if (imageIds.length === 0) {
+      return [];
+    }
+
+    return tx.selfDateFeedImage.findMany({
+      where: {
+        feed_id: feedId,
+        id: { in: imageIds },
+      },
+      select: { id: true, image_url: true, sort_order: true },
+      orderBy: { sort_order: "asc" },
+    });
+  }
+
+  async deleteFeedImagesByIds(
+    tx: Prisma.TransactionClient,
+    feedId: number,
+    imageIds: number[],
+  ) {
+    if (imageIds.length === 0) {
+      return;
+    }
+
+    await tx.selfDateFeedImage.deleteMany({
+      where: {
+        feed_id: feedId,
+        id: { in: imageIds },
+      },
+    });
+  }
+
+  async getMaxImageSortOrder(tx: Prisma.TransactionClient, feedId: number): Promise<number> {
+    const aggregate = await tx.selfDateFeedImage.aggregate({
+      where: { feed_id: feedId },
+      _max: { sort_order: true },
+    });
+
+    return aggregate._max.sort_order ?? 0;
   }
 
   async softDeleteFeed(feedId: number) {

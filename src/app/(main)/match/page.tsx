@@ -1,28 +1,35 @@
 'use client';
 
-import { Suspense, startTransition, useEffect, useMemo, useState } from 'react';
+import { Suspense, startTransition, useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { BrandLogo } from '@/components/brand';
 import { PageContainer, PageContent } from '@/components/layout';
 import { ProfileCardCarousel } from '@/components/match/ProfileCardCarousel';
 import { useToast } from '@/components/ui';
-import {
-  getOtherParticipant,
-  getMyStories,
-  isChatInExpiryWarningWindow,
-  mockChats,
-  mockDailyRecommendation,
-  mockInterests,
-} from '@/lib/data';
+import { getChatRooms } from '@/lib/api/chat';
+import { getFeedComments, getMyFeeds } from '@/lib/api/feeds';
+import { getReceivedInterests } from '@/lib/api/interests';
+import { getMe } from '@/lib/api/profile';
+import { getTodayRecommendation, selectRecommendation } from '@/lib/api/recommendations';
+import { usePolling } from '@/lib/hooks/usePolling';
+import { getOtherParticipant, isChatInExpiryWarningWindow } from '@/lib/utils/chat';
 import { buildChatRoomHref, readRouteViewState, writeRouteViewState } from '@/lib/navigation';
 import { getDailyRecommendationRefreshLabel } from '@/lib/utils';
+import type { Chat, DailyRecommendation, FeedReaction, Interest, User } from '@/lib/types';
 
 const MATCH_VIEW_STATE_KEY = 'match:daily-recommendation';
 const MATCH_READ_NOTIFICATION_IDS_KEY = 'match:read-notification-ids';
 const MATCH_DELETED_NOTIFICATION_IDS_KEY = 'match:deleted-notification-ids';
 const INTEREST_HIDDEN_USER_IDS_KEY = 'interest:hidden-user-ids';
 const INTEREST_CHAT_STARTED_USER_IDS_KEY = 'interest:chat-started-user-ids';
+
+const EMPTY_RECOMMENDATION: DailyRecommendation = {
+  date: new Date().toISOString().slice(0, 10),
+  users: [],
+  viewedCount: 0,
+  isSelectionMade: false,
+};
 
 interface MatchViewState {
   currentIndex: number;
@@ -39,6 +46,11 @@ interface MatchNotification {
   description: string;
   createdAt: Date;
   unread?: boolean;
+}
+
+interface FeedReactionNotificationItem {
+  storyId: string;
+  reaction: FeedReaction;
 }
 
 function addUserIdToRouteState(key: string, userId: string): string[] {
@@ -88,6 +100,21 @@ function BellIcon({
   );
 }
 
+async function loadMyFeedReactionItems(): Promise<FeedReactionNotificationItem[]> {
+  const myFeeds = await getMyFeeds();
+  const reactionGroups = await Promise.all(
+    myFeeds.map(async (story) => {
+      const reactions = await getFeedComments(story.id);
+      return reactions.map((reaction) => ({
+        storyId: story.id,
+        reaction,
+      }));
+    }),
+  );
+
+  return reactionGroups.flat();
+}
+
 function HeaderHeartIcon({
   hasReceivedHeart,
   onClick,
@@ -135,7 +162,11 @@ function HeaderHeartIcon({
 function MatchPageContent() {
   const router = useRouter();
   const { showToast } = useToast();
-  const [recommendation, setRecommendation] = useState(mockDailyRecommendation);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [recommendation, setRecommendation] = useState<DailyRecommendation>(EMPTY_RECOMMENDATION);
+  const [receivedInterests, setReceivedInterests] = useState<Interest[]>([]);
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [feedReactionItems, setFeedReactionItems] = useState<FeedReactionNotificationItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [hiddenUserIds, setHiddenUserIds] = useState<string[]>([]);
   const [hasRestoredViewState, setHasRestoredViewState] = useState(false);
@@ -146,38 +177,116 @@ function MatchPageContent() {
   const [hiddenInterestUserIdsForHeader, setHiddenInterestUserIdsForHeader] = useState<string[]>([]);
 
   useEffect(() => {
-    const savedViewState = readRouteViewState<MatchViewState | null>(MATCH_VIEW_STATE_KEY, null);
+    let cancelled = false;
 
-    startTransition(() => {
-      if (!savedViewState) {
-        setHasRestoredViewState(true);
-        return;
+    async function loadMatchData() {
+      const savedViewState = readRouteViewState<MatchViewState | null>(MATCH_VIEW_STATE_KEY, null);
+
+      try {
+        const me = await getMe();
+        const [todayRecommendation, interests, rooms, feedReactions] = await Promise.all([
+          getTodayRecommendation(),
+          getReceivedInterests(me.id),
+          getChatRooms(me),
+          loadMyFeedReactionItems().catch((error) => {
+            console.warn('[MatchPage] Failed to load feed reaction notifications', error);
+            return [];
+          }),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        const restoredHiddenUserIds = savedViewState?.hiddenUserIds ?? [];
+        const restoredHiddenUserIdSet = new Set(restoredHiddenUserIds);
+        const restoredUsers = todayRecommendation.users.filter((user) => !restoredHiddenUserIdSet.has(user.id));
+        const clampedIndex = Math.max(
+          0,
+          Math.min(savedViewState?.currentIndex ?? 0, Math.max(restoredUsers.length - 1, 0)),
+        );
+        const hasSelectedUser = Boolean(
+          savedViewState?.selectedUserId &&
+            restoredUsers.some((user) => user.id === savedViewState.selectedUserId),
+        );
+
+        startTransition(() => {
+          setCurrentUser(me);
+          setReceivedInterests(interests);
+          setChats(rooms);
+          setFeedReactionItems(feedReactions);
+          setCurrentIndex(clampedIndex);
+          setHiddenUserIds(restoredHiddenUserIds);
+          setRecommendation({
+            ...todayRecommendation,
+            users: restoredUsers,
+            viewedCount: savedViewState?.viewedCount ?? todayRecommendation.viewedCount,
+            selectedUserId: hasSelectedUser ? savedViewState?.selectedUserId : todayRecommendation.selectedUserId,
+            isSelectionMade: hasSelectedUser ? Boolean(savedViewState?.isSelectionMade) : todayRecommendation.isSelectionMade,
+          });
+          setHasRestoredViewState(true);
+        });
+      } catch (error) {
+        if (!cancelled) {
+          setHasRestoredViewState(true);
+          showToast(error instanceof Error ? error.message : '추천 목록을 불러오지 못했습니다.', 'error');
+        }
       }
+    }
 
-      const restoredHiddenUserIds = savedViewState.hiddenUserIds ?? [];
-      const restoredHiddenUserIdSet = new Set(restoredHiddenUserIds);
-      const restoredUsers = mockDailyRecommendation.users.filter((user) => !restoredHiddenUserIdSet.has(user.id));
-      const clampedIndex = Math.max(
-        0,
-        Math.min(savedViewState.currentIndex, Math.max(restoredUsers.length - 1, 0)),
-      );
-      const hasSelectedUser = Boolean(
-        savedViewState.selectedUserId &&
-          restoredUsers.some((user) => user.id === savedViewState.selectedUserId),
-      );
+    void loadMatchData();
 
-      setCurrentIndex(clampedIndex);
-      setHiddenUserIds(restoredHiddenUserIds);
-      setRecommendation((prevRecommendation) => ({
-        ...prevRecommendation,
-        users: restoredUsers,
-        viewedCount: savedViewState.viewedCount,
-        selectedUserId: hasSelectedUser ? savedViewState.selectedUserId : undefined,
-        isSelectionMade: hasSelectedUser ? savedViewState.isSelectionMade : false,
-      }));
-      setHasRestoredViewState(true);
-    });
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
+
+  const refreshMatchData = useCallback(async () => {
+    try {
+      const me = currentUser ?? await getMe();
+      const [todayRecommendation, interests, rooms, feedReactions] = await Promise.all([
+        getTodayRecommendation(),
+        getReceivedInterests(me.id),
+        getChatRooms(me),
+        loadMyFeedReactionItems().catch(() => []),
+      ]);
+
+      const hiddenUserIdSet = new Set(hiddenUserIds);
+      const visibleUsersFromServer = todayRecommendation.users.filter((user) => !hiddenUserIdSet.has(user.id));
+
+      setCurrentUser(me);
+      setReceivedInterests(interests);
+      setChats(rooms);
+      setFeedReactionItems(feedReactions);
+      setCurrentIndex((prevIndex) => Math.min(prevIndex, Math.max(visibleUsersFromServer.length - 1, 0)));
+      setRecommendation((prevRecommendation) => {
+        const selectedUserStillVisible = Boolean(
+          prevRecommendation.selectedUserId &&
+            visibleUsersFromServer.some((user) => user.id === prevRecommendation.selectedUserId),
+        );
+
+        return {
+          ...todayRecommendation,
+          users: visibleUsersFromServer,
+          viewedCount: Math.max(prevRecommendation.viewedCount, todayRecommendation.viewedCount),
+          selectedUserId: selectedUserStillVisible
+            ? prevRecommendation.selectedUserId
+            : todayRecommendation.selectedUserId,
+          isSelectionMade: selectedUserStillVisible
+            ? prevRecommendation.isSelectionMade
+            : todayRecommendation.isSelectionMade,
+        };
+      });
+    } catch {
+      // Keep the current recommendation and notification state during background polling.
+    }
+  }, [currentUser, hiddenUserIds]);
+
+  usePolling(refreshMatchData, {
+    intervalMs: 7000,
+    enabled: hasRestoredViewState,
+    immediate: false,
+  });
 
   useEffect(() => {
     if (!hasRestoredViewState) {
@@ -262,7 +371,7 @@ function MatchPageContent() {
     }));
   };
 
-  const handleSelect = (userId: string) => {
+  const handleSelect = async (userId: string) => {
     if (isSelectionLocked) {
       if (recommendation.selectedUserId === userId) {
         return;
@@ -278,47 +387,63 @@ function MatchPageContent() {
       return;
     }
 
-    setCurrentIndex(selectedIndex);
-    setRecommendation((prevRecommendation) => ({
-      ...prevRecommendation,
-      viewedCount: Math.max(prevRecommendation.viewedCount, selectedIndex + 1),
-      selectedUserId: userId,
-      isSelectionMade: true,
-    }));
+    const selectedRecommendationUser = recommendation.users[selectedIndex] as User & { recommendationItemId?: number };
+    const recommendationItemId = selectedRecommendationUser.recommendationItemId;
 
-    const hasPendingReceivedHeart = mockInterests.some(
-      (interest) => interest.status === 'pending' && interest.fromUser.id === userId,
-    );
-
-    if (!hasPendingReceivedHeart) {
-      showToast('하트를 보냈어요!', 'success');
+    if (!recommendationItemId) {
+      showToast('추천 항목 정보를 찾을 수 없어요.', 'error');
       return;
     }
 
-    const chatStartedUserIds = readRouteViewState<string[]>(INTEREST_CHAT_STARTED_USER_IDS_KEY, []);
-    const hasChatStartedFromReceivedHeart = chatStartedUserIds.includes(userId);
+    try {
+      const result = await selectRecommendation(recommendationItemId);
 
-    addUserIdToRouteState(INTEREST_HIDDEN_USER_IDS_KEY, userId);
-    addUserIdToRouteState(INTEREST_CHAT_STARTED_USER_IDS_KEY, userId);
+      setCurrentIndex(selectedIndex);
+      setRecommendation((prevRecommendation) => ({
+        ...prevRecommendation,
+        viewedCount: Math.max(prevRecommendation.viewedCount, selectedIndex + 1),
+        selectedUserId: userId,
+        isSelectionMade: true,
+      }));
+      void refreshMatchData();
 
-    showToast(
-      hasChatStartedFromReceivedHeart ? '이미 채팅방이 열린 상대입니다.' : '채팅이 시작되었어요.',
-      hasChatStartedFromReceivedHeart ? 'info' : 'success',
-    );
+      const hasPendingReceivedHeart = receivedInterests.some(
+        (interest) => interest.status === 'pending' && interest.fromUser.id === userId,
+      );
+
+      if (!hasPendingReceivedHeart) {
+        showToast('하트를 보냈어요!', 'success');
+        return;
+      }
+
+      const chatStartedUserIds = readRouteViewState<string[]>(INTEREST_CHAT_STARTED_USER_IDS_KEY, []);
+      const hasChatStartedFromReceivedHeart = chatStartedUserIds.includes(userId);
+
+      addUserIdToRouteState(INTEREST_HIDDEN_USER_IDS_KEY, userId);
+      addUserIdToRouteState(INTEREST_CHAT_STARTED_USER_IDS_KEY, userId);
+      setHiddenInterestUserIdsForHeader((prevIds) => Array.from(new Set([...prevIds, userId])));
+
+      showToast(
+        result.chat_room_id || hasChatStartedFromReceivedHeart ? '채팅이 시작되었어요.' : '하트를 보냈어요!',
+        result.chat_room_id || hasChatStartedFromReceivedHeart ? 'success' : 'info',
+      );
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '하트를 보내지 못했어요.', 'error');
+    }
   };
 
   const refreshLabel = now === null ? '--:--:--' : getDailyRecommendationRefreshLabel(now);
   const notificationNow = now ?? 0;
   const pendingReceivedInterests = useMemo(
-    () => mockInterests.filter((interest) => (
+    () => receivedInterests.filter((interest) => (
       interest.status === 'pending' && !hiddenInterestUserIdsForHeader.includes(interest.fromUser.id)
     )),
-    [hiddenInterestUserIdsForHeader],
+    [hiddenInterestUserIdsForHeader, receivedInterests],
   );
   const hasReceivedHeart = pendingReceivedInterests.length > 0;
   const rawNotifications = useMemo<MatchNotification[]>(() => {
-    const items = mockChats.flatMap((chat) => {
-      const partnerName = getOtherParticipant(chat)?.user.nickname ?? '상대방';
+    const items = chats.flatMap((chat) => {
+      const partnerName = getOtherParticipant(chat, currentUser?.id ?? '')?.user.nickname ?? '상대방';
       const startedNotification: MatchNotification = {
         id: `${chat.id}-started`,
         href: buildChatRoomHref(chat.id, { fallbackPath: '/chat' }),
@@ -344,16 +469,16 @@ function MatchPageContent() {
       return [expiryNotification, startedNotification];
     });
 
-    const feedReactionNotifications = getMyStories().flatMap((story) => (
-      (story.reactions ?? []).map((reaction) => ({
-        id: `self-date-reaction-${reaction.id}`,
-        href: '/my/posts',
-        title: `${reaction.fromUser.nickname}님이 내 피드에 하트를 보냈어요`,
-        description: '지금우리 내 피드에서 도착한 하트를 확인해보세요.',
-        createdAt: new Date(reaction.createdAt),
-        unread: true,
-      }))
-    ));
+    const feedReactionNotifications: MatchNotification[] = feedReactionItems.map(({ storyId, reaction }) => ({
+      id: `self-date-comment-${storyId}-${reaction.id}`,
+      href: '/my/posts',
+      title: `${reaction.fromUser.nickname}님이 내 피드에 반응을 남겼어요`,
+      description: reaction.message
+        ? '지금우리 내 피드에서 도착한 메시지를 확인해보세요.'
+        : '지금우리 내 피드에서 도착한 반응을 확인해보세요.',
+      createdAt: reaction.createdAt,
+      unread: true,
+    }));
 
     const receivedHeartNotifications = pendingReceivedInterests.map((interest) => ({
       id: `received-heart-${interest.id}`,
@@ -366,7 +491,7 @@ function MatchPageContent() {
 
     return [...items, ...feedReactionNotifications, ...receivedHeartNotifications]
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
-  }, [notificationNow, pendingReceivedInterests]);
+  }, [chats, currentUser?.id, feedReactionItems, notificationNow, pendingReceivedInterests]);
   const notifications = useMemo(
     () => rawNotifications.filter((notification) => !deletedNotificationIds.includes(notification.id)),
     [deletedNotificationIds, rawNotifications],
@@ -551,6 +676,7 @@ function MatchPageContent() {
                   selectedUserId={isSelectionLocked ? selectedUser?.id : undefined}
                   isSelectionMade={isSelectionLocked}
                   onSelect={handleSelect}
+                  currentUserInterests={currentUser?.interests ?? []}
                 />
               )}
             </div>

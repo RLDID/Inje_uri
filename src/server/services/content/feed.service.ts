@@ -3,6 +3,10 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/lib/app-error";
 import { FeedRepository } from "@/server/repositories/feed/feed.repository";
 import type { FeedDetailRow, FeedListRow } from "@/server/repositories/feed/feed.repository";
+import {
+  removeStoredFeedImage,
+  saveFeedImageFile,
+} from "@/server/services/content/feed-image-storage";
 import { decodeFeedCursor, encodeFeedCursor } from "@/lib/utils/cursor";
 import type {
   CreateFeedResultDto,
@@ -34,6 +38,11 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
       name: k.feed_keyword.name,
     })),
     primaryImage: row.images[0]?.image_url ?? null,
+    images: row.images.map((image) => ({
+      imageId: image.id,
+      imageUrl: image.image_url,
+      sortOrder: image.sort_order,
+    })),
     commentCount: row._count.comments,
   };
 }
@@ -134,6 +143,7 @@ export async function createFeed(
   authorUserId: number,
   text: string,
   feedKeywordIds: number[],
+  images: File[] = [],
 ): Promise<CreateFeedResultDto> {
   const now = new Date();
 
@@ -155,8 +165,19 @@ export async function createFeed(
   const expiryHours = expirySetting ? Number(expirySetting.value) : defaultExpiryHours;
   const expiresAt = new Date(now.getTime() + expiryHours * 60 * 60 * 1000);
 
+  const imageUrls = await Promise.all(images.map((image) => saveFeedImageFile(image)));
+
   const feed = await prisma.$transaction(async (tx) => {
-    return repo.createFeedWithKeywords(tx, { authorUserId, text: text.trim(), expiresAt }, feedKeywordIds);
+    const createdFeed = await repo.createFeedWithKeywords(tx, { authorUserId, text: text.trim(), expiresAt }, feedKeywordIds);
+    await repo.createFeedImages(
+      tx,
+      createdFeed.id,
+      imageUrls.map((imageUrl, index) => ({
+        imageUrl,
+        sortOrder: index + 1,
+      })),
+    );
+    return createdFeed;
   });
 
   return {
@@ -201,6 +222,8 @@ export async function updateFeed(
   feedId: number,
   text: string | undefined,
   feedKeywordIds: number[] | undefined,
+  images: File[] = [],
+  deleteImageIds: number[] = [],
 ): Promise<{ updated: true }> {
   const feed = await repo.findFeedForUpdate(feedId);
   if (!feed) {
@@ -227,11 +250,30 @@ export async function updateFeed(
     }
   }
 
+  const imageUrls = await Promise.all(images.map((image) => saveFeedImageFile(image)));
+  const deletedImageUrls: string[] = [];
+
   await prisma.$transaction(async (tx) => {
     const nextText = text?.trim() ?? feed.text;
     await repo.updateFeedText(tx, feedId, nextText, now);
     if (feedKeywordIds) await repo.replaceFeedKeywords(tx, feedId, feedKeywordIds);
+
+    const imagesToDelete = await repo.findFeedImagesByIds(tx, feedId, deleteImageIds);
+    deletedImageUrls.push(...imagesToDelete.map((image) => image.image_url));
+    await repo.deleteFeedImagesByIds(tx, feedId, deleteImageIds);
+
+    const maxSortOrder = await repo.getMaxImageSortOrder(tx, feedId);
+    await repo.createFeedImages(
+      tx,
+      feedId,
+      imageUrls.map((imageUrl, index) => ({
+        imageUrl,
+        sortOrder: maxSortOrder + index + 1,
+      })),
+    );
   });
+
+  await Promise.all(deletedImageUrls.map((imageUrl) => removeStoredFeedImage(imageUrl)));
 
   return { updated: true };
 }

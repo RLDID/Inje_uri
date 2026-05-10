@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { CenteredModal, useToast } from '@/components/ui';
 import { FeedCard } from '@/components/self-date/FeedCard';
-import { getActiveStories, getChatButtonStatus, getMyStories } from '@/lib/data';
+import { getFeedComments, getMyCommentedFeeds, getMyFeeds, selectFeedCommentChat } from '@/lib/api/feeds';
+import { blockUser, reportTarget } from '@/lib/api/safety';
 import { SELFDATE_KEYWORD_OPTIONS, getFeedCategoryLabel } from '@/lib/constants';
 import { analyzeFeedImage, type FeedImageAsset } from '@/lib/utils/feedImage';
 import {
@@ -17,8 +18,8 @@ import {
   type AppSection,
   useCurrentRouteContext,
 } from '@/lib/navigation';
-import { getFeedRemainingTime, isValidFeed } from '@/lib/utils/feed';
-import { applyMyStoryOverrides, getUserAcademicLabel, readSelfDateLikedFeedIds } from '@/lib/utils';
+import { getFeedRemainingTime } from '@/lib/utils/feed';
+import { getUserAcademicLabel } from '@/lib/utils';
 import type { FeedCategory, Story, FeedReaction } from '@/lib/types';
 
 interface MyStoriesViewProps {
@@ -104,47 +105,43 @@ export function MyStoriesView({
   const [isUpdatingEditImage, setIsUpdatingEditImage] = useState(false);
   const [reactionMenuTarget, setReactionMenuTarget] = useState<ReactionMenuTarget | null>(null);
   const [reactionActionTarget, setReactionActionTarget] = useState<ReactionActionTarget | null>(null);
-  const [myStories, setMyStories] = useState<Story[]>(() => getMyStories());
-  const [likedFeedIds, setLikedFeedIds] = useState<string[]>(() => readSelfDateLikedFeedIds());
+  const [myStories, setMyStories] = useState<Story[]>([]);
+  const [likedStories, setLikedStories] = useState<Story[]>([]);
   const [reactionChatIds, setReactionChatIds] = useState<string[]>(() => readReactionChatIds());
 
-  const likedStories = useMemo(() => {
-    const activeStories = getActiveStories().filter(isValidFeed);
-
-    return likedFeedIds
-      .map((feedId) => activeStories.find((story) => story.id === feedId))
-      .filter((story): story is Story => !!story);
-  }, [likedFeedIds]);
-
   useEffect(() => {
-    const syncLikedFeeds = () => {
-      setLikedFeedIds(readSelfDateLikedFeedIds());
-    };
+    let cancelled = false;
 
-    syncLikedFeeds();
-    window.addEventListener('focus', syncLikedFeeds);
-    window.addEventListener('storage', syncLikedFeeds);
+    async function loadStories() {
+      try {
+        const [mine, commented] = await Promise.all([
+          getMyFeeds(),
+          getMyCommentedFeeds(),
+        ]);
+        const mineWithReactions = await Promise.all(mine.map(async (story) => ({
+          ...story,
+          reactions: await getFeedComments(story.id),
+        })));
+
+        if (!cancelled) {
+          setMyStories(mineWithReactions);
+          setLikedStories(commented);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '피드 목록을 불러오지 못했어요.', 'error');
+        }
+      }
+    }
+
+    void loadStories();
+    window.addEventListener('focus', loadStories);
 
     return () => {
-      window.removeEventListener('focus', syncLikedFeeds);
-      window.removeEventListener('storage', syncLikedFeeds);
+      cancelled = true;
+      window.removeEventListener('focus', loadStories);
     };
-  }, []);
-
-  useEffect(() => {
-    const syncMyStories = () => {
-      setMyStories(applyMyStoryOverrides(getMyStories()));
-    };
-
-    syncMyStories();
-    window.addEventListener('focus', syncMyStories);
-    window.addEventListener('storage', syncMyStories);
-
-    return () => {
-      window.removeEventListener('focus', syncMyStories);
-      window.removeEventListener('storage', syncMyStories);
-    };
-  }, []);
+  }, [showToast]);
 
   useEffect(() => {
     setActiveTab(searchParams.get('tab') === 'liked' ? 'liked' : 'mine');
@@ -283,54 +280,66 @@ export function MyStoriesView({
     });
   };
 
-  const handleStartReactionChat = (reaction: FeedReaction) => {
-    setReactionChatIds((prevReactionChatIds) => (
-      prevReactionChatIds.includes(reaction.id)
-        ? prevReactionChatIds
-        : [...prevReactionChatIds, reaction.id]
-    ));
-
-    const chatStatus = getChatButtonStatus(reaction.fromUser.id);
-
-    if (chatStatus.type === 'existing_chat') {
-      router.push(buildChatRoomHref(chatStatus.chatId, {
+  const handleStartReactionChat = async (reaction: FeedReaction) => {
+    try {
+      const result = await selectFeedCommentChat(reaction.id);
+      setReactionChatIds((prevReactionChatIds) => (
+        prevReactionChatIds.includes(reaction.id)
+          ? prevReactionChatIds
+          : [...prevReactionChatIds, reaction.id]
+      ));
+      showToast('채팅방이 열렸어요.', 'success');
+      router.push(buildChatRoomHref(String(result.chatRoomId), {
         sourcePath: currentPath,
         fallbackPath: currentPath,
       }));
-      return;
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '채팅방을 만들지 못했어요.', 'error');
     }
-
-    showToast('대화를 시작할 준비가 됐어요.', 'success');
-    router.push('/chat');
   };
 
-  const handleConfirmReactionAction = () => {
+  const handleConfirmReactionAction = async () => {
     if (!reactionActionTarget) {
       return;
     }
 
     const { action, reaction, storyId } = reactionActionTarget;
 
-    setMyStories((prevStories) => prevStories.map((story) => (
-      story.id === storyId
-        ? {
-            ...story,
-            reactions: story.reactions?.filter((item) => item.id !== reaction.id) ?? [],
-          }
-        : story
-    )));
+    try {
+      if (action === 'report') {
+        await reportTarget({
+          targetType: 'feed_comment',
+          targetId: reaction.id,
+          reasonType: 'inappropriate',
+          description: null,
+        });
+      } else {
+        await blockUser(reaction.fromUser.id);
+      }
 
-    if (selectedReaction?.reaction.id === reaction.id) {
-      setSelectedReaction(null);
+      setMyStories((prevStories) => prevStories.map((story) => (
+        story.id === storyId
+          ? {
+              ...story,
+              reactions: story.reactions?.filter((item) => item.id !== reaction.id) ?? [],
+            }
+          : story
+      )));
+
+      if (selectedReaction?.reaction.id === reaction.id) {
+        setSelectedReaction(null);
+      }
+
+      showToast(
+        action === 'report'
+          ? `${reaction.fromUser.nickname}님을 신고했어요.`
+          : `${reaction.fromUser.nickname}님을 차단했어요.`,
+        'success',
+      );
+      setReactionActionTarget(null);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '요청을 처리하지 못했어요.', 'error');
     }
-
-    showToast(
-      action === 'report'
-        ? `${reaction.fromUser.nickname}님을 신고했어요.`
-        : `${reaction.fromUser.nickname}님을 차단했어요.`,
-      'success',
-    );
-    setReactionActionTarget(null);
   };
 
   const selectedReactionProfileHref = selectedReaction
@@ -369,7 +378,7 @@ export function MyStoriesView({
                     : 'text-[var(--color-text-secondary)]'
                 }`}
               >
-                하트 누른 피드
+                반응한 피드
               </button>
             </div>
           </div>
@@ -388,7 +397,7 @@ export function MyStoriesView({
               <p className="text-[var(--color-text-secondary)]">아직 작성한 피드가 없어요.</p>
               <Link
                 href="/self-date/create"
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--color-action-primary)] px-5 py-2.5 text-sm font-medium text-[var(--color-action-primary-text)]"
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--color-action-primary)] px-5 py-2.5 text-sm font-medium text-white"
               >
                 첫 피드 만들기
               </Link>
@@ -542,7 +551,9 @@ export function MyStoriesView({
                               {!isReactionHandled && (
                                 <button
                                   type="button"
-                                  onClick={() => handleStartReactionChat(reaction)}
+                                  onClick={() => {
+                                    void handleStartReactionChat(reaction);
+                                  }}
                                   className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#e9799f] text-[14px] font-semibold text-white shadow-[0_3px_8px_rgba(233,121,159,0.24)] transition-transform active:scale-[0.99]"
                                 >
                                   <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -570,10 +581,10 @@ export function MyStoriesView({
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                 </svg>
               </div>
-              <p className="text-[var(--color-text-secondary)]">아직 좋아요를 보낸 피드가 없어요.</p>
+              <p className="text-[var(--color-text-secondary)]">아직 반응한 피드가 없어요.</p>
               <Link
                 href="/self-date"
-                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--color-action-primary)] px-5 py-2.5 text-sm font-medium text-[var(--color-action-primary-text)]"
+                className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--color-action-primary)] px-5 py-2.5 text-sm font-medium text-white"
               >
                 지금 우리 둘러보기
               </Link>
@@ -669,7 +680,7 @@ export function MyStoriesView({
               <button
                 type="button"
                 onClick={() => {
-                  handleStartReactionChat(selectedReaction.reaction);
+                  void handleStartReactionChat(selectedReaction.reaction);
                   setSelectedReaction(null);
                 }}
                 className="flex items-center justify-center rounded-2xl bg-[var(--color-action-primary)] px-4 py-3 font-medium text-[var(--color-action-primary-text)]"
@@ -917,7 +928,9 @@ export function MyStoriesView({
               </button>
               <button
                 type="button"
-                onClick={handleConfirmReactionAction}
+                onClick={() => {
+                  void handleConfirmReactionAction();
+                }}
                 className={`rounded-2xl py-3 font-medium ${
                   reactionActionTarget.action === 'report'
                     ? 'bg-[var(--color-error-bg)] text-[var(--color-error)]'

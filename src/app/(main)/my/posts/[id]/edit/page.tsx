@@ -1,14 +1,13 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import Image from 'next/image';
 import { useParams, useRouter } from 'next/navigation';
 import { PageContainer, PageContent } from '@/components/layout';
 import { BottomSheet, useToast } from '@/components/ui';
-import { getMyStoryById } from '@/lib/data';
+import { feedCategoriesToKeywordIds, getFeed, updateFeed } from '@/lib/api/feeds';
 import { SELFDATE_KEYWORD_OPTIONS } from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
-import { applyMyStoryOverrides, writeMyStoryOverride } from '@/lib/utils';
 import { analyzeFeedImage, type FeedImageAsset } from '@/lib/utils/feedImage';
 import type { FeedCategory, Story } from '@/lib/types';
 
@@ -38,6 +37,15 @@ function createFeedImageAssetFromUrl(url: string, index: number): FeedImageAsset
   };
 }
 
+async function feedImageAssetToFile(asset: FeedImageAsset, index: number): Promise<File> {
+  const response = await fetch(asset.previewUrl);
+  const blob = await response.blob();
+  const extension = asset.mimeType === 'image/png' ? 'png' : asset.mimeType === 'image/gif' ? 'gif' : 'jpg';
+  return new File([blob], asset.fileName || `feed-image-${index + 1}.${extension}`, {
+    type: asset.mimeType || blob.type || 'image/jpeg',
+  });
+}
+
 export default function MyPostEditPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -46,31 +54,43 @@ export default function MyPostEditPage() {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
 
-  const story = useMemo(() => getMyStoryById(params.id), [params.id]);
-
-  const [text, setText] = useState(() => story?.content.text ?? '');
-  const [selectedImages, setSelectedImages] = useState<FeedImageAsset[]>(() => (
-    story?.content.images.map(createFeedImageAssetFromUrl) ?? []
-  ));
-  const [selectedCategories, setSelectedCategories] = useState<FeedCategory[]>(() => (
-    story ? getStoryCategoryList(story) : []
-  ));
+  const [story, setStory] = useState<Story | null>(null);
+  const [text, setText] = useState('');
+  const [selectedImages, setSelectedImages] = useState<FeedImageAsset[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<FeedCategory[]>([]);
+  const [deleteImageIds, setDeleteImageIds] = useState<string[]>([]);
   const [showImageOptions, setShowImageOptions] = useState(false);
   const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   const isValid = text.trim().length > 0 && selectedCategories.length > 0;
 
   useEffect(() => {
-    if (!story) {
-      return;
+    let cancelled = false;
+
+    async function loadStory() {
+      try {
+        const nextStory = await getFeed(params.id);
+        if (cancelled) {
+          return;
+        }
+
+        setStory(nextStory);
+        setText(nextStory.content.text ?? '');
+        setSelectedImages(nextStory.content.images.map(createFeedImageAssetFromUrl));
+        setSelectedCategories(getStoryCategoryList(nextStory));
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '피드를 불러오지 못했어요.', 'error');
+        }
+      }
     }
 
-    const hydratedStory = applyMyStoryOverrides([story])[0];
+    void loadStory();
 
-    setText(hydratedStory.content.text ?? '');
-    setSelectedImages(hydratedStory.content.images.map(createFeedImageAssetFromUrl));
-    setSelectedCategories(getStoryCategoryList(hydratedStory));
-  }, [story]);
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id, showToast]);
 
   const processSelectedFiles = async (files: File[]) => {
     const remainingSlots = MAX_SELECTED_IMAGES - selectedImages.length;
@@ -124,6 +144,12 @@ export default function MyPostEditPage() {
   };
 
   const handleRemoveImage = (indexToRemove: number) => {
+    const removedImage = selectedImages[indexToRemove];
+    const existingImage = story?.content.imageMetas?.find((image) => image.imageUrl === removedImage?.previewUrl);
+    if (existingImage) {
+      setDeleteImageIds((prevIds) => Array.from(new Set([...prevIds, existingImage.id])));
+    }
+
     setSelectedImages((prevImages) => prevImages.filter((_, index) => index !== indexToRemove));
   };
 
@@ -141,7 +167,7 @@ export default function MyPostEditPage() {
     setSelectedCategories((prevCategories) => [...prevCategories, category]);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!story) {
       return;
     }
@@ -156,14 +182,25 @@ export default function MyPostEditPage() {
       return;
     }
 
-    writeMyStoryOverride(story.id, {
-      text: text.trim(),
-      images: selectedImages.map((image) => image.previewUrl),
-      category: selectedCategories[0],
-      categories: selectedCategories,
-    });
-    showToast('피드를 수정했어요.', 'success');
-    router.replace('/my/posts');
+    try {
+      const newImages = await Promise.all(
+        selectedImages
+          .filter((image) => image.previewUrl.startsWith('data:'))
+          .map(feedImageAssetToFile),
+      );
+
+      await updateFeed({
+        feedId: story.id,
+        text: text.trim(),
+        feedKeywordIds: feedCategoriesToKeywordIds(selectedCategories),
+        images: newImages,
+        deleteImageIds,
+      });
+      showToast('피드를 수정했어요.', 'success');
+      router.replace('/my/posts');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '피드를 수정하지 못했어요.', 'error');
+    }
   };
 
   if (!story) {
@@ -356,7 +393,9 @@ export default function MyPostEditPage() {
       <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
         <button
           type="button"
-          onClick={handleSave}
+          onClick={() => {
+            void handleSave();
+          }}
           disabled={!isValid}
           className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
           aria-label="피드 수정 저장"

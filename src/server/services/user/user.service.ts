@@ -7,12 +7,18 @@ import {
   replaceUserKeywordSelections,
 } from '@/server/repositories/user/keyword-selection.repository';
 import {
+  findActiveUserProfileById,
   findUserById,
   findUserByNickname,
   findUserProfileById,
   type UserUpdateData,
   updateUser,
 } from '@/server/repositories/user/user.repository';
+import { findActiveRoomBetweenUsers } from '@/server/repositories/chat/chatRoom.repo';
+import { SafetyRepository } from '@/server/repositories/safety/safety.repository';
+import { prisma } from '@/server/db/prisma';
+
+const safetyRepo = new SafetyRepository(prisma);
 
 interface KeywordSelectionInput {
   categoryId?: unknown;
@@ -306,6 +312,65 @@ export async function getCurrentUserProfile(userId: number) {
         keyword_sort_order: selection.keyword.sort_order,
       })),
     ),
+  };
+}
+
+export async function getUserProfileDetail(currentUserId: number, targetUserId: number) {
+  const user = await findActiveUserProfileById(targetUserId);
+
+  if (!user) {
+    throw new ApiError(ERROR.NOT_FOUND, '사용자 정보를 찾을 수 없습니다.');
+  }
+
+  const activeBlock = currentUserId === targetUserId
+    ? null
+    : await safetyRepo.findActiveBlockBetweenUsers(currentUserId, targetUserId);
+
+  if (activeBlock) {
+    throw new ApiError(ERROR.NOT_FOUND, '사용자 정보를 찾을 수 없습니다.');
+  }
+
+  const activeRoom = currentUserId === targetUserId
+    ? null
+    : await findActiveRoomBetweenUsers(currentUserId, targetUserId);
+
+  return {
+    user: {
+      id: user.id,
+      nickname: user.nickname,
+      age: user.age,
+      gender: user.gender,
+      university: user.university,
+      department: user.department,
+      studentYear: user.student_year,
+      bio: user.bio,
+      profileImages: user.userProfileImages.map((image: any) => ({
+        id: image.id,
+        imageUrl: image.image_url,
+        sortOrder: image.sort_order,
+        isPrimary: image.is_primary,
+      })),
+      keywordSelections: groupSelectionsByCategory(
+        user.userKeywordSelections.map((selection: any) => ({
+          category_id: selection.category.category_id,
+          category_code: selection.category.category_code,
+          category_name: selection.category.name,
+          selection_type: selection.category.selection_type,
+          max_select_count: selection.category.max_select_count,
+          keyword_id: selection.keyword.keyword_id,
+          keyword_code: selection.keyword.keyword_code,
+          keyword_label: selection.keyword.label,
+          keyword_sort_order: selection.keyword.sort_order,
+        })),
+      ),
+      lastActiveAt: user.last_active_at?.toISOString() ?? null,
+    },
+    relationship: {
+      hasActiveChat: Boolean(activeRoom),
+      chatRoomId: activeRoom?.id ?? null,
+      isBlockedByMe: false,
+      isBlockedMe: false,
+    },
   };
 }
 

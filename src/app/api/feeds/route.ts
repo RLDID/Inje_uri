@@ -4,6 +4,54 @@ import { AppError } from "@/server/lib/app-error";
 import { getAuthUser } from "@/server/lib/auth";
 import { listFeeds, createFeed } from "@/server/services/content/feed.service";
 
+function parseIdList(value: unknown): number[] | null {
+  if (Array.isArray(value)) {
+    const ids = value.map((item) => Number(item));
+    return ids.every((id) => Number.isInteger(id)) ? ids : null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      const ids = parsed.map((item) => Number(item));
+      return ids.every((id) => Number.isInteger(id)) ? ids : null;
+    }
+  } catch {
+    // Fall through to comma-separated parsing.
+  }
+
+  const ids = trimmed.split(",").map((item) => Number(item.trim()));
+  return ids.every((id) => Number.isInteger(id)) ? ids : null;
+}
+
+async function parseCreateFeedRequest(request: NextRequest) {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    const text = formData.get("text");
+    const feedKeywordIds = parseIdList(formData.get("feedKeywordIds"));
+    const images = formData
+      .getAll("images")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+
+    return { text, feedKeywordIds, images };
+  }
+
+  const body = await request.json();
+  const { text, feedKeywordIds } = body as { text: unknown; feedKeywordIds: unknown };
+  return { text, feedKeywordIds: parseIdList(feedKeywordIds), images: [] as File[] };
+}
+
 /**
  * D-01: 피드 목록 조회 API
  *
@@ -60,7 +108,7 @@ export async function GET(request: NextRequest) {
  *
  * 새 피드를 작성한다.
  * 1인 1활성피드 검증 → 만료시간 계산 (app_settings) → 피드 + 키워드 묶음 생성.
- * 이미지 업로드는 저장소 구현 후 추가 예정 (현재 TODO).
+ * multipart/form-data 요청에서는 선택 이미지도 함께 처리한다.
  *
  * @route POST /api/feeds
  *
@@ -89,14 +137,13 @@ export async function POST(request: NextRequest) {
     const user = await getAuthUser(request);
     if (!user) return fail("UNAUTHORIZED", "인증이 필요합니다.");
 
-    const body = await request.json();
-    const { text, feedKeywordIds } = body as { text: unknown; feedKeywordIds: unknown };
+    const { text, feedKeywordIds, images } = await parseCreateFeedRequest(request);
 
     if (typeof text !== "string" || !text.trim()) {
       return fail("INVALID_TEXT", "피드 본문은 빈 값이 아닌 문자열이어야 합니다.");
     }
 
-    if (!Array.isArray(feedKeywordIds) || feedKeywordIds.length === 0) {
+    if (!feedKeywordIds || feedKeywordIds.length === 0) {
       return fail("INVALID_KEYWORDS", "피드 키워드 ID 배열은 1개 이상이어야 합니다.");
     }
 
@@ -107,7 +154,7 @@ export async function POST(request: NextRequest) {
 
     const authorUserId = user.id;
 
-    const data = await createFeed(authorUserId, text, feedKeywordIds as number[]);
+    const data = await createFeed(authorUserId, text, feedKeywordIds, images);
     return ok(data);
   } catch (error) {
     if (error instanceof AppError) return fail(error.code, error.message);

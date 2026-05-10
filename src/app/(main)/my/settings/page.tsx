@@ -1,30 +1,71 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { PageContainer, PageContent, PageHeader, PageSection, SectionHeading } from '@/components/layout';
 import { Button, useToast } from '@/components/ui';
 import { RecommendationSettingsFields } from '@/components/profile/RecommendationSettingsFields';
-import { mockRecommendationSettings } from '@/lib/data';
+import { getRecommendationSettings, updateRecommendationSettings } from '@/lib/api/settings';
 import { useSafeBack } from '@/lib/navigation';
 import type { RecommendationSettings } from '@/lib/types';
-import { persistRecommendationSettings, readRecommendationSettings } from '@/lib/utils/recommendationSettings';
+
+const DEFAULT_SETTINGS: RecommendationSettings = {
+  excludeSameDepartment: false,
+  reduceSameYear: false,
+  excludeSmokers: false,
+  excludeFrequentDrinkers: false,
+  preferredAgeRange: { min: 20, max: 29 },
+  lastUpdated: new Date(),
+};
 
 function SettingsPageContent() {
   const { showToast } = useToast();
   const { goBack } = useSafeBack({ fallbackPath: '/my' });
 
-  const [settings, setSettings] = useState<RecommendationSettings>(() => readRecommendationSettings(mockRecommendationSettings));
+  const [settings, setSettings] = useState<RecommendationSettings>(DEFAULT_SETTINGS);
   const [hasChanges, setHasChanges] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadSettings() {
+      try {
+        const nextSettings = await getRecommendationSettings();
+        if (!cancelled) {
+          setSettings(nextSettings);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '추천 설정을 불러오지 못했어요.', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   const handleChange = (nextSettings: RecommendationSettings) => {
     setSettings(nextSettings);
     setHasChanges(true);
   };
 
-  const handleSave = () => {
-    persistRecommendationSettings(settings);
-    showToast('추천 설정을 저장했어요. 다음 추천부터 차분히 반영될 거예요.', 'success', 4000);
-    setHasChanges(false);
+  const handleSave = async () => {
+    try {
+      const savedSettings = await updateRecommendationSettings(settings);
+      setSettings(savedSettings);
+      showToast('추천 설정을 저장했어요. 다음 추천부터 차분히 반영될 거예요.', 'success', 4000);
+      setHasChanges(false);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '추천 설정을 저장하지 못했어요.', 'error');
+    }
   };
 
   return (
@@ -46,7 +87,13 @@ function SettingsPageContent() {
 
         <PageSection className="!border-0 !p-0">
           <div>
-            <RecommendationSettingsFields settings={settings} onChange={handleChange} />
+            {isLoading ? (
+              <div className="py-10 text-center text-sm text-[var(--color-text-secondary)]">
+                추천 설정을 불러오는 중이에요
+              </div>
+            ) : (
+              <RecommendationSettingsFields settings={settings} onChange={handleChange} />
+            )}
           </div>
         </PageSection>
       </PageContent>

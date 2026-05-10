@@ -5,7 +5,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Badge, Button } from '@/components/ui';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { getStoryTimeRemaining } from '@/lib/data';
+import { getStoryTimeRemaining } from '@/lib/utils/feed';
 import { buildProfileDetailHref } from '@/lib/navigation';
 import type { Story } from '@/lib/types';
 

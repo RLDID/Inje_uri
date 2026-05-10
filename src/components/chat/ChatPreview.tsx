@@ -1,23 +1,26 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type { Chat } from '@/lib/types';
 import { formatChatTime } from '@/lib/utils';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { currentUser, getChatRemainingTime } from '@/lib/data';
+import { getChatRemainingTime, getOtherParticipant } from '@/lib/utils/chat';
 import { CenteredModal } from '@/components/ui/BottomSheet';
 import { useToast } from '@/components/ui';
+import { leaveChatRoom } from '@/lib/api/chat';
 import { buildChatRoomHref, buildProfileDetailHref, useCurrentRouteContext } from '@/lib/navigation';
 
 interface ChatPreviewProps {
   chat: Chat;
   showTypeBadge?: boolean;
+  currentUserId: string;
+  onChanged?: () => void;
 }
 
-export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
+function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onChanged }: ChatPreviewProps) {
   const router = useRouter();
   const { showToast } = useToast();
   const { currentPath, ownerSection } = useCurrentRouteContext();
@@ -25,7 +28,7 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
   const [showMenu, setShowMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
 
-  const otherParticipant = chat.participants.find((participant) => participant.user.id !== currentUser.id);
+  const otherParticipant = getOtherParticipant(chat, currentUserId);
   const user = otherParticipant?.user;
 
   if (!user) return null;
@@ -59,9 +62,15 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
     showToast('신고/차단 기능은 준비 중입니다.', 'info');
   };
   
-  const confirmLeave = () => {
-    setShowLeaveConfirm(false);
-    showToast('채팅방을 나갔습니다.', 'success');
+  const confirmLeave = async () => {
+    try {
+      await leaveChatRoom(chat.id);
+      setShowLeaveConfirm(false);
+      onChanged?.();
+      showToast('채팅방을 나갔습니다.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '채팅방을 나가지 못했습니다.', 'error');
+    }
   };
 
   return (
@@ -189,3 +198,35 @@ export function ChatPreview({ chat, showTypeBadge = false }: ChatPreviewProps) {
     </>
   );
 }
+
+function getDateTime(value: Date | string | undefined): number {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function getOtherUserSignature(chat: Chat, currentUserId: string): string {
+  const otherParticipant = getOtherParticipant(chat, currentUserId);
+  const user = otherParticipant?.user;
+  return user ? `${user.id}:${user.nickname}:${user.profileImages[0] ?? ''}` : '';
+}
+
+function getLastMessageSignature(chat: Chat): string {
+  const message = chat.lastMessage;
+  return message
+    ? `${message.id}:${message.content}:${message.senderId}:${getDateTime(message.createdAt)}`
+    : '';
+}
+
+export const ChatPreview = memo(ChatPreviewComponent, (prevProps, nextProps) => (
+  prevProps.showTypeBadge === nextProps.showTypeBadge &&
+  prevProps.currentUserId === nextProps.currentUserId &&
+  prevProps.onChanged === nextProps.onChanged &&
+  prevProps.chat.id === nextProps.chat.id &&
+  prevProps.chat.status === nextProps.chat.status &&
+  prevProps.chat.chatType === nextProps.chat.chatType &&
+  prevProps.chat.unreadCount === nextProps.chat.unreadCount &&
+  getDateTime(prevProps.chat.expiresAt) === getDateTime(nextProps.chat.expiresAt) &&
+  getOtherUserSignature(prevProps.chat, prevProps.currentUserId) === getOtherUserSignature(nextProps.chat, nextProps.currentUserId) &&
+  getLastMessageSignature(prevProps.chat) === getLastMessageSignature(nextProps.chat)
+));

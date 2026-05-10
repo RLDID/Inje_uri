@@ -87,6 +87,27 @@ export async function findUserProfileById(userId: number) {
   });
 }
 
+export async function findActiveUserProfileById(userId: number) {
+  return prisma.user.findFirst({
+    where: {
+      id: userId,
+      status: 'active',
+      deleted_at: null,
+    },
+    include: {
+      userProfileImages: {
+        orderBy: { sort_order: 'asc' },
+      },
+      userKeywordSelections: {
+        include: {
+          category: true,
+          keyword: true,
+        },
+      },
+    },
+  });
+}
+
 export async function createUser(data: Prisma.UserUncheckedCreateInput) {
   return prisma.user.create({ data });
 }

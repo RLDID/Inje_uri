@@ -5,12 +5,29 @@ import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { currentUser } from '@/lib/data';
 import { buildProfileDetailHref, useCurrentRouteContext } from '@/lib/navigation';
 import type { User } from '@/lib/types';
 import { getKeywordLabel, getUserAcademicLabel } from '@/lib/utils';
 
 const INTEREST_CHIP_GAP = 10;
+
+function appendProfileDetailParams(
+  href: string,
+  params: Record<string, string | number | null | undefined>,
+): string {
+  const [pathAndQuery, hash = ''] = href.split('#');
+  const [pathname, query = ''] = pathAndQuery.split('?');
+  const searchParams = new URLSearchParams(query);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  const queryString = searchParams.toString();
+  return `${pathname}${queryString ? `?${queryString}` : ''}${hash ? `#${hash}` : ''}`;
+}
 
 interface ProfileCardProps {
   user: User;
@@ -25,6 +42,7 @@ interface ProfileCardProps {
   isSelectionMadeForOther?: boolean;
   currentIndex?: number;
   totalCount?: number;
+  currentUserInterests?: string[];
 }
 
 export function ProfileCard({
@@ -37,6 +55,7 @@ export function ProfileCard({
   isSelectionMadeForOther = false,
   currentIndex = 0,
   totalCount = 1,
+  currentUserInterests = [],
 }: ProfileCardProps) {
   const router = useRouter();
   const { currentPath, ownerSection } = useCurrentRouteContext();
@@ -55,7 +74,7 @@ export function ProfileCard({
   const measureMoreChipRef = useRef<HTMLSpanElement>(null);
   const displayedInterests = interestLabels.slice(0, visibleInterestCount);
   const hiddenInterestCount = Math.max(interestLabels.length - displayedInterests.length, 0);
-  const commonInterests = user.interests.filter((interest) => currentUser.interests.includes(interest));
+  const commonInterests = user.interests.filter((interest) => currentUserInterests.includes(interest));
   const displayedCommonInterests = commonInterests.slice(0, 3);
   const pageCount = Math.min(Math.max(totalCount, 1), 3);
   const activePageIndex = Math.min(currentIndex, pageCount - 1);
@@ -120,10 +139,16 @@ export function ProfileCard({
   }, [interestLabels]);
 
   const handleCardClick = () => {
-    router.push(buildProfileDetailHref(user.id, source, {
+    const profileHref = buildProfileDetailHref(user.id, source, {
       sourcePath: currentPath,
       sourceSection: ownerSection,
       fallbackPath: currentPath,
+    });
+
+    router.push(appendProfileDetailParams(profileHref, {
+      recommendationItemId: source === 'recommendation'
+        ? (user as User & { recommendationItemId?: number }).recommendationItemId
+        : undefined,
     }));
   };
 

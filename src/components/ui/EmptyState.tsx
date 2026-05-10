@@ -55,6 +55,19 @@ export function EmptyState({ icon, title, description, action }: EmptyStateProps
   );
 }
 
+function SoftEmptyState({ icon, title }: Pick<EmptyStateProps, 'icon' | 'title'>) {
+  return (
+    <div className="rounded-[24px] bg-[var(--color-surface-secondary)] px-6 py-10 text-center">
+      {icon && (
+        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">
+          {icon}
+        </div>
+      )}
+      <p className="text-[var(--color-text-secondary)]">{title}</p>
+    </div>
+  );
+}
+
 export function NoRecommendationsLeft() {
   return (
     <EmptyState
@@ -77,20 +90,18 @@ export function NoInterests() {
 
 export function NoChats() {
   return (
-    <EmptyState
+    <SoftEmptyState
       icon={<ChatIcon />}
       title="아직 대화가 없어요"
-      description="마음이 가는 상대에게 먼저 반응을 보내보세요."
     />
   );
 }
 
 export function NoStories() {
   return (
-    <EmptyState
+    <SoftEmptyState
       icon={<CameraIcon />}
       title="지금 올라온 피드가 없어요"
-      description="첫 글을 올리면 여기에서 바로 볼 수 있어요."
     />
   );
 }
