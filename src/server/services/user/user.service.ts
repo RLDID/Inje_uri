@@ -2,6 +2,7 @@
 import { ApiError, ERROR } from '@/server/lib/errors';
 import {
   findAllCategoriesWithKeywords,
+  findCategoriesWithKeywordsByCodes,
   findCategoriesWithKeywordsByIds,
   replaceUserKeywordSelections,
 } from '@/server/repositories/user/keyword-selection.repository';
@@ -16,6 +17,8 @@ import {
 interface KeywordSelectionInput {
   categoryId?: unknown;
   keywordIds?: unknown;
+  categoryCode?: unknown;
+  keywordCodes?: unknown;
 }
 
 export interface UserPatchBody {
@@ -48,6 +51,15 @@ function toOptionalNumber(value: unknown): number | undefined {
   }
 
   return value;
+}
+
+function toOptionalCode(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function groupSelectionsByCategory(
@@ -120,13 +132,33 @@ async function normalizeKeywordSelections(rawValue: unknown) {
     throw new ApiError(ERROR.VALIDATION_ERROR, 'keywordSelections는 배열이어야 합니다.');
   }
 
-  const normalized = rawValue.map((item) => {
+  const idBasedSelections = [];
+  const codeBasedSelections = [];
+
+  for (const item of rawValue) {
     const selection = item as KeywordSelectionInput;
     const categoryId = toOptionalNumber(selection.categoryId);
     const rawKeywordIds = selection.keywordIds;
+    const categoryCode = toOptionalCode(selection.categoryCode);
+    const rawKeywordCodes = selection.keywordCodes;
+
+    if (categoryCode !== undefined || rawKeywordCodes !== undefined) {
+      if (!categoryCode || !Array.isArray(rawKeywordCodes)) {
+        throw new ApiError(ERROR.VALIDATION_ERROR, 'categoryCode와 keywordCodes 형식을 확인해주세요.');
+      }
+
+      const keywordCodes = [...new Set(
+        rawKeywordCodes
+          .map((keywordCode) => toOptionalCode(keywordCode))
+          .filter((keywordCode): keywordCode is string => Boolean(keywordCode)),
+      )];
+
+      codeBasedSelections.push({ categoryCode, keywordCodes });
+      continue;
+    }
 
     if (!categoryId || !Array.isArray(rawKeywordIds)) {
-      throw new ApiError(ERROR.VALIDATION_ERROR, 'categoryId와 keywordIds 형식을 확인해주세요.');
+      throw new ApiError(ERROR.VALIDATION_ERROR, 'categoryId/keywordIds 또는 categoryCode/keywordCodes 형식을 확인해주세요.');
     }
 
     const keywordIds = [...new Set(
@@ -135,23 +167,73 @@ async function normalizeKeywordSelections(rawValue: unknown) {
         .filter((keywordId) => !Number.isNaN(keywordId)),
     )];
 
-    return { categoryId, keywordIds };
-  });
+    idBasedSelections.push({ categoryId, keywordIds });
+  }
+
+  const normalized = [];
+
+  if (idBasedSelections.length > 0) {
+    const categoryIds = idBasedSelections.map((item) => item.categoryId);
+    const uniqueCategoryCount = new Set(categoryIds).size;
+    if (uniqueCategoryCount !== categoryIds.length) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '중복된 카테고리는 허용되지 않습니다.');
+    }
+
+    const categories = await findCategoriesWithKeywordsByIds(categoryIds);
+    const categoryMap = new Map(categories.map((category: any) => [category.category_id, category]));
+    if (categoryMap.size !== categoryIds.length) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 카테고리가 포함되어 있습니다.');
+    }
+
+    normalized.push(...idBasedSelections.map((item) => {
+      const category = categoryMap.get(item.categoryId);
+      return {
+        category,
+        categoryId: item.categoryId,
+        keywordIds: item.keywordIds,
+      };
+    }));
+  }
+
+  if (codeBasedSelections.length > 0) {
+    const categoryCodes = codeBasedSelections.map((item) => item.categoryCode);
+    const uniqueCategoryCount = new Set(categoryCodes).size;
+    if (uniqueCategoryCount !== categoryCodes.length) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '중복된 카테고리는 허용되지 않습니다.');
+    }
+
+    const categories = await findCategoriesWithKeywordsByCodes(categoryCodes);
+    const categoryMap = new Map(categories.map((category: any) => [category.category_code, category]));
+    if (categoryMap.size !== categoryCodes.length) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 카테고리가 포함되어 있습니다.');
+    }
+
+    normalized.push(...codeBasedSelections.map((item) => {
+      const category = categoryMap.get(item.categoryCode);
+      const keywordMap = new Map((category?.keywords ?? []).map((keyword: any) => [keyword.keyword_code, keyword.keyword_id]));
+      const keywordIds = item.keywordCodes
+        .map((keywordCode) => keywordMap.get(keywordCode))
+        .filter((keywordId): keywordId is number => typeof keywordId === 'number');
+
+      if (keywordIds.length !== item.keywordCodes.length) {
+        throw new ApiError(ERROR.VALIDATION_ERROR, '카테고리와 맞지 않는 키워드가 포함되어 있습니다.');
+      }
+
+      return {
+        category,
+        categoryId: category.category_id,
+        keywordIds,
+      };
+    }));
+  }
 
   const categoryIds = normalized.map((item) => item.categoryId);
-  const uniqueCategoryCount = new Set(categoryIds).size;
-  if (uniqueCategoryCount !== categoryIds.length) {
+  if (new Set(categoryIds).size !== categoryIds.length) {
     throw new ApiError(ERROR.VALIDATION_ERROR, '중복된 카테고리는 허용되지 않습니다.');
   }
 
-  const categories = await findCategoriesWithKeywordsByIds(categoryIds);
-  const categoryMap = new Map(categories.map((category: any) => [category.category_id, category]));
-  if (categoryMap.size !== categoryIds.length) {
-    throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 카테고리가 포함되어 있습니다.');
-  }
-
   for (const item of normalized) {
-    const category = categoryMap.get(item.categoryId);
+    const category = item.category;
     if (!category) {
       throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 카테고리가 포함되어 있습니다.');
     }
@@ -172,7 +254,10 @@ async function normalizeKeywordSelections(rawValue: unknown) {
     }
   }
 
-  return normalized;
+  return normalized.map((item) => ({
+    categoryId: item.categoryId,
+    keywordIds: item.keywordIds,
+  }));
 }
 
 export async function getCurrentUserProfile(userId: number) {
