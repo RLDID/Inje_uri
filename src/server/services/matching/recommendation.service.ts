@@ -26,6 +26,16 @@ const DISMISS_COOLDOWN_DAYS = 7;
 const DECLINE_COOLDOWN_DAYS = 7;
 const RECENT_REC_EXCLUDE_DAYS = 7;
 
+/** 
+ * 교차 도메인 매핑 규칙: 나의 이상형(Ideal) ↔ 상대방의 실제 특성(Actual)
+ * 매칭 성공 시 가산점(Weight 2)을 부여한다.
+ */
+const CROSS_DOMAIN_MAPPING: Record<string, string> = {
+  desired_vibe: "personality",
+  date_style: "interests",
+  ideal_lifestyle: "lifestyle",
+};
+
 /** KST 오늘 날짜 (YYYY-MM-DD) */
 function getKSTDateString(): string {
   const now = new Date();
@@ -299,18 +309,6 @@ export async function generateRecommendationsForUser(
   `;
   const excludeByDismiss = new Set(dismissRows.map((r) => r.dismissed_user_id));
 
-  // 선호 키워드 조회 (가산 매칭용: 성향 관련 모든 카테고리 포함)
-  const preferredKeywordRows = await prisma.$queryRaw<{ keyword_code: string }[]>`
-    SELECT k.keyword_code
-    FROM user_keyword_selections uks
-    JOIN keyword k ON uks.keyword_id = k.keyword_id
-    JOIN categories c ON uks.category_id = c.category_id
-    WHERE uks.user_id = ${userId}
-      AND c.category_code IN ('personality', 'mbti', 'lifestyle', 'interests', 'desired_vibe', 'date_style')
-  `;
-  const preferredKeywordCodes = preferredKeywordRows.map((r) => r.keyword_code);
-  const safePreferredCodes = preferredKeywordCodes.length > 0 ? preferredKeywordCodes : ['__NONE__'];
-
   // 하드 필터링용 제외 키워드 ID 조회 (음주/흡연 다중 카테고리 대응)
   const targetKeywords = await prisma.$queryRaw<{ keyword_id: number; cat: string; code: string }[]>`
     SELECT k.keyword_id, c.category_code as cat, k.keyword_code as code
@@ -363,7 +361,8 @@ export async function generateRecommendationsForUser(
       ...recentIds,
     ]);
 
-    // 선호 키워드는 점수에 반영하고, 하드 필터(음주/흡연)는 SQL 단계에서 후보를 제외합니다.
+    // [교차 도메인 매핑 및 점수 산정]
+    // 나의 이상형(Ideal)과 상대방의 실제 특성(Actual)이 일치하거나, 동일 카테고리 내에서 일치할 경우 1점 부여
     const activeUsers = await prisma.$queryRaw<{
       id: number;
       gender: string;
@@ -383,20 +382,36 @@ export async function generateRecommendationsForUser(
         u.student_year,
         u.age,
         u.created_at,
-        -- [수정] ID가 아닌 Code 기반으로 매칭 카운트 산정 (k.keyword_code 사용)
-        COUNT(DISTINCT CASE WHEN k.keyword_code IN (${Prisma.join(safePreferredCodes)}) THEN uks.id END) AS keyword_match_count,
+        COALESCE(SUM(
+          CASE
+            -- 1. 교차 도메인 매치 (이상형 ↔ 실제성격 등)
+            WHEN k.keyword_code = my_k.keyword_code AND (
+              (my_c.category_code = 'desired_vibe' AND c.category_code = 'personality') OR
+              (my_c.category_code = 'date_style' AND c.category_code = 'interests') OR
+              (my_c.category_code = 'ideal_lifestyle' AND c.category_code = 'lifestyle')
+            ) THEN 1
+            -- 2. 동일 카테고리 내 직접 매치
+            WHEN k.keyword_code = my_k.keyword_code AND my_c.category_code = c.category_code THEN 1
+            ELSE 0
+          END
+        ), 0) AS keyword_match_count,
         COUNT(DISTINCT uks.id) AS keyword_count,
         COUNT(DISTINCT upi.id) AS image_count,
         (u.bio IS NOT NULL AND u.bio != '') AS has_bio
       FROM users u
       LEFT JOIN user_keyword_selections uks ON uks.user_id = u.id
       LEFT JOIN keyword k ON k.keyword_id = uks.keyword_id
+      LEFT JOIN categories c ON c.category_id = k.category_id
+      -- 현재 유저의 키워드와 매칭 (코드 기준 JOIN)
+      LEFT JOIN user_keyword_selections my_uks ON my_uks.user_id = ${userId}
+      LEFT JOIN keyword my_k ON my_k.keyword_id = my_uks.keyword_id AND my_k.keyword_code = k.keyword_code
+      LEFT JOIN categories my_c ON my_c.category_id = my_k.category_id
       LEFT JOIN user_profile_images upi ON upi.user_id = u.id
       WHERE u.status = 'active'
         AND u.onboarding_completed = true
         AND u.gender != ${user.gender}
         AND u.id NOT IN (${Prisma.join(excludeIds.size > 0 ? [...excludeIds] : [-1])})
-        -- 음주 필터: 필터가 활성화된 경우에만 NOT EXISTS 체크
+        -- 음주 필터
         AND (
           NOT ${isFilterDrinkingActive}
           OR NOT EXISTS (
@@ -404,7 +419,7 @@ export async function generateRecommendationsForUser(
             WHERE uks_d.user_id = u.id AND uks_d.keyword_id IN (${Prisma.join(safeDrinkingExcludeIds)})
           )
         )
-        -- 흡연 필터: 필터가 활성화된 경우에만 NOT EXISTS 체크
+        -- 흡연 필터
         AND (
           NOT ${isFilterSmokingActive}
           OR NOT EXISTS (
