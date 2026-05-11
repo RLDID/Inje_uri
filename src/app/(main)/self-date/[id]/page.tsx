@@ -7,7 +7,8 @@ import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useToast } from '@/components/ui/Toast';
 import { PLACEHOLDER_PROFILE_IMAGE, getFeedCategoryLabel } from '@/lib/constants';
-import { getStoryById } from '@/lib/data';
+import { createFeedComment, getFeed, recordFeedView } from '@/lib/api/feeds';
+import { reportTarget } from '@/lib/api/safety';
 import {
   buildProfileDetailHref,
   useCurrentRouteContext,
@@ -15,12 +16,9 @@ import {
 } from '@/lib/navigation';
 import {
   getUserAcademicLabel,
-  readSelfDateLikedFeedIds,
-  readSelfDateReportedFeedIds,
-  writeSelfDateLikedFeedIds,
-  writeSelfDateReportedFeedIds,
 } from '@/lib/utils';
-import { getFeedRemainingTime, getStoryCategories, markFeedAsViewed } from '@/lib/utils/feed';
+import { getFeedRemainingTime, getStoryCategories } from '@/lib/utils/feed';
+import type { Story } from '@/lib/types';
 
 type OverlayState = 'none' | 'menu' | 'report' | 'interest';
 
@@ -34,28 +32,49 @@ function SelfDateDetailPageContent() {
   const { goBack, fallbackPath } = useSafeBack({ fallbackPath: '/self-date' });
   const storyId = params.id as string;
 
-  const story = getStoryById(storyId);
+  const [story, setStory] = useState<Story | null>(null);
   const [overlayState, setOverlayState] = useState<OverlayState>('none');
   const [interestMessage, setInterestMessage] = useState('');
   const [imgError, setImgError] = useState(false);
   const [contentImgErrorIndexes, setContentImgErrorIndexes] = useState<Set<number>>(() => new Set());
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [previewImageIndex, setPreviewImageIndex] = useState<number | null>(null);
-  const [likedFeedIds, setLikedFeedIds] = useState<Set<string>>(
-    () => new Set(readSelfDateLikedFeedIds()),
-  );
-  const [timeRemaining, setTimeRemaining] = useState(() =>
-    story
-      ? getFeedRemainingTime(story)
-      : {
-          hours: 0,
-          minutes: 0,
-          totalMinutes: 0,
-          isExpiringSoon: false,
-          isExpired: true,
-          formatted: '만료됨',
-        },
-  );
+  const [likedFeedIds, setLikedFeedIds] = useState<Set<string>>(() => new Set());
+  const [timeRemaining, setTimeRemaining] = useState({
+    hours: 0,
+    minutes: 0,
+    totalMinutes: 0,
+    isExpiringSoon: false,
+    isExpired: true,
+    formatted: '만료됨',
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadStory() {
+      try {
+        const nextStory = await getFeed(storyId);
+        if (cancelled) {
+          return;
+        }
+
+        setStory(nextStory);
+        setTimeRemaining(getFeedRemainingTime(nextStory));
+        await recordFeedView(storyId);
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '피드를 불러오지 못했어요.', 'error');
+        }
+      }
+    }
+
+    void loadStory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast, storyId]);
 
   useEffect(() => {
     if (!story) {
@@ -68,16 +87,6 @@ function SelfDateDetailPageContent() {
 
     return () => clearInterval(interval);
   }, [story]);
-
-  useEffect(() => {
-    if (storyId) {
-      markFeedAsViewed(storyId);
-    }
-  }, [storyId]);
-
-  useEffect(() => {
-    writeSelfDateLikedFeedIds(Array.from(likedFeedIds));
-  }, [likedFeedIds]);
 
   if (!story) {
     return (
@@ -126,25 +135,36 @@ function SelfDateDetailPageContent() {
     setOverlayState('interest');
   };
 
-  const handleSubmitInterest = () => {
+  const handleSubmitInterest = async () => {
     const message = interestMessage.trim();
-    const nextLikedFeedIds = new Set(likedFeedIds);
-    nextLikedFeedIds.add(story.id);
-    setLikedFeedIds(nextLikedFeedIds);
-    writeSelfDateLikedFeedIds(Array.from(nextLikedFeedIds));
-    setOverlayState('none');
-    setInterestMessage('');
-    showToast(message ? '호감과 인사를 보냈어요.' : '호감을 보냈어요.', 'success');
-    router.replace(fallbackPath);
+    try {
+      await createFeedComment(story.id, message || '하트만 보냈어요.');
+      const nextLikedFeedIds = new Set(likedFeedIds);
+      nextLikedFeedIds.add(story.id);
+      setLikedFeedIds(nextLikedFeedIds);
+      setOverlayState('none');
+      setInterestMessage('');
+      showToast(message ? '호감과 인사를 보냈어요.' : '호감을 보냈어요.', 'success');
+      router.replace(fallbackPath);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '호감을 보내지 못했어요.', 'error');
+    }
   };
 
-  const handleReport = () => {
-    const nextReportedFeedIds = new Set(readSelfDateReportedFeedIds());
-    nextReportedFeedIds.add(story.id);
-    writeSelfDateReportedFeedIds(Array.from(nextReportedFeedIds));
-    setOverlayState('none');
-    showToast('신고가 접수되었어요.', 'success');
-    router.replace(fallbackPath);
+  const handleReport = async () => {
+    try {
+      await reportTarget({
+        targetType: 'feed',
+        targetId: story.id,
+        reasonType: 'inappropriate',
+        description: null,
+      });
+      setOverlayState('none');
+      showToast('신고가 접수되었어요.', 'success');
+      router.replace(fallbackPath);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '신고를 접수하지 못했어요.', 'error');
+    }
   };
 
   return (

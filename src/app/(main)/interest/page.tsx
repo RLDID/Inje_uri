@@ -1,64 +1,52 @@
 'use client';
 
-import { Suspense, useMemo, useState, useSyncExternalStore } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { InterestCard } from '@/components/interest';
 import { PageContainer, PageContent, PageHeader, PageSection } from '@/components/layout';
 import { useToast } from '@/components/ui';
-import { getChatButtonStatus, mockInterests } from '@/lib/data';
+import { acceptInterest, declineInterest, getReceivedInterests } from '@/lib/api/interests';
+import { getMe } from '@/lib/api/profile';
+import { usePolling } from '@/lib/hooks/usePolling';
 import {
   buildChatRoomHref,
   buildProfileDetailHref,
-  readRouteViewState,
   useCurrentRouteContext,
   useSafeBack,
-  writeRouteViewState,
 } from '@/lib/navigation';
 import type { Interest } from '@/lib/types';
 
-const INTEREST_HIDDEN_USER_IDS_KEY = 'interest:hidden-user-ids';
-const INTEREST_CHAT_STARTED_USER_IDS_KEY = 'interest:chat-started-user-ids';
 type InterestSectionState = 'pending' | 'matched' | 'chat_available' | 'expired';
 
-const subscribeToHiddenInterestUserIds = () => () => undefined;
+function appendProfileDetailParams(
+  href: string,
+  params: Record<string, string | number | null | undefined>,
+): string {
+  const [pathAndQuery, hash = ''] = href.split('#');
+  const [pathname, query = ''] = pathAndQuery.split('?');
+  const searchParams = new URLSearchParams(query);
 
-function getHiddenInterestUserIdsSnapshot() {
-  return JSON.stringify(readRouteViewState<string[]>(INTEREST_HIDDEN_USER_IDS_KEY, []));
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== null && value !== undefined && value !== '') {
+      searchParams.set(key, String(value));
+    }
+  });
+
+  const queryString = searchParams.toString();
+  return `${pathname}${queryString ? `?${queryString}` : ''}${hash ? `#${hash}` : ''}`;
 }
 
-function getHiddenInterestUserIdsServerSnapshot() {
-  return '[]';
-}
-
-function addUserIdToRouteState(key: string, userId: string): string[] {
-  const currentIds = readRouteViewState<string[]>(key, []);
-  const nextIds = Array.from(new Set([...currentIds, userId]));
-  writeRouteViewState<string[]>(key, nextIds);
-
-  return nextIds;
-}
-
-function getInterestSectionState(interest: Interest, targetUserId: string): InterestSectionState {
-  if (interest.status === 'pending') {
-    return 'pending';
-  }
-
-  if (interest.status === 'accepted') {
-    return getChatButtonStatus(targetUserId).type === 'existing_chat' ? 'chat_available' : 'matched';
-  }
-
+function getInterestSectionState(interest: Interest): InterestSectionState {
+  if (interest.status === 'pending') return 'pending';
+  if (interest.status === 'accepted') return 'matched';
   return 'expired';
 }
 
-function groupInterestsByState(
-  interests: Interest[],
-  getTargetUserId: (interest: Interest) => string,
-): Record<InterestSectionState, Interest[]> {
+function groupInterestsByState(interests: Interest[]): Record<InterestSectionState, Interest[]> {
   return interests.reduce<Record<InterestSectionState, Interest[]>>(
     (groups, interest) => {
-      const sectionState = getInterestSectionState(interest, getTargetUserId(interest));
-      groups[sectionState].push(interest);
+      groups[getInterestSectionState(interest)].push(interest);
       return groups;
     },
     {
@@ -122,7 +110,7 @@ function NoInterestsWithActions() {
       <div>
         <h3 className="text-lg font-semibold text-[var(--color-text-primary)]">아직 받은 하트가 없어요</h3>
         <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-          프로필을 채우면 새로운 하트를 받을 수 있어요.
+          프로필을 채우면 새로운 하트를 받을 수 있어요
         </p>
       </div>
 
@@ -143,7 +131,7 @@ function NoInterestsWithActions() {
           href="/self-date/create"
           className="inline-flex min-h-12 items-center justify-center rounded-xl bg-[var(--color-surface-secondary)] px-4 py-3 text-sm font-semibold text-[var(--color-text-secondary)]"
         >
-          지금 우리 글 올리기
+          지금우리 글 올리기
         </Link>
       </div>
     </PageSection>
@@ -156,72 +144,110 @@ function InterestPageContent() {
   const { currentPath, ownerSection } = useCurrentRouteContext();
   const { goBack } = useSafeBack();
   const [viewedAt] = useState(() => Date.now());
-  const hiddenInterestUserIdsSnapshot = useSyncExternalStore(
-    subscribeToHiddenInterestUserIds,
-    getHiddenInterestUserIdsSnapshot,
-    getHiddenInterestUserIdsServerSnapshot,
-  );
-  const hiddenInterestUserIds = useMemo(() => {
+  const [receivedInterests, setReceivedInterests] = useState<Interest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const refreshReceivedInterests = useCallback(async () => {
     try {
-      return JSON.parse(hiddenInterestUserIdsSnapshot) as string[];
+      const me = await getMe();
+      const interests = await getReceivedInterests(me.id);
+      setReceivedInterests(interests);
     } catch {
-      return [];
+      // Keep the current list during background polling; the next tick can retry.
     }
-  }, [hiddenInterestUserIdsSnapshot]);
-  const [receivedInterests, setReceivedInterests] = useState(mockInterests);
+  }, []);
+
+  usePolling(refreshReceivedInterests, {
+    intervalMs: 7000,
+    enabled: true,
+    immediate: false,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReceivedInterests() {
+      try {
+        const me = await getMe();
+        const interests = await getReceivedInterests(me.id);
+        if (!cancelled) {
+          setReceivedInterests(interests);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '받은 하트를 불러오지 못했어요.', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadReceivedInterests();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
+
   const visibleReceivedInterests = useMemo(
-    () => receivedInterests.filter((interest) => interest.status === 'pending' && !hiddenInterestUserIds.includes(interest.fromUser.id)),
-    [hiddenInterestUserIds, receivedInterests],
+    () => receivedInterests.filter((interest) => interest.status === 'pending'),
+    [receivedInterests],
   );
 
   const receivedGroups = useMemo(
-    () => groupInterestsByState(visibleReceivedInterests, (interest) => interest.fromUser.id),
+    () => groupInterestsByState(visibleReceivedInterests),
     [visibleReceivedInterests],
   );
 
-  const handleSendBackInterest = (interestId: string) => {
+  const handleSendBackInterest = async (interestId: string) => {
     const acceptedInterest = receivedInterests.find((interest) => interest.id === interestId);
 
     if (!acceptedInterest) {
       return;
     }
 
-    const nextHiddenIds = Array.from(new Set([...hiddenInterestUserIds, acceptedInterest.fromUser.id]));
-    writeRouteViewState<string[]>(INTEREST_HIDDEN_USER_IDS_KEY, nextHiddenIds);
-    addUserIdToRouteState(INTEREST_CHAT_STARTED_USER_IDS_KEY, acceptedInterest.fromUser.id);
-    setReceivedInterests((prevInterests) => prevInterests.filter((interest) => interest.id !== interestId));
-    showToast('채팅방이 열렸어요.', 'success');
+    try {
+      const result = await acceptInterest(interestId);
+      setReceivedInterests((prevInterests) => prevInterests.filter((interest) => interest.id !== interestId));
+      await refreshReceivedInterests();
+      showToast('채팅방이 열렸어요.', 'success');
 
-    const chatStatus = getChatButtonStatus(acceptedInterest.fromUser.id);
+      if (result.chat_room_id) {
+        router.push(buildChatRoomHref(String(result.chat_room_id), {
+          sourcePath: currentPath,
+          fallbackPath: currentPath,
+        }));
+        return;
+      }
 
-    if (chatStatus.type === 'existing_chat') {
-      router.push(buildChatRoomHref(chatStatus.chatId, {
-        sourcePath: currentPath,
-        fallbackPath: currentPath,
-      }));
-      return;
+      router.push('/chat');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '하트를 수락하지 못했어요.', 'error');
     }
-
-    router.push('/chat');
   };
 
-  const handleSkipInterest = (interestId: string) => {
-    const skippedInterest = receivedInterests.find((interest) => interest.id === interestId);
-
-    if (skippedInterest) {
-      const nextIds = Array.from(new Set([...hiddenInterestUserIds, skippedInterest.fromUser.id]));
-      writeRouteViewState<string[]>(INTEREST_HIDDEN_USER_IDS_KEY, nextIds);
+  const handleSkipInterest = async (interestId: string) => {
+    try {
+      await declineInterest(interestId);
+      setReceivedInterests((prevInterests) => prevInterests.filter((interest) => interest.id !== interestId));
+      await refreshReceivedInterests();
+      showToast('하트를 거절했어요.', 'info');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '하트를 거절하지 못했어요.', 'error');
     }
-
-    setReceivedInterests((prevInterests) => prevInterests.filter((interest) => interest.id !== interestId));
-    showToast('하트를 거절했어요.', 'info');
   };
 
-  const handleViewProfile = (userId: string) => {
-    router.push(buildProfileDetailHref(userId, 'interest', {
+  const handleViewProfile = (interest: Interest) => {
+    const profileHref = buildProfileDetailHref(interest.fromUser.id, 'interest', {
       sourcePath: currentPath,
       sourceSection: ownerSection,
       fallbackPath: currentPath,
+    });
+
+    router.push(appendProfileDetailParams(profileHref, {
+      interestId: interest.id,
     }));
   };
 
@@ -236,7 +262,11 @@ function InterestPageContent() {
       />
 
       <PageContent className="app-section-stack px-5 py-4">
-        {receivedActiveCount === 0 ? (
+        {isLoading ? (
+          <PageSection className="px-6 py-10 text-center text-sm text-[var(--color-text-secondary)]">
+            받은 하트를 불러오는 중이에요
+          </PageSection>
+        ) : receivedActiveCount === 0 ? (
           <NoInterestsWithActions />
         ) : (
           <SectionBlock
@@ -251,7 +281,7 @@ function InterestPageContent() {
                 interest={interest}
                 canStartChat
                 onStartChat={() => handleSendBackInterest(interest.id)}
-                onViewProfile={() => handleViewProfile(interest.fromUser.id)}
+                onViewProfile={() => handleViewProfile(interest)}
                 onSkip={() => handleSkipInterest(interest.id)}
                 nowMs={viewedAt}
               />

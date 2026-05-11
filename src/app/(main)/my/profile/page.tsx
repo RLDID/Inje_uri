@@ -1,16 +1,42 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { ProfilePreview } from '@/components/profile/ProfilePreview';
-import { Button } from '@/components/ui';
-import { currentUser } from '@/lib/data';
+import { Button, useToast } from '@/components/ui';
+import { getMe } from '@/lib/api/profile';
 import { useSafeBack } from '@/lib/navigation';
+import type { User } from '@/lib/types';
 
 function MyProfilePageContent() {
   const router = useRouter();
+  const { showToast } = useToast();
   const { goBack } = useSafeBack({ fallbackPath: '/my' });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const me = await getMe();
+        if (!cancelled) {
+          setCurrentUser(me);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '내 프로필을 불러오지 못했어요.', 'error');
+        }
+      }
+    }
+
+    void loadMe();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   return (
     <PageContainer>
@@ -22,7 +48,13 @@ function MyProfilePageContent() {
       />
 
       <PageContent className="pb-36" noPadding>
-        <ProfilePreview user={currentUser} showEdit />
+        {currentUser ? (
+          <ProfilePreview user={currentUser} showEdit />
+        ) : (
+          <div className="px-[var(--page-padding-x)] py-20 text-center text-sm text-[var(--color-text-secondary)]">
+            내 프로필을 불러오는 중이에요
+          </div>
+        )}
 
         <div className="px-[var(--page-padding-x)] pt-[var(--space-section)]">
           <Button variant="secondary" fullWidth size="lg" onClick={() => router.push('/my/ideal-type')}>

@@ -1,7 +1,17 @@
-import type { Story } from '@/lib/types';
+import type { Story, StoryTimeRemaining } from '@/lib/types';
 import { STORY_EXPIRY_HOURS, getFeedFilterCategoryId, type FeedFilterCategoryId } from '@/lib/constants';
 
 const VIEWED_FEEDS_SESSION_KEY = 'session_viewed_feeds';
+
+export function getStoryTimeRemaining(story: Story): StoryTimeRemaining {
+  const remaining = getFeedRemainingTime(story);
+  return {
+    hours: remaining.hours,
+    minutes: remaining.minutes,
+    isExpiringSoon: remaining.isExpiringSoon,
+    isExpired: remaining.isExpired,
+  };
+}
 
 export function isValidFeed(story: Story): boolean {
   const now = Date.now();

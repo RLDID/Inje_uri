@@ -5,7 +5,11 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { PageContainer, PageHeader, PageContent } from '@/components/layout';
 import { ProfilePreview } from '@/components/profile/ProfilePreview';
 import { Button, CenteredModal, ConfirmSheet, useToast } from '@/components/ui';
-import { currentUser, getChatButtonStatus, getUserById } from '@/lib/data';
+import { declineInterest } from '@/lib/api/interests';
+import { getMe } from '@/lib/api/profile';
+import { dismissRecommendation, selectRecommendation } from '@/lib/api/recommendations';
+import { blockUser, reportTarget } from '@/lib/api/safety';
+import { getUserProfile, type UserProfileDetail } from '@/lib/api/users';
 import {
   buildChatRoomHref,
   readRouteViewState,
@@ -29,6 +33,15 @@ interface MatchViewState {
   hiddenUserIds?: string[];
 }
 
+function toPositiveNumberParam(value: string | null): number | null {
+  if (!value) {
+    return null;
+  }
+
+  const parsedValue = Number(value);
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
 function ProfileDetailPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -39,7 +52,8 @@ function ProfileDetailPageContent() {
 
   const userId = params.id as string;
   const source = (searchParams.get('source') as ProfileSource) || 'recommendation';
-  const user = getUserById(userId);
+  const recommendationItemId = toPositiveNumberParam(searchParams.get('recommendationItemId'));
+  const interestId = toPositiveNumberParam(searchParams.get('interestId'));
   const initialRecommendationViewState = source === 'recommendation'
     ? readRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, {
       currentIndex: 0,
@@ -57,10 +71,20 @@ function ProfileDetailPageContent() {
   const [showMenu, setShowMenu] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ModalAction>(null);
   const [recommendationViewState, setRecommendationViewState] = useState<MatchViewState>(initialRecommendationViewState);
+  const [profileDetail, setProfileDetail] = useState<UserProfileDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const user = profileDetail?.user ?? null;
 
   const chatButtonStatus = useMemo(
-    () => (user ? getChatButtonStatus(user.id) : { type: 'can_create' as const }),
-    [user],
+    () => {
+      if (profileDetail?.relationship.hasActiveChat && profileDetail.relationship.chatRoomId) {
+        return { type: 'existing_chat' as const, chatId: String(profileDetail.relationship.chatRoomId) };
+      }
+
+      return { type: 'can_create' as const };
+    },
+    [profileDetail],
   );
 
   const isFromInterest = source === 'interest';
@@ -71,12 +95,56 @@ function ProfileDetailPageContent() {
   const hasStickyActions = false;
 
   useEffect(() => {
-    if (!user || user.id === currentUser.id) {
-      return;
+    let cancelled = false;
+
+    async function loadProfile() {
+      try {
+        const [detail, me] = await Promise.all([
+          getUserProfile(userId),
+          getMe(),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setProfileDetail(detail);
+        setLoadError(null);
+
+        if (detail.user.id !== me.id) {
+          recordRecentProfileView(detail.user.id);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : '프로필을 불러오지 못했어요.');
+          showToast(error instanceof Error ? error.message : '프로필을 불러오지 못했어요.', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
     }
 
-    recordRecentProfileView(user.id, source);
-  }, [source, user]);
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast, source, userId]);
+
+  if (isLoading) {
+    return (
+      <PageContainer>
+        <PageHeader title="프로필" showBack onBack={goBack} />
+        <PageContent>
+          <div className="py-20 text-center">
+            <p className="text-[var(--color-text-secondary)]">프로필을 불러오는 중이에요</p>
+          </div>
+        </PageContent>
+      </PageContainer>
+    );
+  }
 
   if (!user) {
     return (
@@ -84,7 +152,7 @@ function ProfileDetailPageContent() {
         <PageHeader title="프로필" showBack onBack={goBack} />
         <PageContent>
           <div className="py-20 text-center">
-            <p className="text-[var(--color-text-secondary)]">?꾨줈?꾩쓣 李얠쓣 ???놁뼱??</p>
+            <p className="text-[var(--color-text-secondary)]">{loadError ?? '프로필을 찾을 수 없어요'}</p>
           </div>
         </PageContent>
       </PageContainer>
@@ -96,57 +164,101 @@ function ProfileDetailPageContent() {
     setConfirmAction(action);
   };
 
-  const handleDestructiveAction = () => {
-    if (isFromSelfDate && (confirmAction === 'report' || confirmAction === 'block')) {
-      const hiddenUserIds = readSelfDateHiddenUserIds();
-      writeSelfDateHiddenUserIds(Array.from(new Set([...hiddenUserIds, user.id])));
+  const handleDestructiveAction = async () => {
+    if (!confirmAction) {
+      return;
+    }
+
+    try {
+      if (confirmAction === 'block') {
+        await blockUser(user.id);
+      }
+
+      if (confirmAction === 'report') {
+        await reportTarget({
+          targetType: 'user',
+          targetId: user.id,
+          reasonType: 'inappropriate',
+          description: null,
+        });
+      }
+
+      if (isFromSelfDate && (confirmAction === 'report' || confirmAction === 'block')) {
+        const hiddenUserIds = readSelfDateHiddenUserIds();
+        writeSelfDateHiddenUserIds(Array.from(new Set([...hiddenUserIds, user.id])));
+      }
+
       showToast(
         confirmAction === 'report'
-          ? '신고한 사용자의 피드를 숨겼어요.'
-          : '차단한 사용자의 피드를 숨겼어요.',
+          ? '신고가 접수되었어요.'
+          : '사용자를 차단했어요.',
         'success',
       );
+      setConfirmAction(null);
+      router.replace(isFromSelfDate ? '/self-date' : fallbackPath);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '요청을 처리하지 못했어요.', 'error');
     }
-
-    setConfirmAction(null);
-    router.replace(isFromSelfDate ? '/self-date' : fallbackPath);
   };
 
-  const handleHideRecommendation = () => {
-    const currentViewState = readRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, {
-      currentIndex: 0,
-      viewedCount: 0,
-      isSelectionMade: false,
-      hiddenUserIds: [],
-    });
-    const hiddenUserIds = Array.from(new Set([...(currentViewState.hiddenUserIds ?? []), user.id]));
-    const isSelectedUser = currentViewState.selectedUserId === user.id;
-    const nextViewState: MatchViewState = {
-      ...currentViewState,
-      currentIndex: Math.max(0, currentViewState.currentIndex),
-      selectedUserId: isSelectedUser ? undefined : currentViewState.selectedUserId,
-      isSelectionMade: isSelectedUser ? false : currentViewState.isSelectionMade,
-      hiddenUserIds,
-    };
-
-    writeRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, nextViewState);
-    if (isFromInterest) {
-      const hiddenInterestUserIds = readRouteViewState<string[]>(INTEREST_HIDDEN_USER_IDS_KEY, []);
-      writeRouteViewState<string[]>(
-        INTEREST_HIDDEN_USER_IDS_KEY,
-        Array.from(new Set([...hiddenInterestUserIds, user.id])),
-      );
+  const handleHideRecommendation = async () => {
+    if (!recommendationItemId) {
+      showToast('추천 항목 정보를 확인할 수 없어 제외 처리하지 못했어요.', 'error');
+      setConfirmAction(null);
+      return;
     }
-    setRecommendationViewState(nextViewState);
-    showToast('이 프로필을 추천에서 제외했어요.', 'success');
-    setConfirmAction(null);
-    router.replace(fallbackPath);
+
+    try {
+      await dismissRecommendation(recommendationItemId);
+
+      const currentViewState = readRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, {
+        currentIndex: 0,
+        viewedCount: 0,
+        isSelectionMade: false,
+        hiddenUserIds: [],
+      });
+      const hiddenUserIds = Array.from(new Set([...(currentViewState.hiddenUserIds ?? []), user.id]));
+      const isSelectedUser = currentViewState.selectedUserId === user.id;
+      const nextViewState: MatchViewState = {
+        ...currentViewState,
+        currentIndex: Math.max(0, currentViewState.currentIndex),
+        selectedUserId: isSelectedUser ? undefined : currentViewState.selectedUserId,
+        isSelectionMade: isSelectedUser ? false : currentViewState.isSelectionMade,
+        hiddenUserIds,
+      };
+
+      writeRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, nextViewState);
+      if (isFromInterest) {
+        const hiddenInterestUserIds = readRouteViewState<string[]>(INTEREST_HIDDEN_USER_IDS_KEY, []);
+        writeRouteViewState<string[]>(
+          INTEREST_HIDDEN_USER_IDS_KEY,
+          Array.from(new Set([...hiddenInterestUserIds, user.id])),
+        );
+      }
+      setRecommendationViewState(nextViewState);
+      showToast('이 프로필을 추천에서 제외했어요.', 'success');
+      setConfirmAction(null);
+      router.replace(fallbackPath);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '추천 제외를 처리하지 못했어요.', 'error');
+    }
   };
 
-  const handleReject = () => {
-    showToast('하트를 거절했어요.', 'success');
-    setConfirmAction(null);
-    router.replace(fallbackPath);
+  const handleReject = async () => {
+    if (!interestId) {
+      showToast('받은 하트 정보를 확인할 수 없어 거절 처리하지 못했어요.', 'error');
+      setConfirmAction(null);
+      return;
+    }
+
+    try {
+      await declineInterest(interestId);
+      showToast('하트를 거절했어요.', 'success');
+      setConfirmAction(null);
+      router.replace(fallbackPath);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '하트를 거절하지 못했어요.', 'error');
+    }
   };
 
   const handleStartChat = () => {
@@ -164,7 +276,12 @@ function ProfileDetailPageContent() {
     router.replace('/interest');
   };
 
-  const handleSendRecommendationInterest = () => {
+  const handleSendRecommendationInterest = async () => {
+    if (!recommendationItemId) {
+      showToast('추천 항목 정보를 확인할 수 없어 하트를 보내지 못했어요.', 'error');
+      return;
+    }
+
     const currentViewState = readRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, {
       currentIndex: 0,
       viewedCount: 0,
@@ -187,9 +304,14 @@ function ProfileDetailPageContent() {
       isSelectionMade: true,
     };
 
-    writeRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, nextViewState);
-    setRecommendationViewState(nextViewState);
-    showToast('하트를 보냈어요!', 'success');
+    try {
+      const result = await selectRecommendation(recommendationItemId);
+      writeRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, nextViewState);
+      setRecommendationViewState(nextViewState);
+      showToast(result.chat_room_id ? '채팅이 시작되었어요.' : '하트를 보냈어요!', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '하트를 보내지 못했어요.', 'error');
+    }
   };
 
   const getActionConfig = (action: ModalAction) => {

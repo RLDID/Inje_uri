@@ -11,6 +11,7 @@ interface ProfileCardCarouselProps {
   selectedUserId?: string;
   isSelectionMade?: boolean;
   onSelect?: (userId: string) => void;
+  currentUserInterests?: string[];
 }
 
 export function ProfileCardCarousel({
@@ -20,6 +21,7 @@ export function ProfileCardCarousel({
   selectedUserId,
   isSelectionMade = false,
   onSelect,
+  currentUserInterests = [],
 }: ProfileCardCarouselProps) {
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
@@ -119,6 +121,7 @@ export function ProfileCardCarousel({
         isSelectionMadeForOther={Boolean(isSelectionMade && selectedUserId && selectedUserId !== currentUser.id)}
         currentIndex={currentIndex}
         totalCount={users.length}
+        currentUserInterests={currentUserInterests}
       />
     </div>
   );

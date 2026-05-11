@@ -5,7 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { getStoryTimeRemaining } from '@/lib/data';
+import { getStoryTimeRemaining } from '@/lib/utils/feed';
 import { buildCurrentPath, buildProfileDetailHref } from '@/lib/navigation';
 import type { Story } from '@/lib/types';
 

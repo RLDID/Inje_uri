@@ -1,11 +1,11 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { getUserById } from '@/lib/data';
+import { getUserProfile } from '@/lib/api/users';
 import { buildProfileDetailHref, type ProfileEntrySource, useSafeBack } from '@/lib/navigation';
 import { formatRelativeTime, getUserAcademicLabel } from '@/lib/utils';
 import { readRecentProfileViews, type RecentProfileView } from '@/lib/utils/recentProfiles';
@@ -20,26 +20,33 @@ const DEFAULT_PROFILE_SOURCE: ProfileEntrySource = 'recommendation';
 
 function RecentViewsPageContent() {
   const { goBack, currentPath } = useSafeBack({ fallbackPath: '/my' });
-  const [recentViews, setRecentViews] = useState<RecentProfileView[]>([]);
+  const [recentProfiles, setRecentProfiles] = useState<RecentProfileItem[]>([]);
 
   useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      setRecentViews(readRecentProfileViews());
-    }, 0);
+    let cancelled = false;
+
+    async function loadRecentProfiles() {
+      const views = readRecentProfileViews();
+      const items = await Promise.all(views.map(async (view) => {
+        try {
+          const detail = await getUserProfile(view.userId);
+          return { view, user: detail.user };
+        } catch {
+          return null;
+        }
+      }));
+
+      if (!cancelled) {
+        setRecentProfiles(items.filter((item): item is RecentProfileItem => item !== null));
+      }
+    }
+
+    void loadRecentProfiles();
 
     return () => {
-      window.clearTimeout(timeoutId);
+      cancelled = true;
     };
   }, []);
-
-  const recentProfiles = useMemo<RecentProfileItem[]>(() => (
-    recentViews
-      .map((view) => {
-        const user = getUserById(view.userId);
-        return user ? { view, user } : null;
-      })
-      .filter((item): item is RecentProfileItem => item !== null)
-  ), [recentViews]);
 
   return (
     <PageContainer>

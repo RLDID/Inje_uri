@@ -1,22 +1,85 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { useToast } from '@/components/ui';
 import { KeywordSelector, ProfileSection } from '@/components/profile/KeywordSelector';
-import { PROFILE_CATEGORIES } from '@/lib/types';
-import { currentUser } from '@/lib/data';
+import { PROFILE_CATEGORIES, type User } from '@/lib/types';
+import { getMe, updateMe } from '@/lib/api/profile';
 import { useSafeBack } from '@/lib/navigation';
+
+type KeywordSelectionPayload = {
+  categoryCode: string;
+  keywordCodes: string[];
+};
+
+function toKeywordCodes(value: string | string[] | null | undefined, lowercase = false): string[] {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return values.map((keywordCode) => (lowercase ? keywordCode.toLowerCase() : keywordCode));
+}
+
+function buildKeywordSelections(user: User, profile: {
+  vibe: string[];
+  dateStyle: string;
+  dealBreakers: string[];
+}): KeywordSelectionPayload[] {
+  return [
+    { categoryCode: 'lifestyle', keywordCodes: toKeywordCodes(user.lifestyle) },
+    { categoryCode: 'drinking', keywordCodes: toKeywordCodes(user.drinking) },
+    { categoryCode: 'smoking', keywordCodes: toKeywordCodes(user.smoking) },
+    { categoryCode: 'mbti', keywordCodes: toKeywordCodes(user.mbti, true) },
+    { categoryCode: 'personality', keywordCodes: toKeywordCodes(user.personality) },
+    { categoryCode: 'conversation', keywordCodes: toKeywordCodes(user.conversationStyle) },
+    { categoryCode: 'interests', keywordCodes: toKeywordCodes(user.interests) },
+    { categoryCode: 'desired_vibe', keywordCodes: toKeywordCodes(profile.vibe) },
+    { categoryCode: 'date_style', keywordCodes: toKeywordCodes(profile.dateStyle) },
+    { categoryCode: 'deal_breakers', keywordCodes: toKeywordCodes(profile.dealBreakers) },
+  ];
+}
 
 function IdealTypePageContent() {
   const { showToast } = useToast();
   const { goBack } = useSafeBack();
 
   const [profile, setProfile] = useState({
-    vibe: [...currentUser.desiredVibe],
-    dateStyle: currentUser.dateStyle || '',
-    dealBreakers: [...currentUser.dealBreakers],
+    vibe: [] as string[],
+    dateStyle: '',
+    dealBreakers: [] as string[],
   });
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const me = await getMe();
+        if (!cancelled) {
+          setCurrentUser(me);
+          setProfile({
+            vibe: [...me.desiredVibe],
+            dateStyle: me.dateStyle || '',
+            dealBreakers: [...me.dealBreakers],
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '이상형 설정을 불러오지 못했어요.', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadMe();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   const partnerCategories = PROFILE_CATEGORIES
     .filter((category) => category.belongsTo === 'desiredPartner')
@@ -32,9 +95,21 @@ function IdealTypePageContent() {
     setProfile((prevProfile) => ({ ...prevProfile, [categoryId]: value }));
   };
 
-  const handleSave = () => {
-    showToast('이상형 키워드를 저장했어요.', 'success');
-    goBack();
+  const handleSave = async () => {
+    if (!currentUser) {
+      showToast('내 정보를 불러온 뒤 다시 시도해주세요.', 'error');
+      return;
+    }
+
+    try {
+      await updateMe({
+        keywordSelections: buildKeywordSelections(currentUser, profile),
+      });
+      showToast('이상형 키워드를 저장했어요.', 'success');
+      goBack();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '이상형 키워드를 저장하지 못했어요.', 'error');
+    }
   };
 
   return (
@@ -47,14 +122,20 @@ function IdealTypePageContent() {
 
       <PageContent className="app-section-stack pb-36">
         <ProfileSection title="이런 만남을 원해요" className="!border-0 !px-0 !shadow-none">
-          {partnerCategories.map((category) => (
-            <KeywordSelector
-              key={category.id}
-              category={category}
-              selected={profile[category.id as keyof typeof profile] as string | string[]}
-              onChange={(value) => handleCategoryChange(category.id, value)}
-            />
-          ))}
+          {isLoading ? (
+            <div className="py-10 text-center text-sm text-[var(--color-text-secondary)]">
+              이상형 설정을 불러오는 중이에요
+            </div>
+          ) : (
+            partnerCategories.map((category) => (
+              <KeywordSelector
+                key={category.id}
+                category={category}
+                selected={profile[category.id as keyof typeof profile] as string | string[]}
+                onChange={(value) => handleCategoryChange(category.id, value)}
+              />
+            ))
+          )}
         </ProfileSection>
       </PageContent>
 

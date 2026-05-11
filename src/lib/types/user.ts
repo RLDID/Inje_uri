@@ -9,6 +9,12 @@ export interface User {
   studentNumber?: number;
   gender: 'male' | 'female';
   profileImages: string[];
+  profileImageMetas?: Array<{
+    id: string;
+    imageUrl: string;
+    sortOrder: number;
+    isPrimary?: boolean;
+  }>;
   bio?: string;
 
   // Profile Keywords

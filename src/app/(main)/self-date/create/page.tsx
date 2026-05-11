@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { PageContainer, PageContent } from '@/components/layout';
 import { BottomSheet, CenteredModal, useToast } from '@/components/ui';
+import { createFeed, feedCategoriesToKeywordIds } from '@/lib/api/feeds';
 import { SELFDATE_KEYWORD_OPTIONS, getFeedFilterCategoryId } from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
 import {
@@ -29,6 +30,15 @@ const INITIAL_IMAGE_CROP: FeedImageCrop = {
   offsetY: 0,
   zoom: 1,
 };
+
+async function feedImageAssetToFile(asset: FeedImageAsset, index: number): Promise<File> {
+  const response = await fetch(asset.previewUrl);
+  const blob = await response.blob();
+  const extension = asset.mimeType === 'image/png' ? 'png' : asset.mimeType === 'image/gif' ? 'gif' : 'jpg';
+  return new File([blob], asset.fileName || `feed-image-${index + 1}.${extension}`, {
+    type: asset.mimeType || blob.type || 'image/jpeg',
+  });
+}
 
 function CreateStoryPageContent() {
   const router = useRouter();
@@ -383,7 +393,7 @@ function CreateStoryPageContent() {
     }
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (selectedCategories.length === 0) {
       showToast('카테고리를 선택해주세요.', 'error');
       return;
@@ -394,8 +404,18 @@ function CreateStoryPageContent() {
       return;
     }
 
-    showToast('피드를 올렸어요!', 'success');
-    router.push(`/self-date?filter=${getFeedFilterCategoryId(selectedCategories)}`);
+    try {
+      const images = await Promise.all(selectedImages.map(feedImageAssetToFile));
+      await createFeed({
+        text: text.trim(),
+        feedKeywordIds: feedCategoriesToKeywordIds(selectedCategories),
+        images,
+      });
+      showToast('피드를 올렸어요!', 'success');
+      router.push(`/self-date?filter=${getFeedFilterCategoryId(selectedCategories)}`);
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '피드를 올리지 못했어요.', 'error');
+    }
   };
 
   return (
@@ -612,7 +632,9 @@ function CreateStoryPageContent() {
       <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
         <button
           type="button"
-          onClick={handleSubmit}
+          onClick={() => {
+            void handleSubmit();
+          }}
           disabled={!isValid}
           className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
           aria-label="피드 올리기"

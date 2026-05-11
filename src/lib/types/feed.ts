@@ -18,6 +18,11 @@ export interface FeedListItemDto {
   author: FeedAuthorDto;
   keywords: FeedKeywordDto[];
   primaryImage: string | null;
+  images?: Array<{
+    imageId: number;
+    imageUrl: string;
+    sortOrder: number;
+  }>;
   commentCount: number;
 }
 

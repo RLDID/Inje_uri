@@ -1,9 +1,9 @@
 import type { Message } from '@/lib/types';
-import { currentUser } from '@/lib/data';
 import { formatMessageTime } from '@/lib/utils';
 
 interface ChatBubbleProps {
   message: Message;
+  currentUserId: string;
 }
 
 // 시스템 메시지 컴포넌트
@@ -19,8 +19,8 @@ export function SystemMessage({ content }: { content: string }) {
   );
 }
 
-export function ChatBubble({ message }: ChatBubbleProps) {
-  const isMine = message.senderId === currentUser.id;
+export function ChatBubble({ message, currentUserId }: ChatBubbleProps) {
+  const isMine = message.senderId === currentUserId;
   
   // 시스템 메시지 처리
   if (message.type === 'system') {

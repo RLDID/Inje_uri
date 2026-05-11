@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { PageContainer } from '@/components/layout';
@@ -9,15 +9,24 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { BottomSheet, Button, CenteredModal, useToast } from '@/components/ui';
 import {
   createChatExpiringSystemMessage,
-  currentUser,
-  getChatById,
   getChatExpirySessionKey,
   getChatRemainingTime,
-  getMessagesForChat,
-} from '@/lib/data';
+  normalizeChatMessages,
+} from '@/lib/utils/chat';
+import {
+  blockChatRoom,
+  getChatMessages,
+  getChatRooms,
+  leaveChatRoom,
+  markChatRoomRead,
+  sendChatMessage,
+} from '@/lib/api/chat';
+import { getMe } from '@/lib/api/profile';
+import { reportTarget } from '@/lib/api/safety';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
+import { usePolling } from '@/lib/hooks/usePolling';
 import { buildProfileDetailHref, useCurrentRouteContext, useSafeBack } from '@/lib/navigation';
-import type { Message } from '@/lib/types';
+import type { Chat, Message, User } from '@/lib/types';
 
 type ChatAction = 'leave' | 'block' | 'report' | null;
 type ChatRoomRestriction = 'reported' | 'blocked' | null;
@@ -75,6 +84,70 @@ function sortMessages(messages: Message[]): Message[] {
   );
 }
 
+function mergeMessagesById(currentMessages: Message[], nextMessages: Message[]): Message[] {
+  const messageMap = new Map<string, Message>();
+
+  currentMessages.forEach((message) => {
+    messageMap.set(message.id, message);
+  });
+
+  nextMessages.forEach((message) => {
+    messageMap.set(message.id, message);
+  });
+
+  return sortMessages([...messageMap.values()]);
+}
+
+function getLastReadableMessage(messages: Message[]): Message | undefined {
+  return messages
+    .filter((message) => message.type !== 'system')
+    .at(-1);
+}
+
+function isNearPageBottom(threshold = 160): boolean {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return true;
+  }
+
+  const scrollTop = window.scrollY;
+  const viewportHeight = window.innerHeight;
+  const pageHeight = document.documentElement.scrollHeight;
+
+  return pageHeight - (scrollTop + viewportHeight) <= threshold;
+}
+
+function getDateTime(value: Date | string | undefined): number {
+  if (!value) return 0;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function getChatShellSignature(chat: Chat | null): string {
+  if (!chat) return '';
+
+  const participants = chat.participants
+    .map((participant) => `${participant.user.id}:${participant.user.nickname}:${participant.user.profileImages[0] ?? ''}`)
+    .join('|');
+
+  return [
+    chat.id,
+    chat.status,
+    chat.chatType,
+    getDateTime(chat.createdAt),
+    getDateTime(chat.expiresAt),
+    participants,
+  ].join('::');
+}
+
+function isSameUserShell(left: User | null, right: User): boolean {
+  return Boolean(
+    left &&
+      left.id === right.id &&
+      left.nickname === right.nickname &&
+      left.profileImages[0] === right.profileImages[0],
+  );
+}
+
 function ChatRoomPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -83,10 +156,9 @@ function ChatRoomPageContent() {
   const { goBack } = useSafeBack({ fallbackPath: '/chat' });
   const chatId = params.id as string;
 
-  const chat = useMemo(() => getChatById(chatId), [chatId]);
-  const initialMessages = useMemo(() => getMessagesForChat(chatId), [chatId]);
-
-  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [chat, setChat] = useState<Chat | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ChatAction>(null);
   const [leaveRoomOnSubmit, setLeaveRoomOnSubmit] = useState(false);
@@ -102,16 +174,101 @@ function ChatRoomPageContent() {
     timeLabel: '로딩 중...',
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const didInitialScrollRef = useRef(false);
+  const lastReadMessageIdRef = useRef<string | null>(null);
 
-  const otherParticipant = chat?.participants.find((participant) => participant.user.id !== currentUser.id);
+  const otherParticipant = currentUser
+    ? chat?.participants.find((participant) => participant.user.id !== currentUser.id)
+    : undefined;
   const otherUser = otherParticipant?.user;
   const imageSrc = imgError ? PLACEHOLDER_PROFILE_IMAGE : (otherUser?.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE);
 
-  useEffect(() => {
-    setMessages(initialMessages);
-  }, [initialMessages]);
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
+    window.requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    });
+  }, []);
+
+  const applyLoadedMessages = useCallback((
+    nextMessages: Message[],
+    options?: { merge?: boolean; forceScroll?: boolean; smooth?: boolean },
+  ) => {
+    const shouldScrollAfterLoad = Boolean(options?.forceScroll) || isNearPageBottom();
+    const lastMessage = getLastReadableMessage(nextMessages);
+
+    setMessages((prevMessages) => (
+      options?.merge ? mergeMessagesById(prevMessages, nextMessages) : nextMessages
+    ));
+
+    if (lastMessage && lastReadMessageIdRef.current !== lastMessage.id) {
+      lastReadMessageIdRef.current = lastMessage.id;
+      void markChatRoomRead(chatId, lastMessage.id);
+    }
+
+    if (!didInitialScrollRef.current || shouldScrollAfterLoad) {
+      didInitialScrollRef.current = true;
+      scrollToBottom(options?.smooth === false ? 'auto' : 'smooth');
+    }
+  }, [chatId, scrollToBottom]);
+
+  const loadRoom = useCallback(async (options?: { silent?: boolean; forceScroll?: boolean }) => {
+    const isSilent = Boolean(options?.silent);
+
+    try {
+      const me = await getMe();
+      const rooms = await getChatRooms(me);
+      const room = rooms.find((item) => item.id === chatId) ?? null;
+      const roomMessages = room ? await getChatMessages(chatId) : [];
+      const normalizedMessages = room ? normalizeChatMessages(room, roomMessages) : roomMessages;
+
+      setCurrentUser((prevUser) => (isSameUserShell(prevUser, me) ? prevUser : me));
+      setChat((prevChat) => (
+        getChatShellSignature(prevChat) === getChatShellSignature(room) ? prevChat : room
+      ));
+      applyLoadedMessages(normalizedMessages, {
+        merge: isSilent,
+        forceScroll: options?.forceScroll,
+        smooth: isSilent,
+      });
+    } catch {
+      if (!isSilent) {
+        setCurrentUser(null);
+        setChat(null);
+        setMessages([]);
+      }
+    }
+  }, [applyLoadedMessages, chatId]);
+
+  const refreshMessages = useCallback(async (options?: { forceScroll?: boolean }) => {
+    try {
+      const roomMessages = await getChatMessages(chatId);
+      const normalizedMessages = chat ? normalizeChatMessages(chat, roomMessages) : roomMessages;
+      applyLoadedMessages(normalizedMessages, {
+        merge: true,
+        forceScroll: options?.forceScroll,
+      });
+    } catch {
+      // Keep the current messages during background polling; the next tick can retry.
+    }
+  }, [applyLoadedMessages, chat, chatId]);
+
+  usePolling(() => loadRoom({
+    silent: didInitialScrollRef.current,
+    forceScroll: !didInitialScrollRef.current,
+  }), {
+    intervalMs: 30000,
+    enabled: Boolean(chatId),
+    immediate: true,
+  });
+
+  usePolling(() => refreshMessages(), {
+    intervalMs: 3000,
+    enabled: Boolean(chat),
+    immediate: false,
+  });
 
   useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
     if (!chat) {
       setRoomRestriction(null);
       setHasReportedRoom(false);
@@ -122,6 +279,11 @@ function ChatRoomPageContent() {
     const storedReported = readSessionValue(getChatRoomReportedKey(chat.id));
     setRoomRestriction(storedRestriction === 'blocked' || storedRestriction === 'reported' ? storedRestriction : null);
     setHasReportedRoom(storedReported === 'true' || storedRestriction === 'reported');
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [chat]);
 
   useEffect(() => {
@@ -160,25 +322,27 @@ function ChatRoomPageContent() {
 
     const roomSystemKey = getChatExpirySessionKey('roomSystem', chat.id);
 
-    setMessages((prevMessages) => {
-      if (prevMessages.some((message) => message.type === 'system' && message.systemKind === 'chat_expiring')) {
-        return prevMessages;
-      }
+    const timeoutId = window.setTimeout(() => {
+      setMessages((prevMessages) => {
+        if (prevMessages.some((message) => message.type === 'system' && message.systemKind === 'chat_expiring')) {
+          return prevMessages;
+        }
 
-      const storedCreatedAt = readSessionValue(roomSystemKey);
-      const createdAt = storedCreatedAt ? new Date(storedCreatedAt) : new Date();
+        const storedCreatedAt = readSessionValue(roomSystemKey);
+        const createdAt = storedCreatedAt ? new Date(storedCreatedAt) : new Date();
 
-      if (!storedCreatedAt) {
-        writeSessionValue(roomSystemKey, createdAt.toISOString());
-      }
+        if (!storedCreatedAt) {
+          writeSessionValue(roomSystemKey, createdAt.toISOString());
+        }
 
-      return sortMessages([...prevMessages, createChatExpiringSystemMessage(chat, createdAt)]);
-    });
+        return sortMessages([...prevMessages, createChatExpiringSystemMessage(chat, createdAt)]);
+      });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
   }, [chat, timeInfo.totalMinutes, timeInfo.isExpired]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   useEffect(() => {
     if (!chat || !roomRestriction || !timeInfo.isExpired) {
@@ -190,7 +354,7 @@ function ChatRoomPageContent() {
     router.push('/chat');
   }, [chat, roomRestriction, router, showToast, timeInfo.isExpired]);
 
-  if (!chat || !otherUser) {
+  if (!currentUser || !chat || !otherUser) {
     return (
       <PageContainer withBottomNav={false}>
         <div className="flex min-h-screen items-center justify-center">
@@ -213,22 +377,19 @@ function ChatRoomPageContent() {
     }));
   };
 
-  const handleSend = (content: string) => {
+  const handleSend = async (content: string) => {
     if (isChatDisabled) {
       return;
     }
 
-    const newMessage: Message = {
-      id: `msg-${Date.now()}`,
-      chatId,
-      senderId: currentUser.id,
-      content,
-      type: 'text',
-      createdAt: new Date(),
-      isRead: false,
-    };
-
-    setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
+    try {
+      const newMessage = await sendChatMessage(chatId, content);
+      setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
+      scrollToBottom();
+      await refreshMessages({ forceScroll: true });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '메시지를 보내지 못했습니다.', 'error');
+    }
   };
 
   const openConfirm = (action: Exclude<ChatAction, null>) => {
@@ -260,17 +421,33 @@ function ChatRoomPageContent() {
     setLeaveRoomOnSubmit(false);
   };
 
-  const confirmActionHandler = () => {
+  const confirmActionHandler = async () => {
     if (confirmAction === 'leave') {
-      closeConfirm();
-      router.push('/chat');
+      try {
+        await leaveChatRoom(chat.id);
+        closeConfirm();
+        router.push('/chat');
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : '채팅방을 나가지 못했습니다.', 'error');
+      }
       return;
     }
 
     if (confirmAction === 'block') {
+      try {
+        await blockChatRoom(chat.id);
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : '차단하지 못했습니다.', 'error');
+        return;
+      }
       showToast('상대방을 차단했어요.', 'success');
 
       if (leaveRoomOnSubmit) {
+        try {
+          await leaveChatRoom(chat.id);
+        } catch {
+          // The block request already succeeded; leaving is optional here.
+        }
         closeConfirm();
         router.push('/chat');
         return;
@@ -283,6 +460,18 @@ function ChatRoomPageContent() {
     }
 
     if (confirmAction === 'report') {
+      try {
+        await reportTarget({
+          targetType: 'chat_room',
+          targetId: chat.id,
+          reasonType: 'inappropriate',
+          alsoBlock: false,
+        });
+      } catch (error) {
+        showToast(error instanceof Error ? error.message : '신고하지 못했습니다.', 'error');
+        return;
+      }
+
       writeSessionValue(getChatRoomReportedKey(chat.id), 'true');
       setHasReportedRoom(true);
       if (roomRestriction !== 'blocked') {
@@ -293,6 +482,11 @@ function ChatRoomPageContent() {
       showToast('신고가 접수되었고 대화 내역이 함께 제출되었어요.', 'success');
 
       if (leaveRoomOnSubmit) {
+        try {
+          await leaveChatRoom(chat.id);
+        } catch {
+          // Reporting already succeeded; leaving is optional here.
+        }
         closeConfirm();
         router.push('/chat');
         return;
@@ -462,7 +656,7 @@ function ChatRoomPageContent() {
           {messages
             .filter((message) => !(message.type === 'system' && message.systemKind === 'match_started'))
             .map((message) => (
-              <ChatBubble key={message.id} message={message} />
+              <ChatBubble key={message.id} message={message} currentUserId={currentUser.id} />
             ))}
           {isBlockedRoom && (
             <div className="my-5 flex justify-center">

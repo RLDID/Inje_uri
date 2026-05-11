@@ -1,38 +1,116 @@
 'use client';
 
-import { Suspense, useRef, useState, type ChangeEvent } from 'react';
+import { Suspense, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { PageContainer, PageHeader, PageContent } from '@/components/layout';
 import { KeywordSelector, ProfileSection } from '@/components/profile/KeywordSelector';
 import { BottomSheet, useToast } from '@/components/ui';
-import { PROFILE_CATEGORIES } from '@/lib/types';
-import { currentUser } from '@/lib/data';
+import { PROFILE_CATEGORIES, type User } from '@/lib/types';
+import { deleteMyProfileImage, getMe, updateMe, uploadMyProfileImage } from '@/lib/api/profile';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
+
+type KeywordSelectionPayload = {
+  categoryCode: string;
+  keywordCodes: string[];
+};
+
+function toKeywordCodes(value: string | string[] | null | undefined, lowercase = false): string[] {
+  const values = Array.isArray(value) ? value : value ? [value] : [];
+  return values.map((keywordCode) => (lowercase ? keywordCode.toLowerCase() : keywordCode));
+}
+
+function buildKeywordSelections(profile: {
+  lifestyle: string;
+  drinking: string;
+  smoking: string;
+  mbti: string;
+  personality: string[];
+  conversation: string;
+  interests: string[];
+}, user: User): KeywordSelectionPayload[] {
+  return [
+    { categoryCode: 'lifestyle', keywordCodes: toKeywordCodes(profile.lifestyle) },
+    { categoryCode: 'drinking', keywordCodes: toKeywordCodes(profile.drinking) },
+    { categoryCode: 'smoking', keywordCodes: toKeywordCodes(profile.smoking) },
+    { categoryCode: 'mbti', keywordCodes: toKeywordCodes(profile.mbti, true) },
+    { categoryCode: 'personality', keywordCodes: toKeywordCodes(profile.personality) },
+    { categoryCode: 'conversation', keywordCodes: toKeywordCodes(profile.conversation) },
+    { categoryCode: 'interests', keywordCodes: toKeywordCodes(profile.interests) },
+    { categoryCode: 'desired_vibe', keywordCodes: toKeywordCodes(user.desiredVibe) },
+    { categoryCode: 'date_style', keywordCodes: toKeywordCodes(user.dateStyle) },
+    { categoryCode: 'deal_breakers', keywordCodes: toKeywordCodes(user.dealBreakers) },
+  ];
+}
 
 function EditProfilePageContent() {
   const { showToast } = useToast();
   const { goBack } = useSafeBack({ fallbackPath: '/my/profile' });
 
-  const [photos, setPhotos] = useState<string[]>(
-    currentUser.profileImages?.length > 0 ? currentUser.profileImages : [],
-  );
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [photoIds, setPhotoIds] = useState<Array<string | undefined>>([]);
+  const [pendingPhotoFiles, setPendingPhotoFiles] = useState<Record<string, File>>({});
+  const [deletedPhotoIds, setDeletedPhotoIds] = useState<string[]>([]);
   const [brokenPhotoIndices, setBrokenPhotoIndices] = useState<number[]>([]);
   const [photoTargetIndex, setPhotoTargetIndex] = useState<number | null>(null);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [profile, setProfile] = useState({
-    lifestyle: currentUser.lifestyle || '',
-    drinking: currentUser.drinking || '',
-    smoking: currentUser.smoking || '',
-    mbti: currentUser.mbti || '',
-    personality: [...currentUser.personality],
-    conversation: currentUser.conversationStyle || '',
-    interests: [...currentUser.interests],
-    bio: currentUser.bio || '',
+    lifestyle: '',
+    drinking: '',
+    smoking: '',
+    mbti: '',
+    personality: [] as string[],
+    conversation: '',
+    interests: [] as string[],
+    bio: '',
   });
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const me = await getMe();
+        if (cancelled) {
+          return;
+        }
+
+        const imageMetas = me.profileImageMetas ?? me.profileImages.map((imageUrl, index) => ({
+          id: undefined,
+          imageUrl,
+          sortOrder: index + 1,
+        }));
+
+        setCurrentUser(me);
+        setPhotos(imageMetas.map((image) => image.imageUrl));
+        setPhotoIds(imageMetas.map((image) => image.id));
+        setProfile({
+          lifestyle: me.lifestyle || '',
+          drinking: me.drinking || '',
+          smoking: me.smoking || '',
+          mbti: me.mbti || '',
+          personality: [...me.personality],
+          conversation: me.conversationStyle || '',
+          interests: [...me.interests],
+          bio: me.bio || '',
+        });
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '프로필을 불러오지 못했어요.', 'error');
+        }
+      }
+    }
+
+    void loadMe();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   const handleCategoryChange = (categoryId: string, value: string | string[]) => {
     const isEmptySelection = Array.isArray(value) ? value.length === 0 : value.length === 0;
@@ -46,10 +124,20 @@ function EditProfilePageContent() {
   };
 
   const applyPhoto = (index: number, src: string) => {
+    const replacedImageId = photoIds[index];
+    if (replacedImageId) {
+      setDeletedPhotoIds((prevIds) => Array.from(new Set([...prevIds, replacedImageId])));
+    }
+
     setPhotos((prevPhotos) => {
       const nextPhotos = [...prevPhotos];
       nextPhotos[index] = src;
       return nextPhotos;
+    });
+    setPhotoIds((prevIds) => {
+      const nextIds = [...prevIds];
+      nextIds[index] = undefined;
+      return nextIds;
     });
     setBrokenPhotoIndices((prevIndices) => prevIndices.filter((photoIndex) => photoIndex !== index));
   };
@@ -86,13 +174,20 @@ function EditProfilePageContent() {
       }
 
       applyPhoto(targetIndex, reader.result);
+      setPendingPhotoFiles((prevFiles) => ({ ...prevFiles, [reader.result as string]: file }));
       setPhotoTargetIndex(null);
     };
     reader.readAsDataURL(file);
   };
 
   const handleRemovePhoto = (index: number) => {
+    const removedImageId = photoIds[index];
+    if (removedImageId) {
+      setDeletedPhotoIds((prevIds) => Array.from(new Set([...prevIds, removedImageId])));
+    }
+
     setPhotos((prevPhotos) => prevPhotos.filter((_, photoIndex) => photoIndex !== index));
+    setPhotoIds((prevIds) => prevIds.filter((_, photoIndex) => photoIndex !== index));
     setBrokenPhotoIndices([]);
   };
 
@@ -117,7 +212,7 @@ function EditProfilePageContent() {
     return Array.isArray(selected) ? selected.length > 0 : Boolean(selected);
   });
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!hasMinPhotos) {
       showToast('프로필 사진은 1장 이상 등록해주세요.', 'error');
       return;
@@ -128,8 +223,33 @@ function EditProfilePageContent() {
       return;
     }
 
-    showToast('프로필 소개를 업데이트했어요.', 'success');
-    goBack();
+    if (!currentUser) {
+      showToast('내 정보를 불러온 뒤 다시 시도해주세요.', 'error');
+      return;
+    }
+
+    try {
+      await updateMe({
+        profile: { bio: profile.bio },
+        keywordSelections: buildKeywordSelections(profile, currentUser),
+      });
+
+      for (const imageId of deletedPhotoIds) {
+        await deleteMyProfileImage(imageId);
+      }
+
+      for (const [index, src] of photos.entries()) {
+        const file = pendingPhotoFiles[src];
+        if (file) {
+          await uploadMyProfileImage(file, index === 0);
+        }
+      }
+
+      showToast('프로필 소개를 업데이트했어요.', 'success');
+      goBack();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '프로필을 저장하지 못했어요.', 'error');
+    }
   };
 
   return (

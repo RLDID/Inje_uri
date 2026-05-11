@@ -37,6 +37,11 @@ export interface Story {
 export interface StoryContent {
   text?: string;
   images: string[];
+  imageMetas?: Array<{
+    id: string;
+    imageUrl: string;
+    order: number;
+  }>;
   question?: string;
 }
 

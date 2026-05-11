@@ -1,14 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { getChatRooms } from '@/lib/api/chat';
+import { getMe } from '@/lib/api/profile';
+import { usePolling } from '@/lib/hooks/usePolling';
 import {
   getChatExpiryNotificationCopy,
   getChatExpirySessionKey,
   getChatsInExpiryWarningWindow,
-  mockChats,
-} from '@/lib/data';
+} from '@/lib/utils/chat';
 import { buildChatRoomHref, useCurrentRouteContext } from '@/lib/navigation';
+import type { Chat, User } from '@/lib/types';
 
 const BANNER_AUTO_DISMISS_MS = 1000 * 60;
 
@@ -40,6 +43,8 @@ export function ChatExpiryNotifier() {
   const router = useRouter();
   const { currentPath, pathname } = useCurrentRouteContext();
   const [now, setNow] = useState(() => Date.now());
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [chats, setChats] = useState<Chat[]>([]);
   const [dismissedBannerId, setDismissedBannerId] = useState<string | null>(null);
   const isChatRoom = pathname?.startsWith('/chat/') ?? false;
 
@@ -57,8 +62,29 @@ export function ChatExpiryNotifier() {
     };
   }, []);
 
+  const loadChats = useCallback(async (options?: { silent?: boolean }) => {
+    const isSilent = Boolean(options?.silent);
+    try {
+      const me = await getMe();
+      const rooms = await getChatRooms(me);
+      setCurrentUser(me);
+      setChats(rooms);
+    } catch {
+      if (!isSilent) {
+        setCurrentUser(null);
+        setChats([]);
+      }
+    }
+  }, []);
+
+  usePolling(() => loadChats({ silent: true }), {
+    intervalMs: 7000,
+    enabled: true,
+    immediate: true,
+  });
+
   const currentChatId = pathname?.startsWith('/chat/') ? pathname.split('/')[2] ?? null : null;
-  const expiringChats = useMemo(() => getChatsInExpiryWarningWindow(mockChats, now), [now]);
+  const expiringChats = useMemo(() => getChatsInExpiryWarningWindow(chats, now), [chats, now]);
 
   useEffect(() => {
     expiringChats.forEach((chat) => {
@@ -66,7 +92,7 @@ export function ChatExpiryNotifier() {
         return;
       }
 
-      const copy = getChatExpiryNotificationCopy(chat);
+      const copy = getChatExpiryNotificationCopy(chat, currentUser?.id);
 
       if (document.visibilityState === 'hidden' && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         const browserKey = getChatExpirySessionKey('browser', chat.id);
@@ -90,7 +116,7 @@ export function ChatExpiryNotifier() {
       }
 
     });
-  }, [currentChatId, expiringChats, router]);
+  }, [currentChatId, currentUser?.id, expiringChats, router]);
 
   const activeBannerChat = useMemo(
     () =>
@@ -126,7 +152,7 @@ export function ChatExpiryNotifier() {
     return null;
   }
 
-  const copy = getChatExpiryNotificationCopy(activeBannerChat);
+  const copy = getChatExpiryNotificationCopy(activeBannerChat, currentUser?.id);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 top-0 z-[180] px-4 pt-[calc(env(safe-area-inset-top,0px)+8px)]">

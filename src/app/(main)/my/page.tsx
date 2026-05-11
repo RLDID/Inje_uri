@@ -6,8 +6,10 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { PageContainer, PageContent } from '@/components/layout';
 import { useToast } from '@/components/ui';
-import { currentUser } from '@/lib/data';
+import { getMe } from '@/lib/api/profile';
+import { logout } from '@/lib/api/settings';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
+import type { User } from '@/lib/types';
 import { getUserAcademicLabel } from '@/lib/utils';
 
 const IDEAL_KEYWORD_CHIP_GAP = 8;
@@ -100,11 +102,15 @@ const idealKeywordLabelMap: Record<string, string> = {
   'too-fast': '천천히',
 };
 
-function getIdealKeywordLabels() {
+function getIdealKeywordLabels(user: User | null) {
+  if (!user) {
+    return [];
+  }
+
   const keywords = [
-    ...currentUser.desiredVibe,
-    currentUser.dateStyle,
-    ...currentUser.dealBreakers,
+    ...user.desiredVibe,
+    user.dateStyle,
+    ...user.dealBreakers,
   ].filter((keyword): keyword is string => Boolean(keyword));
 
   return keywords.map((keyword) => idealKeywordLabelMap[keyword] ?? keyword);
@@ -115,7 +121,8 @@ function MyPageContent() {
   const router = useRouter();
   const { showToast } = useToast();
   const [imgError, setImgError] = useState(false);
-  const idealKeywords = useMemo(() => getIdealKeywordLabels(), []);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const idealKeywords = useMemo(() => getIdealKeywordLabels(currentUser), [currentUser]);
   const [visibleIdealKeywordCount, setVisibleIdealKeywordCount] = useState(() => Math.min(idealKeywords.length, 4));
   const idealKeywordRowRef = useRef<HTMLDivElement>(null);
   const idealKeywordMeasureRefs = useRef<Array<HTMLSpanElement | null>>([]);
@@ -126,6 +133,29 @@ function MyPageContent() {
       router.replace('/my/posts');
     }
   }, [router, searchParams]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadMe() {
+      try {
+        const me = await getMe();
+        if (!cancelled) {
+          setCurrentUser(me);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '내 정보를 불러오지 못했어요.', 'error');
+        }
+      }
+    }
+
+    void loadMe();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showToast]);
 
   useEffect(() => {
     const row = idealKeywordRowRef.current;
@@ -193,9 +223,24 @@ function MyPageContent() {
     );
   }
 
-  const handleLogout = () => {
-    showToast('로그아웃 기능은 준비 중입니다.', 'info');
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace('/login');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '로그아웃하지 못했어요.', 'error');
+    }
   };
+
+  if (!currentUser) {
+    return (
+      <PageContainer>
+        <PageContent className="py-20 text-center text-sm text-[var(--color-text-secondary)]">
+          내 정보를 불러오는 중이에요
+        </PageContent>
+      </PageContainer>
+    );
+  }
 
   const imageSrc = imgError ? PLACEHOLDER_PROFILE_IMAGE : (currentUser.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE);
   const visibleIdealKeywords = idealKeywords.slice(0, visibleIdealKeywordCount);
@@ -282,7 +327,7 @@ function MyPageContent() {
               </svg>
             </span>
             <span className="whitespace-nowrap text-[13px] font-semibold text-[var(--color-text-secondary)]">
-              좋아요한 피드
+              반응한 피드
             </span>
           </Link>
 

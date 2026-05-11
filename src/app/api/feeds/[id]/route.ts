@@ -4,6 +4,74 @@ import { AppError } from "@/server/lib/app-error";
 import { getAuthUser } from "@/server/lib/auth";
 import { deleteFeed, getFeedDetail, updateFeed } from "@/server/services/content/feed.service";
 
+function parseIdList(value: unknown): number[] | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    const ids = value.map((item) => Number(item));
+    return ids.every((id) => Number.isInteger(id)) ? ids : null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      const ids = parsed.map((item) => Number(item));
+      return ids.every((id) => Number.isInteger(id)) ? ids : null;
+    }
+  } catch {
+    // Fall through to comma-separated parsing.
+  }
+
+  const ids = trimmed.split(",").map((item) => Number(item.trim()));
+  return ids.every((id) => Number.isInteger(id)) ? ids : null;
+}
+
+async function parseUpdateFeedRequest(request: NextRequest) {
+  const contentType = request.headers.get("content-type") ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    const formData = await request.formData();
+    const text = formData.get("text");
+    const feedKeywordIds = parseIdList(formData.get("feedKeywordIds"));
+    const deleteImageIds = parseIdList(formData.get("deleteImageIds")) ?? [];
+    const images = formData
+      .getAll("images")
+      .filter((entry): entry is File => entry instanceof File && entry.size > 0);
+
+    return {
+      text,
+      feedKeywordIds,
+      deleteImageIds,
+      images,
+      hasText: text !== null,
+      hasKeywords: formData.has("feedKeywordIds"),
+      hasImageChanges: images.length > 0 || formData.has("deleteImageIds"),
+    };
+  }
+
+  const body = await request.json() as Record<string, unknown>;
+  return {
+    text: body.text,
+    feedKeywordIds: parseIdList(body.feedKeywordIds),
+    deleteImageIds: parseIdList(body.deleteImageIds) ?? [],
+    images: [] as File[],
+    hasText: body.text !== undefined,
+    hasKeywords: body.feedKeywordIds !== undefined,
+    hasImageChanges: body.deleteImageIds !== undefined,
+  };
+}
+
 /**
  * D-03: 피드 상세 조회 API
  *
@@ -104,14 +172,17 @@ export async function PATCH(
       return fail("INVALID_FEED_ID", "유효하지 않은 피드 ID입니다.");
     }
 
-    const body = await request.json() as Record<string, unknown>;
-    const text = body.text;
-    const feedKeywordIds = body.feedKeywordIds;
+    const {
+      text,
+      feedKeywordIds,
+      deleteImageIds,
+      images,
+      hasText,
+      hasKeywords,
+      hasImageChanges,
+    } = await parseUpdateFeedRequest(request);
 
-    const hasText = text !== undefined;
-    const hasKeywords = feedKeywordIds !== undefined;
-
-    if (!hasText && !hasKeywords) {
+    if (!hasText && !hasKeywords && !hasImageChanges) {
       return fail("NO_UPDATE_FIELDS", "수정할 항목이 없습니다. text 또는 feedKeywordIds를 전달해주세요.");
     }
 
@@ -120,7 +191,7 @@ export async function PATCH(
     }
 
     if (hasKeywords) {
-      if (!Array.isArray(feedKeywordIds) || feedKeywordIds.length === 0) {
+      if (!feedKeywordIds || feedKeywordIds.length === 0) {
         return fail("INVALID_KEYWORDS", "피드 키워드 ID 배열은 1개 이상이어야 합니다.");
       }
 
@@ -138,7 +209,9 @@ export async function PATCH(
       currentUserId,
       feedId,
       typeof text === "string" ? text : undefined,
-      Array.isArray(feedKeywordIds) ? feedKeywordIds : undefined,
+      hasKeywords && feedKeywordIds ? feedKeywordIds : undefined,
+      images,
+      deleteImageIds,
     );
     return ok(data);
   } catch (error) {
