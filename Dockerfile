@@ -23,6 +23,10 @@ ENV DATABASE_URL="postgresql://postgres:postgres@db:5432/injeuri?schema=public"
 RUN npx prisma generate
 RUN npm run build
 
+RUN mkdir -p .next/standalone/.next \
+  && cp -r .next/static .next/standalone/.next/static \
+  && if [ -d public ]; then cp -r public .next/standalone/public; fi
+
 FROM base AS runner
 
 ENV NODE_ENV=production

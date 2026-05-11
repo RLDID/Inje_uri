@@ -33,6 +33,18 @@ export const WITHDRAWN_USER_STATUS = 'withdrawn';
 
 type SessionWithUser = AuthSession & { user: User };
 
+function shouldUseSecureCookie(): boolean {
+  if (process.env.COOKIE_SECURE === 'true') {
+    return true;
+  }
+
+  if (process.env.COOKIE_SECURE === 'false') {
+    return false;
+  }
+
+  return process.env.NODE_ENV === 'production';
+}
+
 export interface AuthContext {
   session: SessionWithUser;
   user: User;
@@ -152,7 +164,7 @@ export async function deleteUserSession(sessionId: number) {
 export function attachSessionCookie(response: NextResponse, token: string, expiresAt: Date) {
   response.cookies.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(),
     sameSite: 'lax',
     path: '/',
     expires: expiresAt,
@@ -163,7 +175,7 @@ export function attachSessionCookie(response: NextResponse, token: string, expir
 export function clearSessionCookie(response: NextResponse) {
   response.cookies.set(SESSION_COOKIE_NAME, '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(),
     sameSite: 'lax',
     path: '/',
     expires: new Date(0),
@@ -175,7 +187,7 @@ export function clearAppAccessCookie(response: NextResponse) {
   response.cookies.set(APP_AUTH_COOKIE_NAME, '', {
     httpOnly: true,
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(),
     path: '/',
     maxAge: 0,
     expires: new Date(0),
@@ -185,7 +197,7 @@ export function clearAppAccessCookie(response: NextResponse) {
 export function attachPreSignupCookie(response: NextResponse, token: string) {
   response.cookies.set(PRE_SIGNUP_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(),
     sameSite: 'lax',
     path: '/',
     maxAge: PRE_SIGNUP_COOKIE_MAX_AGE_SECONDS,
@@ -195,7 +207,7 @@ export function attachPreSignupCookie(response: NextResponse, token: string) {
 export function clearPreSignupCookie(response: NextResponse) {
   response.cookies.set(PRE_SIGNUP_COOKIE_NAME, '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(),
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
@@ -206,7 +218,7 @@ export function clearPreSignupCookie(response: NextResponse) {
 export function attachAccountRecoveryCookie(response: NextResponse, token: string) {
   response.cookies.set(ACCOUNT_RECOVERY_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(),
     sameSite: 'lax',
     path: '/',
     maxAge: ACCOUNT_RECOVERY_TOKEN_MAX_AGE_SECONDS,
@@ -216,7 +228,7 @@ export function attachAccountRecoveryCookie(response: NextResponse, token: strin
 export function clearAccountRecoveryCookie(response: NextResponse) {
   response.cookies.set(ACCOUNT_RECOVERY_COOKIE_NAME, '', {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: shouldUseSecureCookie(),
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
