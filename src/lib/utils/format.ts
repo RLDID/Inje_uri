@@ -73,8 +73,8 @@ export function getKeywordLabel(categoryId: string, keywordId: string, withEmoji
   const categories: Record<string, typeof PERSONALITY_OPTIONS> = {
     personality: PERSONALITY_OPTIONS,
     interests: INTEREST_OPTIONS,
-    vibe: VIBE_OPTIONS,
-    dealBreakers: DEALBREAKER_OPTIONS,
+    desired_vibe: VIBE_OPTIONS,
+    deal_breakers: DEALBREAKER_OPTIONS,
   };
 
   const options = categories[categoryId];

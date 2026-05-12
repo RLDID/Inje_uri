@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcrypt';
 import {
   BUS_INJE_CHECK_ENDPOINT,
@@ -39,6 +40,15 @@ export interface RegisterInput {
   realName: string;
   email: string;
   university: string;
+}
+
+export interface DemoRegisterInput {
+  name: string;
+  department: string;
+  bio?: string;
+  gender: 'male' | 'female';
+  age?: number;
+  studentYear?: number;
 }
 
 function parseUpstreamInjeBody(rawText: string): { status?: string; message?: string } | null {
@@ -196,6 +206,60 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
   return {
     registered: true,
     nextPath: '/register?step=categories',
+    token,
+    expiresAt,
+    user: toAuthUserSummary(user),
+  };
+}
+
+function createDemoUniqueId(): string {
+  return randomUUID().replace(/-/g, '');
+}
+
+async function createUniqueDemoNickname(name: string): Promise<string> {
+  const baseNickname = name.trim().slice(0, 50);
+
+  if (!(await findUserByNickname(baseNickname))) {
+    return baseNickname;
+  }
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const suffix = createDemoUniqueId().slice(0, 6);
+    const candidate = `${baseNickname.slice(0, 43)}-${suffix}`;
+
+    if (!(await findUserByNickname(candidate))) {
+      return candidate;
+    }
+  }
+
+  return `${baseNickname.slice(0, 39)}-${Date.now().toString(36)}`;
+}
+
+export async function registerDemoUser(input: DemoRegisterInput) {
+  const uniqueId = createDemoUniqueId();
+  const nickname = await createUniqueDemoNickname(input.name);
+  const passwordHash = await bcrypt.hash(createDemoUniqueId(), 10);
+  const user = await createUser({
+    login_id: `demo_${uniqueId.slice(0, 32)}`,
+    real_name: input.name,
+    age: input.age ?? 22,
+    email: `demo-${uniqueId}@demo.injeuri.local`,
+    password_hash: passwordHash,
+    nickname,
+    gender: input.gender,
+    university: '인제대학교',
+    department: input.department,
+    student_year: input.studentYear ?? 3,
+    bio: input.bio ?? null,
+    onboarding_completed: true,
+    last_active_at: new Date(),
+  });
+
+  const { token, expiresAt } = await createUserSession(user.id);
+
+  return {
+    registered: true,
+    nextPath: '/match',
     token,
     expiresAt,
     user: toAuthUserSummary(user),

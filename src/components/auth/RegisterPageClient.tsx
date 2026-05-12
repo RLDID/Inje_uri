@@ -8,7 +8,7 @@ import { KeywordSelector, ProfileSection } from '@/components/profile';
 import { Button, Card, useToast } from '@/components/ui';
 import { APP_NAME } from '@/lib/constants';
 import { findCanonicalDepartment, getDepartmentSuggestions } from '@/lib/departments';
-import { PROFILE_CATEGORIES } from '@/lib/types';
+import { PROFILE_CATEGORIES, type KeywordSelectionPayload, type ProfileCategoryCode } from '@/lib/types';
 
 type RegisterStep = 'verify' | 'profile' | 'categories';
 type Gender = 'male' | 'female';
@@ -65,24 +65,6 @@ const INITIAL_FORM_STATE: RegisterFormState = {
   university: '인제대학교',
 };
 
-const PROFILE_TO_CATEGORY_CODE: Record<string, string> = {
-  lifestyle: 'lifestyle',
-  drinking: 'drinking',
-  smoking: 'smoking',
-  mbti: 'mbti',
-  personality: 'personality',
-  conversation: 'conversation',
-  interests: 'interests',
-  vibe: 'desired_vibe',
-  dateStyle: 'date_style',
-  dealBreakers: 'deal_breakers',
-};
-
-interface KeywordSelectionPayload {
-  categoryCode: string;
-  keywordCodes: string[];
-}
-
 const aboutMeCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'aboutMe');
 const partnerCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'desiredPartner');
 
@@ -114,8 +96,8 @@ function toSelectionArray(value: string | string[] | undefined): string[] {
   return value ? [value] : [];
 }
 
-function toKeywordCode(categoryId: string, optionId: string): string {
-  if (categoryId === 'mbti') {
+function toKeywordCode(categoryCode: ProfileCategoryCode, optionId: string): string {
+  if (categoryCode === 'mbti') {
     return optionId.toLowerCase();
   }
 
@@ -130,20 +112,12 @@ function findMissingPreferenceCategory(selectedPreferences: Record<string, strin
 
 function buildKeywordSelections(selectedPreferences: Record<string, string | string[]>): KeywordSelectionPayload[] {
   return PROFILE_CATEGORIES.map((profileCategory) => {
-    const categoryCode = PROFILE_TO_CATEGORY_CODE[profileCategory.id];
+    const categoryCode = profileCategory.id;
     const selectedOptionIds = toSelectionArray(selectedPreferences[profileCategory.id]);
-
-    if (!categoryCode) {
-      console.warn('[RegisterPageClient] Missing category code mapping', {
-        profileCategoryId: profileCategory.id,
-        selectedOptionIds,
-      });
-      throw new Error('선택한 키워드를 저장할 수 없어요. 잠시 후 다시 시도해주세요.');
-    }
 
     return {
       categoryCode,
-      keywordCodes: selectedOptionIds.map((optionId) => toKeywordCode(profileCategory.id, optionId)),
+      keywordCodes: selectedOptionIds.map((optionId) => toKeywordCode(categoryCode, optionId)),
     };
   });
 }

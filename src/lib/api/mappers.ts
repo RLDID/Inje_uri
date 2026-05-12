@@ -9,15 +9,10 @@ import type {
   Interest,
   Message,
   RecommendationSettings,
+  RawKeywordSelectionGroup,
   Story,
   User,
 } from '@/lib/types';
-
-type KeywordGroupDto = {
-  categoryCode?: string;
-  categoryName?: string;
-  keywords?: Array<{ code?: string; label?: string }>;
-};
 
 export type ApiUserProfile = {
   user?: {
@@ -33,12 +28,12 @@ export type ApiUserProfile = {
     studentNumber?: number | string | null;
     bio?: string | null;
     profileImages?: Array<string | { id?: number | string; imageUrl?: string | null; sortOrder?: number; isPrimary?: boolean }>;
-    keywordSelections?: KeywordGroupDto[];
+    keywordSelections?: RawKeywordSelectionGroup[];
     createdAt?: string | null;
     lastActiveAt?: string | null;
   };
   profileImages?: Array<{ id?: number | string; imageUrl?: string | null; sortOrder?: number; isPrimary?: boolean }>;
-  keywordSelections?: KeywordGroupDto[];
+  keywordSelections?: RawKeywordSelectionGroup[];
 };
 
 type TodayRecommendationDto = {
@@ -148,7 +143,7 @@ function normalizeImageMetas(images: unknown): User['profileImageMetas'] {
     .filter((image) => Boolean(image.imageUrl));
 }
 
-function applyKeywordSelections(user: User, keywordSelections: KeywordGroupDto[]): User {
+function applyKeywordSelections(user: User, keywordSelections: RawKeywordSelectionGroup[]): User {
   const nextUser: User = { ...user };
 
   for (const group of keywordSelections) {
@@ -174,6 +169,7 @@ function applyKeywordSelections(user: User, keywordSelections: KeywordGroupDto[]
 }
 
 export function mapUserProfileToUser(input: ApiUserProfile): User {
+  // Display-only mapper; do not use fallback values from this result to build save payloads.
   const source = input.user ?? {};
   const profileImages = normalizeImages(
     source.profileImages ?? input.profileImages,
@@ -393,6 +389,7 @@ export function mapRecommendationSettingsPatch(settings: RecommendationSettings)
 }
 
 function createMinimalUser(id: string, nickname: string, imageUrl?: string | null): User {
+  // Display-only mapper; do not use fallback values from this result to build save payloads.
   return {
     id,
     nickname,

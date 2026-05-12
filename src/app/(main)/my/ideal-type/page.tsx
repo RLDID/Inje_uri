@@ -4,37 +4,28 @@ import { Suspense, useEffect, useState } from 'react';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { useToast } from '@/components/ui';
 import { KeywordSelector, ProfileSection } from '@/components/profile/KeywordSelector';
-import { PROFILE_CATEGORIES, type User } from '@/lib/types';
-import { getMe, updateMe } from '@/lib/api/profile';
+import {
+  DESIRED_PARTNER_CATEGORY_CODES,
+  PROFILE_CATEGORIES,
+  type KeywordSelectionPayload,
+} from '@/lib/types';
+import { getMeProfileRaw, updateMe } from '@/lib/api/profile';
 import { useSafeBack } from '@/lib/navigation';
+import {
+  buildKeywordSelection,
+  getKeywordSelectionValues,
+  getProfileKeywordSelections,
+  mergeKeywordSelections,
+} from '@/lib/utils/profileKeywordSelections';
 
-type KeywordSelectionPayload = {
-  categoryCode: string;
-  keywordCodes: string[];
-};
-
-function toKeywordCodes(value: string | string[] | null | undefined, lowercase = false): string[] {
-  const values = Array.isArray(value) ? value : value ? [value] : [];
-  return values.map((keywordCode) => (lowercase ? keywordCode.toLowerCase() : keywordCode));
-}
-
-function buildKeywordSelections(user: User, profile: {
-  vibe: string[];
-  dateStyle: string;
-  dealBreakers: string[];
+function buildKeywordSelections(profile: {
+  desired_vibe: string[];
+  date_style: string;
+  deal_breakers: string[];
 }): KeywordSelectionPayload[] {
-  return [
-    { categoryCode: 'lifestyle', keywordCodes: toKeywordCodes(user.lifestyle) },
-    { categoryCode: 'drinking', keywordCodes: toKeywordCodes(user.drinking) },
-    { categoryCode: 'smoking', keywordCodes: toKeywordCodes(user.smoking) },
-    { categoryCode: 'mbti', keywordCodes: toKeywordCodes(user.mbti, true) },
-    { categoryCode: 'personality', keywordCodes: toKeywordCodes(user.personality) },
-    { categoryCode: 'conversation', keywordCodes: toKeywordCodes(user.conversationStyle) },
-    { categoryCode: 'interests', keywordCodes: toKeywordCodes(user.interests) },
-    { categoryCode: 'desired_vibe', keywordCodes: toKeywordCodes(profile.vibe) },
-    { categoryCode: 'date_style', keywordCodes: toKeywordCodes(profile.dateStyle) },
-    { categoryCode: 'deal_breakers', keywordCodes: toKeywordCodes(profile.dealBreakers) },
-  ];
+  return DESIRED_PARTNER_CATEGORY_CODES.map((categoryCode) => (
+    buildKeywordSelection(categoryCode, profile[categoryCode])
+  ));
 }
 
 function IdealTypePageContent() {
@@ -42,11 +33,11 @@ function IdealTypePageContent() {
   const { goBack } = useSafeBack();
 
   const [profile, setProfile] = useState({
-    vibe: [] as string[],
-    dateStyle: '',
-    dealBreakers: [] as string[],
+    desired_vibe: [] as string[],
+    date_style: '',
+    deal_breakers: [] as string[],
   });
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [originalKeywordSelections, setOriginalKeywordSelections] = useState<KeywordSelectionPayload[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -54,13 +45,14 @@ function IdealTypePageContent() {
 
     async function loadMe() {
       try {
-        const me = await getMe();
+        const rawProfile = await getMeProfileRaw();
         if (!cancelled) {
-          setCurrentUser(me);
+          const keywordSelections = getProfileKeywordSelections(rawProfile);
+          setOriginalKeywordSelections(keywordSelections);
           setProfile({
-            vibe: [...me.desiredVibe],
-            dateStyle: me.dateStyle || '',
-            dealBreakers: [...me.dealBreakers],
+            desired_vibe: getKeywordSelectionValues(keywordSelections, 'desired_vibe'),
+            date_style: getKeywordSelectionValues(keywordSelections, 'date_style')[0] ?? '',
+            deal_breakers: getKeywordSelectionValues(keywordSelections, 'deal_breakers'),
           });
         }
       } catch (error) {
@@ -96,14 +88,24 @@ function IdealTypePageContent() {
   };
 
   const handleSave = async () => {
-    if (!currentUser) {
+    if (!originalKeywordSelections) {
       showToast('내 정보를 불러온 뒤 다시 시도해주세요.', 'error');
+      return;
+    }
+
+    const { keywordSelections, missingCategoryCodes } = mergeKeywordSelections(
+      originalKeywordSelections,
+      buildKeywordSelections(profile),
+    );
+
+    if (!keywordSelections) {
+      showToast(`기존 키워드 정보를 확인할 수 없어요: ${missingCategoryCodes.join(', ')}`, 'error');
       return;
     }
 
     try {
       await updateMe({
-        keywordSelections: buildKeywordSelections(currentUser, profile),
+        keywordSelections,
       });
       showToast('이상형 키워드를 저장했어요.', 'success');
       goBack();

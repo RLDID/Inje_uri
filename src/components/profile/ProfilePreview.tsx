@@ -214,7 +214,7 @@ export function ProfilePreview({
           {user.desiredVibe.length > 0 && (
             <CategoryBadgeGroup
               category="원하는 분위기"
-              items={user.desiredVibe.map((vibe) => getKeywordLabel('vibe', vibe))}
+              items={user.desiredVibe.map((vibe) => getKeywordLabel('desired_vibe', vibe))}
               variant="profilePink"
               size="md"
               layout="inline"
@@ -226,7 +226,7 @@ export function ProfilePreview({
           {user.dealBreakers.length > 0 && (
             <CategoryBadgeGroup
               category="피하고 싶은 조건"
-              items={user.dealBreakers.map((dealBreaker) => getKeywordLabel('dealBreakers', dealBreaker))}
+              items={user.dealBreakers.map((dealBreaker) => getKeywordLabel('deal_breakers', dealBreaker))}
               variant="profilePink"
               size="md"
               layout="inline"
