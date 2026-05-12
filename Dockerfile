@@ -25,7 +25,8 @@ RUN npm run build
 
 RUN mkdir -p .next/standalone/.next \
   && cp -r .next/static .next/standalone/.next/static \
-  && if [ -d public ]; then cp -r public .next/standalone/public; fi
+  && if [ -d public ]; then cp -r public .next/standalone/public; fi \
+  && cp server.js .next/standalone/server.js
 
 FROM base AS runner
 

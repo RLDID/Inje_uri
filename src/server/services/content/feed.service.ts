@@ -110,7 +110,10 @@ export async function listFeeds(
     author_user: { status: { not: "banned" } },
   };
 
-  if (blockedUserIds.size > 0) where.author_user_id = { notIn: [...blockedUserIds] };
+  where.author_user_id = {
+    not: currentUserId,
+    ...(blockedUserIds.size > 0 ? { notIn: [...blockedUserIds] } : {}),
+  };
   if (keyword) where.keywords = { some: { feed_keyword: { name: keyword } } };
 
   if (cursor) {
