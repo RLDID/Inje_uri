@@ -87,7 +87,17 @@ function IdealTypePageContent() {
     setProfile((prevProfile) => ({ ...prevProfile, [categoryId]: value }));
   };
 
+  const hasRequiredKeywords = DESIRED_PARTNER_CATEGORY_CODES.every((categoryCode) => {
+    const selected = profile[categoryCode];
+    return Array.isArray(selected) ? selected.length > 0 : Boolean(selected);
+  });
+
   const handleSave = async () => {
+    if (!hasRequiredKeywords) {
+      showToast('이상형 키워드를 모두 선택해주세요.', 'error');
+      return;
+    }
+
     if (!originalKeywordSelections) {
       showToast('내 정보를 불러온 뒤 다시 시도해주세요.', 'error');
       return;

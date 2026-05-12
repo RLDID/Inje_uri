@@ -3,8 +3,24 @@ import { ToastProvider } from '@/components/ui';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '인제우리 - 인제대학교 소개팅 앱',
+  title: '인제우리',
   description: '인제대학교 학생들을 위한 소개팅 서비스',
+  icons: {
+    icon: [
+      {
+        url: '/brand/bear-hero-face2-icon.png',
+        type: 'image/png',
+        sizes: '1024x1024',
+      },
+    ],
+    apple: [
+      {
+        url: '/brand/bear-hero-face2-icon.png',
+        type: 'image/png',
+        sizes: '1024x1024',
+      },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',

@@ -21,7 +21,7 @@ import { listMyCommentedFeeds } from "@/server/services/content/comment.service"
  *   data: {
  *     items: Array<{
  *       comment: { commentId, content, createdAt },
- *       feed: { feedId, text, status, expiresAt, author: { userId, nickname, profileImage } }
+ *       feed: { feedId, text, status, expiresAt, viewCount, author: { userId, nickname, profileImage } }
  *     }>
  *   }
  * }

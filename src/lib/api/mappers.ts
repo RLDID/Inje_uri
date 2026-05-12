@@ -315,7 +315,10 @@ export function mapChatMessage(dto: ChatMessageDto, chatId: string): Message {
 export function mapFeedListItemToStory(dto: FeedListItemDto): Story {
   return {
     id: String(dto.feedId),
-    author: createMinimalUser(String(dto.author.userId), dto.author.nickname, dto.author.profileImage),
+    author: {
+      ...createMinimalUser(String(dto.author.userId), dto.author.nickname, dto.author.profileImage),
+      gender: normalizeGender(dto.author.gender),
+    },
     content: {
       text: dto.text,
       images: getFeedImages(dto),
@@ -327,7 +330,7 @@ export function mapFeedListItemToStory(dto: FeedListItemDto): Story {
     },
     category: mapFeedKeywordToCategory(dto.keywords[0]?.feedKeywordId),
     categories: dto.keywords.map((keyword) => mapFeedKeywordToCategory(keyword.feedKeywordId)),
-    viewCount: 0,
+    viewCount: dto.viewCount,
     createdAt: new Date(dto.createdAt),
     expiresAt: new Date(dto.expiresAt),
     isExpired: new Date(dto.expiresAt).getTime() <= Date.now(),
@@ -358,7 +361,7 @@ export function mapFeedDetailToStory(dto: FeedDetailDto): Story {
     },
     category: mapFeedKeywordToCategory(feed.keywords[0]?.feedKeywordId),
     categories: feed.keywords.map((keyword) => mapFeedKeywordToCategory(keyword.feedKeywordId)),
-    viewCount: feed.commentCount,
+    viewCount: feed.viewCount,
     createdAt: new Date(feed.createdAt),
     expiresAt: new Date(feed.expiresAt),
     isExpired: new Date(feed.expiresAt).getTime() <= Date.now(),

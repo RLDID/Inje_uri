@@ -17,7 +17,7 @@ import { getAuthUser } from "@/server/lib/auth";
  * {
  *   success: true,
  *   data: {
- *     feed: { feedId, text, status, createdAt, updatedAt, expiresAt, boostScore, keywords, images, commentCount } | null
+ *     feed: { feedId, text, status, createdAt, updatedAt, expiresAt, boostScore, keywords, images, commentCount, viewCount } | null
  *   }
  * }
  *
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
           orderBy: { sort_order: "asc" },
           select: { id: true, image_url: true, sort_order: true },
         },
-        _count: { select: { comments: true } }, // 댓글 수
+        _count: { select: { comments: true, views: true } }, // 댓글/조회 수
       },
     });
 
@@ -89,6 +89,7 @@ export async function GET(request: NextRequest) {
           sortOrder: img.sort_order,
         })),
         commentCount: feed._count.comments,
+        viewCount: feed._count.views,
       },
     });
   } catch (error) {
