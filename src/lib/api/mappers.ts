@@ -52,6 +52,7 @@ type TodayRecommendationDto = {
     blocked: boolean;
     profile: {
       nickname: string;
+      gender: string;
       age: number | null;
       department: string;
       student_year: number;
@@ -74,6 +75,7 @@ type ReceivedInterestsDto = {
       student_year: number;
       bio: string | null;
       primary_image_url: string | null;
+      gender: string;
     };
   }>;
 };
@@ -210,18 +212,18 @@ export function mapTodayRecommendation(dto: TodayRecommendationDto): DailyRecomm
     .filter((candidate) => !candidate.is_passed && !candidate.blocked && candidate.profile)
     .map((candidate) => {
       const profile = candidate.profile!;
-      return {
-        id: String(candidate.candidate_user_id),
-        nickname: profile.nickname,
-        age: profile.age ?? 0,
-        university: '인제대학교',
-        department: profile.department,
-        studentYear: profile.student_year,
-        gender: 'female',
-        profileImages: profile.primary_image_url ? [profile.primary_image_url] : [PLACEHOLDER_PROFILE_IMAGE],
-        bio: profile.bio ?? undefined,
-        personality: [],
-        conversationStyle: undefined,
+        return {
+          id: String(candidate.candidate_user_id),
+          nickname: profile.nickname,
+          age: profile.age ?? 0,
+          university: '인제대학교',
+          department: profile.department,
+          studentYear: profile.student_year,
+          gender: normalizeGender(profile.gender),
+          profileImages: profile.primary_image_url ? [profile.primary_image_url] : [PLACEHOLDER_PROFILE_IMAGE],
+          bio: profile.bio ?? undefined,
+          personality: [],
+          conversationStyle: undefined,
         interests: profile.keywords.map((keyword) => keyword.label),
         desiredVibe: [],
         dealBreakers: [],
@@ -252,7 +254,7 @@ export function mapReceivedInterests(dto: ReceivedInterestsDto, currentUserId = 
       university: '인제대학교',
       department: item.profile.department,
       studentYear: item.profile.student_year,
-      gender: 'female',
+      gender: normalizeGender(item.profile.gender),
       profileImages: item.profile.primary_image_url ? [item.profile.primary_image_url] : [PLACEHOLDER_PROFILE_IMAGE],
       bio: item.profile.bio ?? undefined,
       personality: [],

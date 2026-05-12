@@ -71,6 +71,7 @@ export async function getTodayRecommendations(
           ? null
           : {
               nickname: c.nickname,
+              gender: c.gender,
               age: c.age,
               department: c.department,
               student_year: c.student_year,

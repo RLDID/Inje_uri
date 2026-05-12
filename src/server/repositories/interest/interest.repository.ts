@@ -21,6 +21,7 @@ export interface InterestWithProfile extends InterestRow {
   student_year: number;
   bio: string | null;
   primary_image_url: string | null;
+  gender: string;
 }
 
 /** pending 상태(매칭/거절 전)인 호감 조회 */
@@ -74,7 +75,7 @@ export async function findReceivedInterestsWithProfile(
     SELECT
       i.id, i.from_user_id, i.to_user_id, i.status,
       i.matched_at, i.declined_at, i.created_at, i.expires_at,
-      u.nickname, u.age, u.department, u.student_year, u.bio,
+      u.nickname, u.age, u.department, u.student_year, u.bio, u.gender,
       upi.image_url AS primary_image_url
     FROM interests i
     JOIN users u ON u.id = i.from_user_id

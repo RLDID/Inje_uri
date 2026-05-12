@@ -5,6 +5,7 @@ export interface CommentListItemDto {
   commenter: {
     userId: number;
     nickname: string;
+    gender: string;
     profileImage: string | null;
   };
 }
@@ -31,6 +32,7 @@ export interface MyCommentedFeedItemDto {
     author: {
       userId: number;
       nickname: string;
+      gender: string;
       profileImage: string | null;
     };
   };
