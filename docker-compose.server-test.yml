@@ -35,7 +35,7 @@ services:
       - "127.0.0.1:3000:3000"
     networks:
       - injeuri-test
-    command: sh -c "npm run prisma:migrate:deploy && node .next/standalone/server.js"
+    command: sh -c "npm run prisma:migrate:deploy && npm run prisma:seed && node .next/standalone/server.js"
 
 volumes:
   injeuri-db-test-data:
