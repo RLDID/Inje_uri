@@ -26,6 +26,7 @@ function toCommentListItemDto(row: CommentListRow): CommentListItemDto {
     commenter: {
       userId: row.commenter_user.id,
       nickname: row.commenter_user.nickname,
+      gender: row.commenter_user.gender,
       profileImage: row.commenter_user.userProfileImages[0]?.image_url ?? null,
     },
   };
@@ -43,11 +44,12 @@ function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemD
       text: row.feed.text,
       status: row.feed.status,
       expiresAt: row.feed.expires_at.toISOString(),
-      author: {
-        userId: row.feed.author_user.id,
-        nickname: row.feed.author_user.nickname,
-        profileImage: row.feed.author_user.userProfileImages[0]?.image_url ?? null,
-      },
+        author: {
+          userId: row.feed.author_user.id,
+          nickname: row.feed.author_user.nickname,
+          gender: row.feed.author_user.gender,
+          profileImage: row.feed.author_user.userProfileImages[0]?.image_url ?? null,
+        },
     },
   };
 }

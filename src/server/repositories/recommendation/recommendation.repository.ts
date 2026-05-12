@@ -9,6 +9,7 @@ export interface CandidateRow {
   rank_order: number;
   passed_at: Date | null;
   nickname: string;
+  gender: string;
   age: number | null;
   department: string;
   student_year: number;
@@ -60,6 +61,7 @@ export async function findCandidatesWithProfile(
       dri.rank_order,
       dri.passed_at,
       u.nickname,
+      u.gender,
       u.age,
       u.department,
       u.student_year,
