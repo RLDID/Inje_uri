@@ -39,8 +39,6 @@ services:
       - injeuri-test
     command: sh -c "npm run prisma:migrate:deploy && npm run prisma:seed && node .next/standalone/server.js"
 
-volumes:
-  injeuri-db-test-data:
 
 networks:
   injeuri-test:
