@@ -94,6 +94,18 @@ export type FeedForViewRow = Prisma.SelfDateFeedGetPayload<{ select: typeof feed
 export class FeedRepository {
   constructor(private readonly db: PrismaClient) {}
 
+  async findCommentedFeedIdsByUser(userId: number): Promise<Set<number>> {
+    const rows = await this.db.feedComment.findMany({
+      where: {
+        commenter_user_id: userId,
+        deleted_at: null,
+      },
+      select: { feed_id: true },
+      distinct: ['feed_id'],
+    });
+    return new Set(rows.map((r) => r.feed_id));
+  }
+
   async findBlockedUserIds(userId: number): Promise<Set<number>> {
     const rows = await this.db.block.findMany({
       where: {

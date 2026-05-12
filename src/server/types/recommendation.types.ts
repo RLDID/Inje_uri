@@ -2,6 +2,7 @@
 
 export interface CandidateProfile {
   nickname: string;
+  gender: string;
   age: number | null;
   department: string;
   student_year: number;

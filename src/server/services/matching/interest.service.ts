@@ -42,6 +42,7 @@ export async function getReceivedInterests(
         student_year: i.student_year,
         bio: i.bio,
         primary_image_url: i.primary_image_url,
+        gender: i.gender,
       },
     })),
     total_count: interests.length,

@@ -8,6 +8,7 @@ const commentListSelect = {
     select: {
       id: true,
       nickname: true,
+      gender: true,
       userProfileImages: {
         where: { is_primary: true },
         select: { image_url: true },
@@ -31,6 +32,7 @@ const myCommentedFeedSelect = {
         select: {
           id: true,
           nickname: true,
+          gender: true,
           userProfileImages: {
             where: { is_primary: true },
             select: { image_url: true },

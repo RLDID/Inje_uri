@@ -7,6 +7,7 @@ export interface InterestProfile {
   student_year: number;
   bio: string | null;
   primary_image_url: string | null;
+  gender: string;
 }
 
 export interface ReceivedInterestItem {

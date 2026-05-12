@@ -86,7 +86,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
         text: string;
         status: string;
         expiresAt: string;
-        author: { userId: number; nickname: string; profileImage: string | null };
+        author: { userId: number; nickname: string; gender: string; profileImage: string | null };
       };
     }>;
   }>('/api/feeds/commented-by-me');
@@ -100,7 +100,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
       university: '인제대학교',
       department: '',
       studentYear: 1,
-      gender: 'male',
+      gender: item.feed.author.gender as 'male' | 'female',
       profileImages: item.feed.author.profileImage ? [item.feed.author.profileImage] : [PLACEHOLDER_PROFILE_IMAGE],
       personality: [],
       interests: [],
@@ -133,7 +133,7 @@ export async function getFeedComments(feedId: string | number): Promise<FeedReac
       commentId: number;
       content: string;
       createdAt: string;
-      commenter: { userId: number; nickname: string; profileImage: string | null };
+      commenter: { userId: number; nickname: string; gender: string; profileImage: string | null };
     }>;
   }>(`/api/feeds/${feedId}/comments`);
 
@@ -148,7 +148,7 @@ export async function getFeedComments(feedId: string | number): Promise<FeedReac
       university: '인제대학교',
       department: '',
       studentYear: 1,
-      gender: 'male',
+      gender: item.commenter.gender as 'male' | 'female',
       profileImages: item.commenter.profileImage ? [item.commenter.profileImage] : [PLACEHOLDER_PROFILE_IMAGE],
       personality: [],
       interests: [],

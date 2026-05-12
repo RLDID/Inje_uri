@@ -9,6 +9,7 @@ const config = [
       'create-dirs.js',
       'create-ideal-type-dir.js',
       'make-dirs.js',
+      'server.js',
     ],
   },
 ];

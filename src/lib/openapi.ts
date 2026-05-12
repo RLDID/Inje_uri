@@ -1465,10 +1465,25 @@
         RecommendationCandidate: {
           type: "object",
           properties: {
-            recommendation_item_id: { type: "integer", example: 12 },
-            user_id: { type: "integer", example: 5 },
-            nickname: { type: "string", example: "테스트B" },
-            profile_image: { type: "string", nullable: true, example: null },
+            item_id: { type: "integer", example: 12 },
+            candidate_user_id: { type: "integer", example: 5 },
+            rank_order: { type: "integer", example: 1 },
+            is_passed: { type: "boolean", example: false },
+            blocked: { type: "boolean", example: false },
+            profile: {
+              type: "object",
+              nullable: true,
+              properties: {
+                nickname: { type: "string", example: "테스트B" },
+                gender: { type: "string", enum: ["male", "female"] },
+                age: { type: "integer", example: 22 },
+                department: { type: "string", example: "컴퓨터공학부" },
+                student_year: { type: "integer", example: 3 },
+                bio: { type: "string", nullable: true, example: null },
+                primary_image_url: { type: "string", nullable: true, example: null },
+                keywords: { type: "array", items: { type: "string" } },
+              },
+            },
           },
         },
         TodayRecommendationsResponse: {
@@ -1527,9 +1542,19 @@
           properties: {
             interest_id: { type: "integer", example: 7 },
             from_user_id: { type: "integer", example: 5 },
-            nickname: { type: "string", example: "테스트B" },
-            profile_image: { type: "string", nullable: true, example: null },
             created_at: { type: "string", format: "date-time" },
+            profile: {
+              type: "object",
+              properties: {
+                nickname: { type: "string", example: "테스트B" },
+                gender: { type: "string", enum: ["male", "female"] },
+                age: { type: "integer", example: 22 },
+                department: { type: "string", example: "컴퓨터공학부" },
+                student_year: { type: "integer", example: 3 },
+                bio: { type: "string", nullable: true, example: null },
+                primary_image_url: { type: "string", nullable: true, example: null },
+              },
+            },
           },
         },
         ReceivedInterestsResponse: {
@@ -1687,6 +1712,7 @@
           properties: {
             userId: { type: "integer", example: 1 },
             nickname: { type: "string", example: "테스트A" },
+            gender: { type: "string", enum: ["male", "female"] },
             profileImage: { type: "string", nullable: true, example: null },
           },
         },
