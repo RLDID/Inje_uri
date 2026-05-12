@@ -17,8 +17,6 @@ services:
       - injeuri-test
 
   app:
-    volumes:
-      - injeuri-upload-data:/app/.next/standalone/public/uploads
     build:
       context: .
       dockerfile: Dockerfile
@@ -35,6 +33,8 @@ services:
         condition: service_healthy
     ports:
       - "127.0.0.1:3000:3000"
+    volumes:
+      - ../uploads:/app/.next/standalone/public/uploads
     networks:
       - injeuri-test
     command: sh -c "npm run prisma:migrate:deploy && npm run prisma:seed && node .next/standalone/server.js"
@@ -46,4 +46,3 @@ networks:
 
 volumes:
   injeuri-db-test-data:
-  injeuri-upload-data:
