@@ -114,6 +114,12 @@ export async function listFeeds(
     not: currentUserId,
     ...(blockedUserIds.size > 0 ? { notIn: [...blockedUserIds] } : {}),
   };
+
+  const commentedFeedIds = await repo.findCommentedFeedIdsByUser(currentUserId);
+  if (commentedFeedIds.size > 0) {
+    where.id = { notIn: [...commentedFeedIds] };
+  }
+
   if (keyword) where.keywords = { some: { feed_keyword: { name: keyword } } };
 
   if (cursor) {
