@@ -17,6 +17,8 @@ services:
       - injeuri-test
 
   app:
+    volumes:
+      - injeuri-upload-data:/app/.next/standalone/public/uploads
     build:
       context: .
       dockerfile: Dockerfile
@@ -43,3 +45,7 @@ volumes:
 networks:
   injeuri-test:
     driver: bridge
+
+volumes:
+  injeuri-db-test-data:
+  injeuri-upload-data:
