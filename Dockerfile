@@ -37,4 +37,4 @@ COPY --from=builder /app ./
 
 EXPOSE 3000
 
-CMD ["node", ".next/standalone/server.js"]
+CMD ["sh", "-c", "npm run prisma:migrate:deploy && npm run prisma:seed && node .next/standalone/server.js"]
