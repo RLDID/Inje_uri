@@ -3,6 +3,7 @@ import {
   BUS_INJE_CHECK_ENDPOINT,
   INJE_CHECK_FAIL_MESSAGE,
 } from '@/lib/auth/constants';
+import { PROFILE_CATEGORY_CODES, type KeywordSelectionPayload, type ProfileCategoryCode } from '@/lib/types';
 import {
   createUserSession,
   hashBirth,
@@ -17,8 +18,9 @@ import {
 } from '@/server/lib/auth';
 import { ApiError, ERROR } from '@/server/lib/errors';
 import { deleteAuthSessionById } from '@/server/repositories/auth/session.repository';
+import { findCategoriesWithKeywordsByCodes } from '@/server/repositories/user/keyword-selection.repository';
 import {
-  createUser,
+  createUserWithKeywordSelections,
   findUserByEmail,
   findUserForAccountRecovery,
   findUserByLoginId,
@@ -39,6 +41,126 @@ export interface RegisterInput {
   realName: string;
   email: string;
   university: string;
+  keywordSelections: unknown;
+}
+
+interface KeywordSelectionInput {
+  categoryCode?: unknown;
+  keywordCodes?: unknown;
+}
+
+type CategoryWithKeywords = {
+  category_id: number;
+  category_code: string;
+  selection_type: string;
+  max_select_count: number;
+  keywords: Array<{
+    keyword_id: number;
+    keyword_code: string;
+  }>;
+};
+
+const PROFILE_CATEGORY_CODE_SET = new Set<string>(PROFILE_CATEGORY_CODES);
+
+function toOptionalCode(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function normalizeRegisterKeywordSelections(rawValue: unknown): KeywordSelectionPayload[] {
+  if (!Array.isArray(rawValue)) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '성향 정보를 모두 선택해주세요.');
+  }
+
+  const selections = rawValue.map((item) => {
+    const selection = item as KeywordSelectionInput;
+    const categoryCode = toOptionalCode(selection.categoryCode);
+
+    if (!categoryCode || !PROFILE_CATEGORY_CODE_SET.has(categoryCode) || !Array.isArray(selection.keywordCodes)) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '성향 정보 형식을 확인해주세요.');
+    }
+
+    const keywordCodes = [...new Set(
+      selection.keywordCodes
+        .map((keywordCode) => toOptionalCode(keywordCode))
+        .filter((keywordCode): keywordCode is string => Boolean(keywordCode)),
+    )];
+
+    return {
+      categoryCode: categoryCode as ProfileCategoryCode,
+      keywordCodes,
+    };
+  });
+
+  const categoryCodes = selections.map((selection) => selection.categoryCode);
+  if (new Set(categoryCodes).size !== categoryCodes.length) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '중복된 성향 카테고리는 허용되지 않습니다.');
+  }
+
+  const missingCategoryCodes = PROFILE_CATEGORY_CODES.filter((categoryCode) => !categoryCodes.includes(categoryCode));
+  if (missingCategoryCodes.length > 0) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '성향 정보를 모두 선택해주세요.');
+  }
+
+  return PROFILE_CATEGORY_CODES.map((categoryCode) => {
+    const selection = selections.find((item) => item.categoryCode === categoryCode);
+    if (!selection) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '성향 정보를 모두 선택해주세요.');
+    }
+
+    return selection;
+  });
+}
+
+async function resolveRegisterKeywordSelectionRows(rawValue: unknown) {
+  const selections = normalizeRegisterKeywordSelections(rawValue);
+  const categories = await findCategoriesWithKeywordsByCodes(selections.map((selection) => selection.categoryCode));
+  const categoryMap = new Map(
+    (categories as CategoryWithKeywords[]).map((category) => [category.category_code, category]),
+  );
+
+  if (categoryMap.size !== PROFILE_CATEGORY_CODES.length) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 성향 카테고리가 포함되어 있습니다.');
+  }
+
+  return selections.flatMap((selection) => {
+    const category = categoryMap.get(selection.categoryCode);
+    const keywordCodes = selection.keywordCodes;
+
+    if (!category) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '존재하지 않는 성향 카테고리가 포함되어 있습니다.');
+    }
+
+    if (keywordCodes.length < 1) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '성향 정보를 모두 선택해주세요.');
+    }
+
+    if (category.selection_type === 'single' && keywordCodes.length !== 1) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '단일 선택 항목은 하나만 선택해주세요.');
+    }
+
+    if (keywordCodes.length > category.max_select_count) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '선택 가능한 키워드 개수를 초과했습니다.');
+    }
+
+    const keywordMap = new Map(category.keywords.map((keyword) => [keyword.keyword_code, keyword.keyword_id]));
+    const keywordIds = keywordCodes
+      .map((keywordCode) => keywordMap.get(keywordCode))
+      .filter((keywordId): keywordId is number => typeof keywordId === 'number');
+
+    if (keywordIds.length !== keywordCodes.length) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '카테고리와 맞지 않는 키워드가 포함되어 있습니다.');
+    }
+
+    return keywordIds.map((keywordId) => ({
+      category_id: category.category_id,
+      keyword_id: keywordId,
+    }));
+  });
 }
 
 function parseUpstreamInjeBody(rawText: string): { status?: string; message?: string } | null {
@@ -173,8 +295,9 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
     throw new ApiError(ERROR.INVALID_VERIFICATION, '인증 정보와 생년월일이 일치하지 않습니다.');
   }
 
+  const keywordSelectionRows = await resolveRegisterKeywordSelectionRows(input.keywordSelections);
   const passwordHash = await bcrypt.hash(input.password, 10);
-  const user = await createUser({
+  const user = await createUserWithKeywordSelections({
     login_id: input.loginId,
     real_name: input.realName,
     age: input.age,
@@ -188,14 +311,15 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
     department: input.department,
     student_year: input.studentYear,
     student_number: preSignup.studentNumber,
-  });
+    onboarding_completed: true,
+  }, keywordSelectionRows);
 
   await clearPreSignupVerificationToken(preSignupToken);
   const { token, expiresAt } = await createUserSession(user.id);
 
   return {
     registered: true,
-    nextPath: '/register?step=categories',
+    nextPath: '/match',
     token,
     expiresAt,
     user: toAuthUserSummary(user),
