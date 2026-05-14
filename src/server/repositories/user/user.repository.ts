@@ -112,6 +112,30 @@ export async function createUser(data: Prisma.UserUncheckedCreateInput) {
   return prisma.user.create({ data });
 }
 
+export async function createUserWithKeywordSelections(
+  data: Prisma.UserUncheckedCreateInput,
+  keywordSelections: Array<{
+    category_id: number;
+    keyword_id: number;
+  }>,
+) {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({ data });
+
+    if (keywordSelections.length > 0) {
+      await tx.userKeywordSelection.createMany({
+        data: keywordSelections.map((selection) => ({
+          user_id: user.id,
+          category_id: selection.category_id,
+          keyword_id: selection.keyword_id,
+        })),
+      });
+    }
+
+    return user;
+  });
+}
+
 export async function updateUser(userId: number, data: UserUpdateData) {
   return prisma.user.update({
     where: { id: userId },
