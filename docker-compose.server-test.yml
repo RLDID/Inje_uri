@@ -28,6 +28,7 @@ services:
       COOKIE_SECURE: "false"
       AUTH_SECRET: staging-test-auth-secret-change-me
       SESSION_SECRET: staging-test-session-secret-change-me
+      BATCH_SECRET: change-me
     depends_on:
       db:
         condition: service_healthy
