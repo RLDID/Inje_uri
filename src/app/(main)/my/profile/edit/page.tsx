@@ -6,20 +6,21 @@ import Image from 'next/image';
 import { PageContainer, PageHeader, PageContent } from '@/components/layout';
 import { KeywordSelector, ProfileSection } from '@/components/profile/KeywordSelector';
 import { BottomSheet, useToast } from '@/components/ui';
-import { PROFILE_CATEGORIES, type User } from '@/lib/types';
-import { deleteMyProfileImage, getMe, updateMe, uploadMyProfileImage } from '@/lib/api/profile';
+import {
+  ABOUT_ME_CATEGORY_CODES,
+  PROFILE_CATEGORIES,
+  type KeywordSelectionPayload,
+} from '@/lib/types';
+import { mapUserProfileToUser } from '@/lib/api/mappers';
+import { deleteMyProfileImage, getMeProfileRaw, updateMe, uploadMyProfileImage } from '@/lib/api/profile';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
-
-type KeywordSelectionPayload = {
-  categoryCode: string;
-  keywordCodes: string[];
-};
-
-function toKeywordCodes(value: string | string[] | null | undefined, lowercase = false): string[] {
-  const values = Array.isArray(value) ? value : value ? [value] : [];
-  return values.map((keywordCode) => (lowercase ? keywordCode.toLowerCase() : keywordCode));
-}
+import {
+  buildKeywordSelection,
+  getKeywordSelectionValues,
+  getProfileKeywordSelections,
+  mergeKeywordSelections,
+} from '@/lib/utils/profileKeywordSelections';
 
 function buildKeywordSelections(profile: {
   lifestyle: string;
@@ -29,19 +30,10 @@ function buildKeywordSelections(profile: {
   personality: string[];
   conversation: string;
   interests: string[];
-}, user: User): KeywordSelectionPayload[] {
-  return [
-    { categoryCode: 'lifestyle', keywordCodes: toKeywordCodes(profile.lifestyle) },
-    { categoryCode: 'drinking', keywordCodes: toKeywordCodes(profile.drinking) },
-    { categoryCode: 'smoking', keywordCodes: toKeywordCodes(profile.smoking) },
-    { categoryCode: 'mbti', keywordCodes: toKeywordCodes(profile.mbti, true) },
-    { categoryCode: 'personality', keywordCodes: toKeywordCodes(profile.personality) },
-    { categoryCode: 'conversation', keywordCodes: toKeywordCodes(profile.conversation) },
-    { categoryCode: 'interests', keywordCodes: toKeywordCodes(profile.interests) },
-    { categoryCode: 'desired_vibe', keywordCodes: toKeywordCodes(user.desiredVibe) },
-    { categoryCode: 'date_style', keywordCodes: toKeywordCodes(user.dateStyle) },
-    { categoryCode: 'deal_breakers', keywordCodes: toKeywordCodes(user.dealBreakers) },
-  ];
+}): KeywordSelectionPayload[] {
+  return ABOUT_ME_CATEGORY_CODES.map((categoryCode) => (
+    buildKeywordSelection(categoryCode, profile[categoryCode])
+  ));
 }
 
 function EditProfilePageContent() {
@@ -57,7 +49,7 @@ function EditProfilePageContent() {
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [originalKeywordSelections, setOriginalKeywordSelections] = useState<KeywordSelectionPayload[] | null>(null);
   const [profile, setProfile] = useState({
     lifestyle: '',
     drinking: '',
@@ -74,28 +66,30 @@ function EditProfilePageContent() {
 
     async function loadMe() {
       try {
-        const me = await getMe();
+        const rawProfile = await getMeProfileRaw();
         if (cancelled) {
           return;
         }
 
+        const me = mapUserProfileToUser(rawProfile);
+        const keywordSelections = getProfileKeywordSelections(rawProfile);
         const imageMetas = me.profileImageMetas ?? me.profileImages.map((imageUrl, index) => ({
           id: undefined,
           imageUrl,
           sortOrder: index + 1,
         }));
 
-        setCurrentUser(me);
+        setOriginalKeywordSelections(keywordSelections);
         setPhotos(imageMetas.map((image) => image.imageUrl));
         setPhotoIds(imageMetas.map((image) => image.id));
         setProfile({
-          lifestyle: me.lifestyle || '',
-          drinking: me.drinking || '',
-          smoking: me.smoking || '',
-          mbti: me.mbti || '',
-          personality: [...me.personality],
-          conversation: me.conversationStyle || '',
-          interests: [...me.interests],
+          lifestyle: getKeywordSelectionValues(keywordSelections, 'lifestyle')[0] ?? '',
+          drinking: getKeywordSelectionValues(keywordSelections, 'drinking')[0] ?? '',
+          smoking: getKeywordSelectionValues(keywordSelections, 'smoking')[0] ?? '',
+          mbti: getKeywordSelectionValues(keywordSelections, 'mbti')[0] ?? '',
+          personality: getKeywordSelectionValues(keywordSelections, 'personality'),
+          conversation: getKeywordSelectionValues(keywordSelections, 'conversation')[0] ?? '',
+          interests: getKeywordSelectionValues(keywordSelections, 'interests'),
           bio: me.bio || '',
         });
       } catch (error) {
@@ -223,15 +217,25 @@ function EditProfilePageContent() {
       return;
     }
 
-    if (!currentUser) {
+    if (!originalKeywordSelections) {
       showToast('내 정보를 불러온 뒤 다시 시도해주세요.', 'error');
+      return;
+    }
+
+    const { keywordSelections, missingCategoryCodes } = mergeKeywordSelections(
+      originalKeywordSelections,
+      buildKeywordSelections(profile),
+    );
+
+    if (!keywordSelections) {
+      showToast(`기존 키워드 정보를 확인할 수 없어요: ${missingCategoryCodes.join(', ')}`, 'error');
       return;
     }
 
     try {
       await updateMe({
         profile: { bio: profile.bio },
-        keywordSelections: buildKeywordSelections(profile, currentUser),
+        keywordSelections,
       });
 
       for (const imageId of deletedPhotoIds) {

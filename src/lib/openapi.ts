@@ -1735,6 +1735,7 @@
             keywords: { type: "array", items: { $ref: "#/components/schemas/FeedKeyword" } },
             primaryImage: { type: "string", nullable: true, example: null },
             commentCount: { type: "integer", example: 2 },
+            viewCount: { type: "integer", example: 12 },
           },
         },
         FeedListResponse: {
@@ -1842,7 +1843,7 @@
         },
         RecordedResponse: {
           type: "object",
-          properties: { success: { type: "boolean", example: true }, data: { type: "object", properties: { recorded: { type: "boolean", example: true } } } },
+          properties: { success: { type: "boolean", example: true }, data: { type: "object", properties: { recorded: { type: "boolean", example: true }, viewCount: { type: "integer", example: 12 } } } },
         },
         BlockListResponse: {
           type: "object",

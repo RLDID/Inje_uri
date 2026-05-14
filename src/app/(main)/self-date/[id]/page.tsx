@@ -61,7 +61,17 @@ function SelfDateDetailPageContent() {
 
         setStory(nextStory);
         setTimeRemaining(getFeedRemainingTime(nextStory));
-        await recordFeedView(storyId);
+
+        const viewResult = await recordFeedView(storyId);
+        if (cancelled) {
+          return;
+        }
+
+        setStory((currentStory) => (
+          currentStory?.id === nextStory.id
+            ? { ...currentStory, viewCount: viewResult.viewCount }
+            : currentStory
+        ));
       } catch (error) {
         if (!cancelled) {
           showToast(error instanceof Error ? error.message : '피드를 불러오지 못했어요.', 'error');

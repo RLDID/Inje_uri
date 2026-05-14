@@ -20,7 +20,7 @@ import { recordFeedView } from "@/server/services/content/feed.service";
  * @returns 200 - 성공 (신규 기록 또는 이미 기록됨)
  * {
  *   success: true,
- *   data: { recorded: true }
+ *   data: { recorded: true, viewCount: number }
  * }
  *
  * @returns 400 - 에러 (피드 없음, 파라미터 오류 등)

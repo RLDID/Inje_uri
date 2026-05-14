@@ -2,7 +2,7 @@ import { apiDelete, apiGet, apiPatch, apiPost } from '@/lib/api/client';
 import { mapFeedDetailToStory, mapFeedListItemToStory } from '@/lib/api/mappers';
 import { getMe } from '@/lib/api/profile';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import type { FeedCategory, FeedDetailDto, FeedListDto, FeedReaction, Story } from '@/lib/types';
+import type { FeedCategory, FeedDetailDto, FeedListDto, FeedReaction, RecordFeedViewResultDto, Story } from '@/lib/types';
 
 export async function getFeeds(keyword?: string | null, cursor?: string | null): Promise<{ items: Story[]; nextCursor: string | null }> {
   const params = new URLSearchParams();
@@ -39,7 +39,7 @@ export async function deleteFeed(feedId: string | number) {
 }
 
 export async function recordFeedView(feedId: string | number) {
-  return apiPost(`/api/feeds/${feedId}/view`);
+  return apiPost<RecordFeedViewResultDto>(`/api/feeds/${feedId}/view`);
 }
 
 export async function getMyFeeds(): Promise<Story[]> {
@@ -54,6 +54,7 @@ export async function getMyFeeds(): Promise<Story[]> {
       keywords: Array<{ feedKeywordId: number; name: string }>;
       images?: Array<{ imageId: number; imageUrl: string; sortOrder: number }>;
       commentCount: number;
+      viewCount: number;
     } }>('/api/feeds/mine'),
     getMe(),
   ]);
@@ -69,7 +70,7 @@ export async function getMyFeeds(): Promise<Story[]> {
     },
     category: feedKeywordIdToCategory(data.feed.keywords[0]?.feedKeywordId),
     categories: data.feed.keywords.map((keyword) => feedKeywordIdToCategory(keyword.feedKeywordId)),
-    viewCount: data.feed.commentCount,
+    viewCount: data.feed.viewCount,
     createdAt: new Date(data.feed.createdAt),
     expiresAt: new Date(data.feed.expiresAt),
     isExpired: new Date(data.feed.expiresAt).getTime() <= Date.now(),
@@ -86,6 +87,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
         text: string;
         status: string;
         expiresAt: string;
+        viewCount: number;
         author: { userId: number; nickname: string; gender: string; profileImage: string | null };
       };
     }>;
@@ -115,7 +117,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
     },
     category: 'hobby',
     categories: ['hobby'],
-    viewCount: 0,
+    viewCount: item.feed.viewCount,
     createdAt: new Date(item.comment.createdAt),
     expiresAt: new Date(item.feed.expiresAt),
     isExpired: new Date(item.feed.expiresAt).getTime() <= Date.now(),

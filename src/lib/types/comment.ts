@@ -29,6 +29,7 @@ export interface MyCommentedFeedItemDto {
     text: string;
     status: string;
     expiresAt: string;
+    viewCount: number;
     author: {
       userId: number;
       nickname: string;
