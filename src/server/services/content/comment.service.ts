@@ -44,6 +44,7 @@ function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemD
       text: row.feed.text,
       status: row.feed.status,
       expiresAt: row.feed.expires_at.toISOString(),
+      viewCount: row.feed._count.views,
         author: {
           userId: row.feed.author_user.id,
           nickname: row.feed.author_user.nickname,

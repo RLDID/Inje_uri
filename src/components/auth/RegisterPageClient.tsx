@@ -8,7 +8,7 @@ import { KeywordSelector, ProfileSection } from '@/components/profile';
 import { Button, Card, useToast } from '@/components/ui';
 import { APP_NAME } from '@/lib/constants';
 import { findCanonicalDepartment, getDepartmentSuggestions } from '@/lib/departments';
-import { PROFILE_CATEGORIES } from '@/lib/types';
+import { PROFILE_CATEGORIES, type KeywordSelectionPayload, type ProfileCategoryCode } from '@/lib/types';
 
 type RegisterStep = 'verify' | 'profile' | 'categories';
 type Gender = 'male' | 'female';
@@ -25,14 +25,11 @@ interface InjeCheckResponse {
 
 interface RegisterApiResponse {
   success?: boolean;
-  error?: {
-    message?: string;
+  data?: {
+    nextPath?: string;
   };
-}
-
-interface SavePreferencesResponse {
-  success?: boolean;
   error?: {
+    code?: string;
     message?: string;
   };
 }
@@ -65,24 +62,6 @@ const INITIAL_FORM_STATE: RegisterFormState = {
   university: '인제대학교',
 };
 
-const PROFILE_TO_CATEGORY_CODE: Record<string, string> = {
-  lifestyle: 'lifestyle',
-  drinking: 'drinking',
-  smoking: 'smoking',
-  mbti: 'mbti',
-  personality: 'personality',
-  conversation: 'conversation',
-  interests: 'interests',
-  vibe: 'desired_vibe',
-  dateStyle: 'date_style',
-  dealBreakers: 'deal_breakers',
-};
-
-interface KeywordSelectionPayload {
-  categoryCode: string;
-  keywordCodes: string[];
-}
-
 const aboutMeCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'aboutMe');
 const partnerCategories = PROFILE_CATEGORIES.filter((category) => category.belongsTo === 'desiredPartner');
 
@@ -98,14 +77,6 @@ function resolveNextPath(nextPath: string | null): string {
   return nextPath;
 }
 
-function getNextQuery(nextPath: string | null): string {
-  if (!nextPath || !nextPath.startsWith('/') || nextPath.startsWith('//')) {
-    return '';
-  }
-
-  return `&next=${encodeURIComponent(nextPath)}`;
-}
-
 function toSelectionArray(value: string | string[] | undefined): string[] {
   if (Array.isArray(value)) {
     return value;
@@ -114,8 +85,8 @@ function toSelectionArray(value: string | string[] | undefined): string[] {
   return value ? [value] : [];
 }
 
-function toKeywordCode(categoryId: string, optionId: string): string {
-  if (categoryId === 'mbti') {
+function toKeywordCode(categoryCode: ProfileCategoryCode, optionId: string): string {
+  if (categoryCode === 'mbti') {
     return optionId.toLowerCase();
   }
 
@@ -130,22 +101,78 @@ function findMissingPreferenceCategory(selectedPreferences: Record<string, strin
 
 function buildKeywordSelections(selectedPreferences: Record<string, string | string[]>): KeywordSelectionPayload[] {
   return PROFILE_CATEGORIES.map((profileCategory) => {
-    const categoryCode = PROFILE_TO_CATEGORY_CODE[profileCategory.id];
+    const categoryCode = profileCategory.id;
     const selectedOptionIds = toSelectionArray(selectedPreferences[profileCategory.id]);
-
-    if (!categoryCode) {
-      console.warn('[RegisterPageClient] Missing category code mapping', {
-        profileCategoryId: profileCategory.id,
-        selectedOptionIds,
-      });
-      throw new Error('선택한 키워드를 저장할 수 없어요. 잠시 후 다시 시도해주세요.');
-    }
 
     return {
       categoryCode,
-      keywordCodes: selectedOptionIds.map((optionId) => toKeywordCode(profileCategory.id, optionId)),
+      keywordCodes: selectedOptionIds.map((optionId) => toKeywordCode(categoryCode, optionId)),
     };
   });
+}
+
+function validateRegisterProfile(form: RegisterFormState): string | null {
+  const loginId = form.loginId.trim();
+  const password = form.password.trim();
+  const nickname = form.nickname.trim();
+  const birth = form.birth.trim();
+  const age = Number(form.age);
+  const studentYear = Number(form.studentYear);
+  const department = form.department.trim();
+  const realName = form.realName.trim();
+  const email = form.email.trim();
+  const university = form.university.trim();
+
+  if (!loginId || !password || !nickname || !birth || !form.age.trim() || !form.studentYear.trim() || !department || !realName || !email || !university) {
+    return '회원가입 필드를 모두 입력해주세요.';
+  }
+
+  if (!findCanonicalDepartment(department)) {
+    return '학과는 목록에서 선택해주세요.';
+  }
+
+  if (loginId.length < 4 || loginId.length > 100) {
+    return '아이디는 4자 이상 100자 이하로 입력해주세요.';
+  }
+
+  if (password.length < 8) {
+    return '비밀번호는 8자 이상이어야 합니다.';
+  }
+
+  if (!/^\d{6}$/.test(birth)) {
+    return '생년월일 6자리를 입력해주세요.';
+  }
+
+  if (!Number.isInteger(age) || age < 1 || age > 100) {
+    return '나이 범위를 확인해주세요.';
+  }
+
+  if (!Number.isInteger(studentYear) || studentYear < 1 || studentYear > 8) {
+    return '학년 범위를 확인해주세요.';
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return '이메일 형식을 확인해주세요.';
+  }
+
+  return null;
+}
+
+function resolveRegisterErrorStep(code: string | undefined, message: string): RegisterStep | null {
+  if (code === 'UNAUTHORIZED' || code === 'INVALID_VERIFICATION') {
+    return 'verify';
+  }
+
+  if (code === 'CONFLICT' || code === 'NICKNAME_ALREADY_EXISTS') {
+    return 'profile';
+  }
+
+  if (code === 'VALIDATION_ERROR') {
+    const isPreferenceError = message.includes('성향') || message.includes('카테고리') || message.includes('키워드') || message.includes('단일 선택');
+    return isPreferenceError ? null : 'profile';
+  }
+
+  return null;
 }
 export function RegisterPageClient() {
   const router = useRouter();
@@ -159,7 +186,6 @@ export function RegisterPageClient() {
   const [selectedPreferences, setSelectedPreferences] = useState<Record<string, string | string[]>>({});
   const [errorMessage, setErrorMessage] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoadingTaxonomy, setIsLoadingTaxonomy] = useState(false);
   const [hasRequestedTaxonomy, setHasRequestedTaxonomy] = useState(false);
   const [isSavingPreferences, setIsSavingPreferences] = useState(false);
@@ -168,6 +194,12 @@ export function RegisterPageClient() {
   useEffect(() => {
     setStep(resolveInitialStep(searchParams.get('step')));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (step === 'categories' && !form.loginId) {
+      setStep('verify');
+    }
+  }, [form.loginId, step]);
 
   useEffect(() => {
     if (step !== 'categories' || isLoadingTaxonomy || hasRequestedTaxonomy) {
@@ -196,7 +228,7 @@ export function RegisterPageClient() {
     };
   }, [hasRequestedTaxonomy, isLoadingTaxonomy, step]);
 
-  const isBusy = isVerifying || isSubmitting || isSavingPreferences;
+  const isBusy = isVerifying || isSavingPreferences;
   const departmentSuggestions = getDepartmentSuggestions(form.department);
   const isPreferenceComplete = !findMissingPreferenceCategory(selectedPreferences);
 
@@ -272,6 +304,16 @@ export function RegisterPageClient() {
   const handleRegisterSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    const validationMessage = validateRegisterProfile(form);
+    if (validationMessage) {
+      setErrorMessage(validationMessage);
+      showToast(validationMessage, 'error');
+      if (validationMessage.includes('학과')) {
+        setIsDepartmentListOpen(true);
+      }
+      return;
+    }
+
     const canonicalDepartment = findCanonicalDepartment(form.department);
     if (!canonicalDepartment) {
       const message = '학과는 목록에서 선택해주세요.';
@@ -281,49 +323,21 @@ export function RegisterPageClient() {
       return;
     }
 
-    setIsSubmitting(true);
     setErrorMessage('');
-
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...form,
-          department: canonicalDepartment,
-          age: Number(form.age),
-          studentYear: Number(form.studentYear),
-          birth: form.birth.trim(),
-        }),
-      });
-
-      let payload: RegisterApiResponse = {};
-      try {
-        payload = await response.json() as RegisterApiResponse;
-      } catch {
-        payload = {};
-      }
-
-      if (!response.ok || !payload.success) {
-        const message = payload.error?.message ?? '회원가입에 실패했습니다.';
-        setErrorMessage(message);
-        showToast(message, 'error');
-        return;
-      }
-
-      showToast('회원가입이 완료되었습니다. 성향을 선택해주세요.', 'success');
-      setStep('categories');
-      startTransition(() => {
-        router.replace(`/register?step=categories${getNextQuery(searchParams.get('next'))}`);
-      });
-    } catch {
-      const message = '회원가입 요청 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.';
-      setErrorMessage(message);
-      showToast(message, 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setForm((prev) => ({
+      ...prev,
+      loginId: prev.loginId.trim(),
+      nickname: prev.nickname.trim(),
+      birth: prev.birth.trim(),
+      age: prev.age.trim(),
+      studentYear: prev.studentYear.trim(),
+      department: canonicalDepartment,
+      realName: prev.realName.trim(),
+      email: prev.email.trim(),
+      university: prev.university.trim(),
+    }));
+    setStep('categories');
+    showToast('가입 정보를 확인했습니다. 성향을 선택해주세요.', 'success');
   };
 
   const handlePreferenceSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -342,32 +356,45 @@ export function RegisterPageClient() {
 
     try {
       const keywordSelections = buildKeywordSelections(selectedPreferences);
-      const response = await fetch('/api/users/me', {
-        method: 'PATCH',
+      const canonicalDepartment = findCanonicalDepartment(form.department);
+      if (!canonicalDepartment) {
+        throw new Error('학과는 목록에서 선택해주세요.');
+      }
+
+      const response = await fetch('/api/auth/register', {
+        method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          profile: { onboardingCompleted: true },
+          ...form,
+          department: canonicalDepartment,
+          age: Number(form.age),
+          studentYear: Number(form.studentYear),
+          birth: form.birth.trim(),
           keywordSelections,
         }),
       });
 
-      let payload: SavePreferencesResponse = {};
+      let payload: RegisterApiResponse = {};
       try {
-        payload = await response.json() as SavePreferencesResponse;
+        payload = await response.json() as RegisterApiResponse;
       } catch {
         payload = {};
       }
 
       if (!response.ok || !payload.success) {
-        const message = payload.error?.message ?? '성향 저장에 실패했습니다.';
+        const message = payload.error?.message ?? '회원가입에 실패했습니다.';
+        const nextErrorStep = resolveRegisterErrorStep(payload.error?.code, message);
         setErrorMessage(message);
         showToast(message, 'error');
+        if (nextErrorStep) {
+          setStep(nextErrorStep);
+        }
         return;
       }
 
-      showToast('성향이 저장되었습니다.', 'success');
-      const nextPath = resolveNextPath(searchParams.get('next'));
+      showToast('회원가입이 완료되었습니다.', 'success');
+      const nextPath = resolveNextPath(searchParams.get('next') ?? payload.data?.nextPath ?? null);
       startTransition(() => {
         router.replace(nextPath);
       });
@@ -420,8 +447,8 @@ export function RegisterPageClient() {
             </h1>
             <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
               {step === 'verify' && '학번 인증을 먼저 완료하면 가입 정보를 입력할 수 있습니다.'}
-              {step === 'profile' && '인증된 학번 정보로 계정을 생성합니다.'}
-              {step === 'categories' && '프로필 수정과 이상형 설정에서 쓰는 항목을 선택해주세요.'}
+              {step === 'profile' && '인증된 학번으로 가입 정보를 입력합니다.'}
+              {step === 'categories' && '성향까지 저장하면 계정 생성이 완료됩니다.'}
             </p>
           </div>
 
@@ -650,7 +677,7 @@ export function RegisterPageClient() {
                 />
               </LabeledInput>
 
-              <Button type="submit" fullWidth size="lg" loading={isSubmitting}>
+              <Button type="submit" fullWidth size="lg">
                 다음
               </Button>
             </form>

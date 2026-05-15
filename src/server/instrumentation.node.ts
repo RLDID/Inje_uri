@@ -5,6 +5,7 @@ import { runDailyRecommendationJobIfNeeded } from "@/server/jobs/dailyRecommenda
 
 const globalForInstrumentation = globalThis as typeof globalThis & {
   __injeuriDailyRecommendationJobStarted?: boolean;
+  __injeuriCronSchedulerStarted?: boolean;
 };
 
 if (!globalForInstrumentation.__injeuriDailyRecommendationJobStarted) {
@@ -17,6 +18,13 @@ if (!globalForInstrumentation.__injeuriDailyRecommendationJobStarted) {
       console.error("[instrumentation.node] daily recommendation job failed", err);
     }
   })();
+}
+
+if (!globalForInstrumentation.__injeuriCronSchedulerStarted) {
+  globalForInstrumentation.__injeuriCronSchedulerStarted = true;
+  setInterval(() => {
+    void runDailyRecommendationJobIfNeeded();
+  }, 60 * 60 * 1000);
 }
 
 export {};

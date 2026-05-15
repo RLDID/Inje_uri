@@ -70,7 +70,7 @@ async function parseCreateFeedRequest(request: NextRequest) {
  * {
  *   success: true,
  *   data: {
- *     items: Array<{ feedId, text, status, createdAt, expiresAt, author, keywords, primaryImage, commentCount }>,
+ *     items: Array<{ feedId, text, status, createdAt, expiresAt, author, keywords, primaryImage, commentCount, viewCount }>,
  *     nextCursor: number | null
  *   }
  * }

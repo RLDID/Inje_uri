@@ -91,7 +91,7 @@ async function parseUpdateFeedRequest(request: NextRequest) {
  *     feed: {
  *       feedId, text, status, createdAt, updatedAt, expiresAt, boostScore,
  *       author: { userId, nickname, gender, department, studentYear, bio, profileImages },
- *       keywords, images, commentCount
+ *       keywords, images, commentCount, viewCount
  *     }
  *   }
  * }

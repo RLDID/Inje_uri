@@ -1,6 +1,7 @@
 export interface FeedAuthorDto {
   userId: number;
   nickname: string;
+  gender: string;
   profileImage: string | null;
 }
 
@@ -24,6 +25,7 @@ export interface FeedListItemDto {
     sortOrder: number;
   }>;
   commentCount: number;
+  viewCount: number;
 }
 
 export interface FeedListDto {
@@ -65,7 +67,13 @@ export interface FeedDetailDto {
     keywords: FeedKeywordDto[];
     images: FeedDetailImageDto[];
     commentCount: number;
+    viewCount: number;
   };
+}
+
+export interface RecordFeedViewResultDto {
+  recorded: true;
+  viewCount: number;
 }
 
 export interface KeywordListItemDto {

@@ -1,5 +1,47 @@
+export const PROFILE_CATEGORY_CODES = [
+  'lifestyle',
+  'drinking',
+  'smoking',
+  'mbti',
+  'personality',
+  'conversation',
+  'interests',
+  'desired_vibe',
+  'date_style',
+  'deal_breakers',
+] as const;
+
+export type ProfileCategoryCode = typeof PROFILE_CATEGORY_CODES[number];
+
+export const ABOUT_ME_CATEGORY_CODES = [
+  'lifestyle',
+  'drinking',
+  'smoking',
+  'mbti',
+  'personality',
+  'conversation',
+  'interests',
+] as const satisfies readonly ProfileCategoryCode[];
+
+export const DESIRED_PARTNER_CATEGORY_CODES = [
+  'desired_vibe',
+  'date_style',
+  'deal_breakers',
+] as const satisfies readonly ProfileCategoryCode[];
+
+export interface KeywordSelectionPayload {
+  categoryCode: ProfileCategoryCode;
+  keywordCodes: string[];
+}
+
+export interface RawKeywordSelectionGroup {
+  categoryCode?: string;
+  categoryName?: string;
+  keywords?: Array<{ code?: string; label?: string }>;
+}
+
 export interface KeywordCategory {
-  id: string;
+  id: ProfileCategoryCode;
   label: string;
   type: 'single' | 'multi';
   maxSelections?: number;
@@ -113,7 +155,7 @@ export const PROFILE_CATEGORIES: KeywordCategory[] = [
   { id: 'personality', label: '성격 키워드', type: 'multi', maxSelections: 5, belongsTo: 'aboutMe', options: PERSONALITY_OPTIONS },
   { id: 'conversation', label: '대화 스타일', type: 'single', belongsTo: 'aboutMe', options: CONVERSATION_OPTIONS },
   { id: 'interests', label: '관심사', type: 'multi', maxSelections: 7, belongsTo: 'aboutMe', options: INTEREST_OPTIONS },
-  { id: 'vibe', label: '원하는 만남 분위기', type: 'multi', maxSelections: 3, belongsTo: 'desiredPartner', options: VIBE_OPTIONS },
-  { id: 'dateStyle', label: '선호하는 데이트', type: 'single', belongsTo: 'desiredPartner', options: DATE_STYLE_OPTIONS },
-  { id: 'dealBreakers', label: '피하고 싶은 조건', type: 'multi', maxSelections: 3, belongsTo: 'desiredPartner', options: DEALBREAKER_OPTIONS },
+  { id: 'desired_vibe', label: '원하는 만남 분위기', type: 'multi', maxSelections: 3, belongsTo: 'desiredPartner', options: VIBE_OPTIONS },
+  { id: 'date_style', label: '선호하는 데이트', type: 'single', belongsTo: 'desiredPartner', options: DATE_STYLE_OPTIONS },
+  { id: 'deal_breakers', label: '피하고 싶은 조건', type: 'multi', maxSelections: 3, belongsTo: 'desiredPartner', options: DEALBREAKER_OPTIONS },
 ];

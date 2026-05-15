@@ -13,6 +13,7 @@ const feedListSelect = {
     select: {
       id: true,
       nickname: true,
+      gender: true,
       userProfileImages: {
         where: { is_primary: true },
         select: { image_url: true },
@@ -31,7 +32,7 @@ const feedListSelect = {
     orderBy: { sort_order: "asc" as const },
     select: { id: true, image_url: true, sort_order: true },
   },
-  _count: { select: { comments: true } },
+  _count: { select: { comments: true, views: true } },
 } satisfies Prisma.SelfDateFeedSelect;
 
 export type FeedListRow = Prisma.SelfDateFeedGetPayload<{ select: typeof feedListSelect }>;
@@ -71,7 +72,7 @@ const feedDetailSelect = {
     orderBy: { sort_order: "asc" as const },
     select: { id: true, image_url: true, sort_order: true },
   },
-  _count: { select: { comments: true } },
+  _count: { select: { comments: true, views: true } },
 } satisfies Prisma.SelfDateFeedSelect;
 
 const feedForUpdateSelect = {
@@ -85,6 +86,7 @@ const feedForUpdateSelect = {
 const feedForViewSelect = {
   id: true,
   status: true,
+  expires_at: true,
 } satisfies Prisma.SelfDateFeedSelect;
 
 export type FeedDetailRow = Prisma.SelfDateFeedGetPayload<{ select: typeof feedDetailSelect }>;
@@ -300,6 +302,12 @@ export class FeedRepository {
         viewer_user_id: viewerUserId,
       },
       update: {},
+    });
+  }
+
+  async countFeedViews(feedId: number): Promise<number> {
+    return this.db.feedView.count({
+      where: { feed_id: feedId },
     });
   }
 

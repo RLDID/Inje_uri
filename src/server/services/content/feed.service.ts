@@ -15,6 +15,7 @@ import type {
   FeedListItemDto,
   KeywordListDto,
   KeywordListItemDto,
+  RecordFeedViewResultDto,
 } from "@/lib/types/feed";
 
 const FEED_PAGE_SIZE = 20;
@@ -31,6 +32,7 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
     author: {
       userId: row.author_user.id,
       nickname: row.author_user.nickname,
+      gender: row.author_user.gender,
       profileImage: row.author_user.userProfileImages[0]?.image_url ?? null,
     },
     keywords: row.keywords.map((k) => ({
@@ -44,6 +46,7 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
       sortOrder: image.sort_order,
     })),
     commentCount: row._count.comments,
+    viewCount: row._count.views,
   };
 }
 
@@ -80,6 +83,7 @@ function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
         sortOrder: image.sort_order,
       })),
       commentCount: row._count.comments,
+      viewCount: row._count.views,
     },
   };
 }
@@ -311,7 +315,7 @@ export async function deleteFeed(
 export async function recordFeedView(
   feedId: number,
   viewerUserId: number,
-): Promise<{ recorded: true }> {
+): Promise<RecordFeedViewResultDto> {
   const feed = await repo.findFeedForView(feedId);
   if (!feed) {
     throw new AppError("FEED_NOT_FOUND", "존재하지 않는 피드입니다.");
@@ -321,8 +325,15 @@ export async function recordFeedView(
     throw new AppError("FEED_NOT_ACTIVE", "활성 상태가 아닌 피드입니다.");
   }
 
+  if (feed.expires_at <= new Date()) {
+    throw new AppError("FEED_NOT_ACTIVE", "만료된 피드입니다.");
+  }
+
   await repo.upsertFeedView(feedId, viewerUserId);
-  return { recorded: true };
+  return {
+    recorded: true,
+    viewCount: await repo.countFeedViews(feedId),
+  };
 }
 
 export async function listKeywords(): Promise<KeywordListDto> {

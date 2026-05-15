@@ -40,6 +40,7 @@ const myCommentedFeedSelect = {
           },
         },
       },
+      _count: { select: { views: true } },
     },
   },
 } satisfies Prisma.FeedCommentSelect;
