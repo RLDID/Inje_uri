@@ -1,3 +1,6 @@
+import { randomInt } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
+import path from 'node:path';
 import bcrypt from 'bcrypt';
 import {
   BUS_INJE_CHECK_ENDPOINT,
@@ -39,6 +42,35 @@ export interface RegisterInput {
   realName: string;
   email: string;
   university: string;
+}
+
+const DEFAULT_PROFILE_IMAGE_DIRS = [
+  {
+    publicUrlPrefix: '/bear-example',
+    directory: path.join(process.cwd(), 'public', 'bear-example'),
+  },
+  {
+    publicUrlPrefix: '/brand/bear-example',
+    directory: path.join(process.cwd(), 'public', 'brand', 'bear-example'),
+  },
+];
+const DEFAULT_PROFILE_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif']);
+
+async function getRandomDefaultProfileImageUrl(): Promise<string | null> {
+  for (const source of DEFAULT_PROFILE_IMAGE_DIRS) {
+    const entries = await readdir(source.directory, { withFileTypes: true }).catch(() => []);
+    const imageFileNames = entries
+      .filter((entry) => entry.isFile() && DEFAULT_PROFILE_IMAGE_EXTENSIONS.has(path.extname(entry.name).toLowerCase()))
+      .map((entry) => entry.name)
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true }));
+
+    if (imageFileNames.length > 0) {
+      const fileName = imageFileNames[randomInt(imageFileNames.length)];
+      return `${source.publicUrlPrefix}/${encodeURIComponent(fileName)}`;
+    }
+  }
+
+  return null;
 }
 
 function parseUpstreamInjeBody(rawText: string): { status?: string; message?: string } | null {
@@ -174,6 +206,7 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
   }
 
   const passwordHash = await bcrypt.hash(input.password, 10);
+  const defaultProfileImageUrl = await getRandomDefaultProfileImageUrl();
   const user = await createUser({
     login_id: input.loginId,
     real_name: input.realName,
@@ -188,6 +221,17 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
     department: input.department,
     student_year: input.studentYear,
     student_number: preSignup.studentNumber,
+    ...(defaultProfileImageUrl
+      ? {
+          userProfileImages: {
+            create: {
+              image_url: defaultProfileImageUrl,
+              sort_order: 1,
+              is_primary: true,
+            },
+          },
+        }
+      : {}),
   });
 
   await clearPreSignupVerificationToken(preSignupToken);
