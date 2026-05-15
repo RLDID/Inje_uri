@@ -24,6 +24,7 @@ interface RegisterBody {
   realName?: unknown;
   email?: unknown;
   university?: unknown;
+  keywordSelections?: unknown;
 }
 
 function normalizeString(value: unknown): string {
@@ -114,6 +115,7 @@ function parseRegisterInput(body: RegisterBody): RegisterInput {
     gender,
     age,
     studentYear,
+    keywordSelections: body.keywordSelections,
   };
 }
 
