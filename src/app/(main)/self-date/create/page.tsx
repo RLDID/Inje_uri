@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { PageContainer, PageContent } from '@/components/layout';
 import { BottomSheet, CenteredModal, useToast } from '@/components/ui';
 import { createFeed, feedCategoriesToKeywordIds } from '@/lib/api/feeds';
-import { SELFDATE_KEYWORD_OPTIONS, getFeedFilterCategoryId } from '@/lib/constants';
+import { SELFDATE_KEYWORD_OPTIONS } from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
 import {
   analyzeFeedImage,
@@ -412,7 +412,7 @@ function CreateStoryPageContent() {
         images,
       });
       showToast('피드를 올렸어요!', 'success');
-      router.push(`/self-date?filter=${getFeedFilterCategoryId(selectedCategories)}`);
+      router.push('/self-date?filter=all');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '피드를 올리지 못했어요.', 'error');
     }

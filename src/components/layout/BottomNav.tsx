@@ -97,12 +97,14 @@ function ChatIcon({ active }: { active: boolean }) {
   );
 }
 
-function UserIcon({ active }: { active: boolean }) {
+function PawIcon({ active }: { active: boolean }) {
   if (active) {
     return (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-        <circle cx="12" cy="7.5" r="3.6" />
-        <path d="M4.9 19.35c.68-3.32 3.36-5.45 7.1-5.45s6.42 2.13 7.1 5.45c.15.75-.43 1.4-1.19 1.4H6.09c-.76 0-1.34-.65-1.19-1.4Z" />
+        <circle cx="5.9" cy="9" r="2.3" />
+        <circle cx="12" cy="6.35" r="2.4" />
+        <circle cx="18.1" cy="9" r="2.3" />
+        <ellipse cx="12" cy="16.25" rx="5.6" ry="4" />
       </svg>
     );
   }
@@ -119,8 +121,10 @@ function UserIcon({ active }: { active: boolean }) {
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <circle cx="12" cy="7.5" r="3.4" />
-      <path d="M5 20.25c.68-3.45 3.33-5.45 7-5.45s6.32 2 7 5.45" />
+      <circle cx="5.9" cy="9" r="2" />
+      <circle cx="12" cy="6.35" r="2.1" />
+      <circle cx="18.1" cy="9" r="2" />
+      <ellipse cx="12" cy="16.25" rx="5.35" ry="3.8" />
     </svg>
   );
 }
@@ -148,7 +152,7 @@ const navItems: NavItem[] = [
     id: 'my',
     label: '마이',
     href: '/my',
-    icon: (active) => <UserIcon active={active} />,
+    icon: (active) => <PawIcon active={active} />,
   },
 ];
 

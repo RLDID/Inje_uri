@@ -11,6 +11,7 @@ import { NoStories, BottomSheet, useToast } from '@/components/ui';
 import { createFeedComment, getFeeds } from '@/lib/api/feeds';
 import {
   buildProfileDetailHref,
+  buildSelfDateMyPostsHref,
   buildSelfDateDetailHref,
   readRouteViewState,
   useCurrentRouteContext,
@@ -72,6 +73,31 @@ function SlidersIcon({ onClick }: { onClick: () => void }) {
         <circle cx="16" cy="17" r="2" />
       </svg>
     </button>
+  );
+}
+
+function MyFeedsIcon({ href }: { href: string }) {
+  return (
+    <Link
+      href={href}
+      className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors active:bg-[var(--color-chip-background)]"
+      aria-label="My feeds"
+    >
+      <svg
+        width="26"
+        height="26"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="8.5" r="3" />
+        <path d="M5.5 19c1.1-3.2 3.5-5 6.5-5s5.4 1.8 6.5 5" />
+      </svg>
+    </Link>
   );
 }
 
@@ -416,7 +442,15 @@ function SelfDatePageContent() {
           framed={false}
           logoClassName="drop-shadow-[0_2px_2px_rgba(34,34,34,0.12)]"
         />
-        <SlidersIcon onClick={() => setIsFilterOpen((prevIsFilterOpen) => !prevIsFilterOpen)} />
+        <div className="flex items-center gap-1">
+          <MyFeedsIcon
+            href={buildSelfDateMyPostsHref({
+              sourcePath: currentPath,
+              fallbackPath: currentPath,
+            })}
+          />
+          <SlidersIcon onClick={() => setIsFilterOpen((prevIsFilterOpen) => !prevIsFilterOpen)} />
+        </div>
         {/*
         title="지금 우리"
         subtitle="2시간 동안만 열리는 가벼운 피드를 둘러보세요."
