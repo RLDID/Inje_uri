@@ -33,6 +33,35 @@ function parseIdList(value: unknown): number[] | null {
   return ids.every((id) => Number.isInteger(id)) ? ids : null;
 }
 
+function parseStringList(value: unknown): string[] | null {
+  if (Array.isArray(value)) {
+    const items = value.map((item) => String(item).trim()).filter(Boolean);
+    return items.length > 0 ? items : null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      const items = parsed.map((item) => String(item).trim()).filter(Boolean);
+      return items.length > 0 ? items : null;
+    }
+  } catch {
+    // Fall through to comma-separated parsing.
+  }
+
+  const items = trimmed.split(",").map((item) => item.trim()).filter(Boolean);
+  return items.length > 0 ? items : null;
+}
+
 async function parseCreateFeedRequest(request: NextRequest) {
   const contentType = request.headers.get("content-type") ?? "";
 
@@ -40,16 +69,26 @@ async function parseCreateFeedRequest(request: NextRequest) {
     const formData = await request.formData();
     const text = formData.get("text");
     const feedKeywordIds = parseIdList(formData.get("feedKeywordIds"));
+    const feedKeywordCodes = parseStringList(formData.get("feedKeywordCodes"));
     const images = formData
       .getAll("images")
       .filter((entry): entry is File => entry instanceof File && entry.size > 0);
 
-    return { text, feedKeywordIds, images };
+    return { text, feedKeywordIds, feedKeywordCodes, images };
   }
 
   const body = await request.json();
-  const { text, feedKeywordIds } = body as { text: unknown; feedKeywordIds: unknown };
-  return { text, feedKeywordIds: parseIdList(feedKeywordIds), images: [] as File[] };
+  const { text, feedKeywordIds, feedKeywordCodes } = body as {
+    text: unknown;
+    feedKeywordIds: unknown;
+    feedKeywordCodes: unknown;
+  };
+  return {
+    text,
+    feedKeywordIds: parseIdList(feedKeywordIds),
+    feedKeywordCodes: parseStringList(feedKeywordCodes),
+    images: [] as File[],
+  };
 }
 
 /**
@@ -137,24 +176,24 @@ export async function POST(request: NextRequest) {
     const user = await getAuthUser(request);
     if (!user) return fail("UNAUTHORIZED", "인증이 필요합니다.");
 
-    const { text, feedKeywordIds, images } = await parseCreateFeedRequest(request);
+    const { text, feedKeywordIds, feedKeywordCodes, images } = await parseCreateFeedRequest(request);
 
     if (typeof text !== "string" || !text.trim()) {
       return fail("INVALID_TEXT", "피드 본문은 빈 값이 아닌 문자열이어야 합니다.");
     }
 
-    if (!feedKeywordIds || feedKeywordIds.length === 0) {
+    if ((!feedKeywordIds || feedKeywordIds.length === 0) && (!feedKeywordCodes || feedKeywordCodes.length === 0)) {
       return fail("INVALID_KEYWORDS", "피드 키워드 ID 배열은 1개 이상이어야 합니다.");
     }
 
-    const hasInvalidId = feedKeywordIds.some((id) => typeof id !== "number" || !Number.isInteger(id));
+    const hasInvalidId = feedKeywordIds?.some((id) => typeof id !== "number" || !Number.isInteger(id)) ?? false;
     if (hasInvalidId) {
       return fail("INVALID_KEYWORD_ID", "피드 키워드 ID는 모두 정수여야 합니다.");
     }
 
     const authorUserId = user.id;
 
-    const data = await createFeed(authorUserId, text, feedKeywordIds, images);
+    const data = await createFeed(authorUserId, text, { ids: feedKeywordIds, codes: feedKeywordCodes }, images);
     return ok(data);
   } catch (error) {
     if (error instanceof AppError) return fail(error.code, error.message);

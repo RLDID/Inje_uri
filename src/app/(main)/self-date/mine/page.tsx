@@ -14,6 +14,7 @@ function SelfDateMyStoriesPageContent() {
       title="내 피드"
       subtitle="작성한 피드와 보낸 반응을 함께 확인해요"
       onBack={goBack}
+      showTabs={false}
     />
   );
 }

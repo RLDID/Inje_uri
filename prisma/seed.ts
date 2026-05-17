@@ -286,6 +286,7 @@ const feedKeywordSeeds = [
   { code: "reading",    name: "독서" },
   { code: "chat",       name: "수다" },
   { code: "hobby",      name: "취미" },
+  { code: "festival",   name: "축제" },
 ];
 
 // ─────────────────────────────────────────────

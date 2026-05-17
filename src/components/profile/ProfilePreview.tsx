@@ -127,13 +127,6 @@ export function ProfilePreview({
                 <h2 className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-text-primary)]">
                   {user.nickname}
                 </h2>
-                {user.isVerified && (
-                  <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-[#64B5F6] text-white">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                      <path d="m5 12 4 4L19 6" />
-                    </svg>
-                  </span>
-                )}
                 {user.isGraduate && (
                   <span className="rounded-full bg-[var(--color-surface-secondary)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
                     졸업생

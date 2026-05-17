@@ -20,7 +20,7 @@ export async function getFeed(feedId: string | number): Promise<Story> {
   return mapFeedDetailToStory(await apiGet<FeedDetailDto>(`/api/feeds/${feedId}`));
 }
 
-export async function createFeed(input: { text: string; feedKeywordIds: number[]; images?: File[] }) {
+export async function createFeed(input: { text: string; feedKeywordIds?: number[]; feedKeywordCodes?: string[]; images?: File[] }) {
   return apiPost('/api/feeds', buildFeedFormData(input));
 }
 
@@ -28,6 +28,7 @@ export async function updateFeed(input: {
   feedId: string | number;
   text?: string;
   feedKeywordIds?: number[];
+  feedKeywordCodes?: string[];
   images?: File[];
   deleteImageIds?: Array<string | number>;
 }) {
@@ -51,7 +52,7 @@ export async function getMyFeeds(): Promise<Story[]> {
       createdAt: string;
       updatedAt: string;
       expiresAt: string;
-      keywords: Array<{ feedKeywordId: number; name: string }>;
+      keywords: Array<{ feedKeywordId: number; code?: string; name: string }>;
       images?: Array<{ imageId: number; imageUrl: string; sortOrder: number }>;
       commentCount: number;
       viewCount: number;
@@ -68,8 +69,8 @@ export async function getMyFeeds(): Promise<Story[]> {
       text: data.feed.text,
       images: (data.feed.images ?? []).map((image) => image.imageUrl).filter(Boolean),
     },
-    category: feedKeywordIdToCategory(data.feed.keywords[0]?.feedKeywordId),
-    categories: data.feed.keywords.map((keyword) => feedKeywordIdToCategory(keyword.feedKeywordId)),
+    category: feedKeywordToCategory(data.feed.keywords[0]),
+    categories: data.feed.keywords.map(feedKeywordToCategory),
     viewCount: data.feed.viewCount,
     createdAt: new Date(data.feed.createdAt),
     expiresAt: new Date(data.feed.expiresAt),
@@ -88,6 +89,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
         status: string;
         expiresAt: string;
         viewCount: number;
+        keywords?: Array<{ feedKeywordId: number; code?: string; name: string }>;
         author: { userId: number; nickname: string; gender: string; profileImage: string | null };
       };
     }>;
@@ -115,8 +117,8 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
       text: item.feed.text,
       images: [],
     },
-    category: 'hobby',
-    categories: ['hobby'],
+    category: feedKeywordToCategory(item.feed.keywords?.[0]),
+    categories: item.feed.keywords?.map(feedKeywordToCategory) ?? ['hobby'],
     viewCount: item.feed.viewCount,
     createdAt: new Date(item.comment.createdAt),
     expiresAt: new Date(item.feed.expiresAt),
@@ -126,7 +128,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
 }
 
 export async function getFeedKeywords() {
-  return apiGet<{ items: Array<{ feedKeywordId: number; name: string; sortOrder: number }> }>('/api/feeds/keywords');
+  return apiGet<{ items: Array<{ feedKeywordId: number; code: string; name: string; sortOrder: number }> }>('/api/feeds/keywords');
 }
 
 export async function getFeedComments(feedId: string | number): Promise<FeedReaction[]> {
@@ -170,20 +172,21 @@ export async function selectFeedCommentChat(commentId: string | number) {
   return apiPost<{ chatRoomId: number }>(`/api/feeds/comments/${commentId}/select-chat`);
 }
 
-export function feedCategoriesToKeywordIds(categories: FeedCategory[]): number[] {
-  const map: Record<FeedCategory, number> = {
-    walk: 1,
-    cafe: 2,
-    food: 3,
-    study: 4,
-    movie: 5,
-    drive: 6,
-    exercise: 7,
-    exhibition: 8,
-    drink: 9,
-    book: 10,
-    talk: 11,
-    hobby: 12,
+export function feedCategoriesToKeywordCodes(categories: FeedCategory[]): string[] {
+  const map: Record<FeedCategory, string> = {
+    walk: 'walk',
+    cafe: 'cafe',
+    food: 'restaurant',
+    study: 'study',
+    movie: 'movie',
+    drive: 'drive',
+    exercise: 'exercise',
+    exhibition: 'exhibition',
+    drink: 'drink',
+    book: 'reading',
+    talk: 'chat',
+    hobby: 'hobby',
+    festival: 'festival',
   };
   return Array.from(new Set(categories.map((category) => map[category]).filter(Boolean)));
 }
@@ -191,12 +194,14 @@ export function feedCategoriesToKeywordIds(categories: FeedCategory[]): number[]
 function buildFeedFormData(input: {
   text?: string;
   feedKeywordIds?: number[];
+  feedKeywordCodes?: string[];
   images?: File[];
   deleteImageIds?: Array<string | number>;
 }) {
   const formData = new FormData();
   if (input.text !== undefined) formData.append('text', input.text);
   if (input.feedKeywordIds !== undefined) formData.append('feedKeywordIds', JSON.stringify(input.feedKeywordIds));
+  if (input.feedKeywordCodes !== undefined) formData.append('feedKeywordCodes', JSON.stringify(input.feedKeywordCodes));
   if (input.deleteImageIds !== undefined) formData.append('deleteImageIds', JSON.stringify(input.deleteImageIds));
   for (const image of input.images ?? []) {
     formData.append('images', image);
@@ -204,7 +209,26 @@ function buildFeedFormData(input: {
   return formData;
 }
 
-function feedKeywordIdToCategory(feedKeywordId?: number): FeedCategory {
+function feedKeywordToCategory(keyword?: { feedKeywordId?: number; code?: string }): FeedCategory {
+  if (keyword?.code) {
+    const codeMap: Record<string, FeedCategory> = {
+      walk: 'walk',
+      cafe: 'cafe',
+      restaurant: 'food',
+      study: 'study',
+      movie: 'movie',
+      drive: 'drive',
+      exercise: 'exercise',
+      exhibition: 'exhibition',
+      drink: 'drink',
+      reading: 'book',
+      chat: 'talk',
+      hobby: 'hobby',
+      festival: 'festival',
+    };
+    return codeMap[keyword.code] ?? 'hobby';
+  }
+
   const map: Record<number, FeedCategory> = {
     1: 'walk',
     2: 'cafe',
@@ -219,5 +243,5 @@ function feedKeywordIdToCategory(feedKeywordId?: number): FeedCategory {
     11: 'talk',
     12: 'hobby',
   };
-  return map[feedKeywordId ?? 0] ?? 'hobby';
+  return map[keyword?.feedKeywordId ?? 0] ?? 'hobby';
 }

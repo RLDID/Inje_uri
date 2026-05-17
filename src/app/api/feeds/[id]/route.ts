@@ -37,6 +37,39 @@ function parseIdList(value: unknown): number[] | null {
   return ids.every((id) => Number.isInteger(id)) ? ids : null;
 }
 
+function parseStringList(value: unknown): string[] | null {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    const items = value.map((item) => String(item).trim()).filter(Boolean);
+    return items.length > 0 ? items : null;
+  }
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (Array.isArray(parsed)) {
+      const items = parsed.map((item) => String(item).trim()).filter(Boolean);
+      return items.length > 0 ? items : null;
+    }
+  } catch {
+    // Fall through to comma-separated parsing.
+  }
+
+  const items = trimmed.split(",").map((item) => item.trim()).filter(Boolean);
+  return items.length > 0 ? items : null;
+}
+
 async function parseUpdateFeedRequest(request: NextRequest) {
   const contentType = request.headers.get("content-type") ?? "";
 
@@ -44,6 +77,7 @@ async function parseUpdateFeedRequest(request: NextRequest) {
     const formData = await request.formData();
     const text = formData.get("text");
     const feedKeywordIds = parseIdList(formData.get("feedKeywordIds"));
+    const feedKeywordCodes = parseStringList(formData.get("feedKeywordCodes"));
     const deleteImageIds = parseIdList(formData.get("deleteImageIds")) ?? [];
     const images = formData
       .getAll("images")
@@ -52,10 +86,11 @@ async function parseUpdateFeedRequest(request: NextRequest) {
     return {
       text,
       feedKeywordIds,
+      feedKeywordCodes,
       deleteImageIds,
       images,
       hasText: text !== null,
-      hasKeywords: formData.has("feedKeywordIds"),
+      hasKeywords: formData.has("feedKeywordIds") || formData.has("feedKeywordCodes"),
       hasImageChanges: images.length > 0 || formData.has("deleteImageIds"),
     };
   }
@@ -64,10 +99,11 @@ async function parseUpdateFeedRequest(request: NextRequest) {
   return {
     text: body.text,
     feedKeywordIds: parseIdList(body.feedKeywordIds),
+    feedKeywordCodes: parseStringList(body.feedKeywordCodes),
     deleteImageIds: parseIdList(body.deleteImageIds) ?? [],
     images: [] as File[],
     hasText: body.text !== undefined,
-    hasKeywords: body.feedKeywordIds !== undefined,
+    hasKeywords: body.feedKeywordIds !== undefined || body.feedKeywordCodes !== undefined,
     hasImageChanges: body.deleteImageIds !== undefined,
   };
 }
@@ -175,6 +211,7 @@ export async function PATCH(
     const {
       text,
       feedKeywordIds,
+      feedKeywordCodes,
       deleteImageIds,
       images,
       hasText,
@@ -191,11 +228,11 @@ export async function PATCH(
     }
 
     if (hasKeywords) {
-      if (!feedKeywordIds || feedKeywordIds.length === 0) {
+      if ((!feedKeywordIds || feedKeywordIds.length === 0) && (!feedKeywordCodes || feedKeywordCodes.length === 0)) {
         return fail("INVALID_KEYWORDS", "피드 키워드 ID 배열은 1개 이상이어야 합니다.");
       }
 
-      const hasInvalidId = feedKeywordIds.some((kwId) => typeof kwId !== "number" || !Number.isInteger(kwId));
+      const hasInvalidId = feedKeywordIds?.some((kwId) => typeof kwId !== "number" || !Number.isInteger(kwId)) ?? false;
       if (hasInvalidId) {
         return fail("INVALID_KEYWORD_ID", "피드 키워드 ID는 모두 정수여야 합니다.");
       }
@@ -209,7 +246,7 @@ export async function PATCH(
       currentUserId,
       feedId,
       typeof text === "string" ? text : undefined,
-      hasKeywords && feedKeywordIds ? feedKeywordIds : undefined,
+      hasKeywords ? { ids: feedKeywordIds, codes: feedKeywordCodes } : undefined,
       images,
       deleteImageIds,
     );
