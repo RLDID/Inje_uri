@@ -30,12 +30,17 @@ export function formatStudentYear(year: number): string {
   return '졸업생';
 }
 
-export function formatStudentNumber(studentNumber?: number): string {
+export function formatStudentNumber(studentNumber?: number | string | null): string {
   if (!studentNumber) {
     return '';
   }
 
-  const normalized = String(studentNumber).slice(-2).padStart(2, '0');
+  const digits = String(studentNumber).replace(/\D/g, '');
+  if (!digits) {
+    return '';
+  }
+
+  const normalized = digits.length >= 4 ? digits.slice(2, 4) : digits.slice(-2).padStart(2, '0');
   return `${normalized}학번`;
 }
 

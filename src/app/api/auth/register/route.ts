@@ -11,6 +11,7 @@ import { register, type RegisterInput } from '@/server/services/auth/auth.servic
 import { findCanonicalDepartment } from '@/lib/departments';
 
 export const runtime = 'nodejs';
+const PASSWORD_SPECIAL_CHARACTER_PATTERN = /[^\p{L}\p{N}\s]/u;
 
 interface RegisterBody {
   loginId?: unknown;
@@ -57,6 +58,10 @@ function toInteger(value: unknown): number | null {
   return null;
 }
 
+function hasPasswordSpecialCharacter(password: string): boolean {
+  return PASSWORD_SPECIAL_CHARACTER_PATTERN.test(password);
+}
+
 function parseRegisterInput(body: RegisterBody): RegisterInput {
   const loginId = normalizeString(body.loginId);
   const password = normalizeString(body.password);
@@ -85,6 +90,10 @@ function parseRegisterInput(body: RegisterBody): RegisterInput {
 
   if (password.length < 8) {
     throw new ApiError(ERROR.VALIDATION_ERROR, '비밀번호는 8자 이상이어야 합니다.');
+  }
+
+  if (!hasPasswordSpecialCharacter(password)) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '비밀번호에는 특수문자를 1개 이상 포함해주세요.');
   }
 
   if (!/^\d{6}$/.test(birth)) {

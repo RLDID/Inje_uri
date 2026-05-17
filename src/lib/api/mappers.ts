@@ -24,7 +24,7 @@ export type ApiUserProfile = {
     university?: string;
     department?: string;
     studentYear?: number;
-    student_number?: number;
+    student_number?: number | string | null;
     studentNumber?: number | string | null;
     bio?: string | null;
     profileImages?: Array<string | { id?: number | string; imageUrl?: string | null; sortOrder?: number; isPrimary?: boolean }>;
@@ -185,7 +185,7 @@ export function mapUserProfileToUser(input: ApiUserProfile): User {
     university: source.university ?? '인제대학교',
     department: source.department ?? '',
     studentYear: source.studentYear ?? 1,
-    studentNumber: source.studentNumber ? Number(source.studentNumber) : undefined,
+    studentNumber: source.studentNumber ?? source.student_number ?? undefined,
     gender: normalizeGender(source.gender),
     profileImages,
     profileImageMetas,
