@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
         keywords: {
           select: {
             feed_keyword: {
-              select: { feed_keyword_id: true, name: true },
+              select: { feed_keyword_id: true, code: true, name: true },
             },
           },
         },
@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
         boostScore: feed.boost_score,
         keywords: feed.keywords.map((k) => ({
           feedKeywordId: k.feed_keyword.feed_keyword_id,
+          code: k.feed_keyword.code,
           name: k.feed_keyword.name,
         })),
         images: feed.images.map((img) => ({

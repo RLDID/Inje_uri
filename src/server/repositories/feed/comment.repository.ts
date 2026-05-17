@@ -28,6 +28,13 @@ const myCommentedFeedSelect = {
       text: true,
       status: true,
       expires_at: true,
+      keywords: {
+        select: {
+          feed_keyword: {
+            select: { feed_keyword_id: true, code: true, name: true },
+          },
+        },
+      },
       author_user: {
         select: {
           id: true,

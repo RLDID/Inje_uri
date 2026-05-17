@@ -6,7 +6,12 @@ import Image from 'next/image';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { useToast } from '@/components/ui/Toast';
-import { PLACEHOLDER_PROFILE_IMAGE, getFeedCategoryLabel } from '@/lib/constants';
+import {
+  FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS,
+  PLACEHOLDER_PROFILE_IMAGE,
+  getFeedCategoryLabel,
+  isFestivalFeedCategory,
+} from '@/lib/constants';
 import { createFeedComment, getFeed, recordFeedView } from '@/lib/api/feeds';
 import { reportTarget } from '@/lib/api/safety';
 import {
@@ -22,7 +27,7 @@ import type { Story } from '@/lib/types';
 
 type OverlayState = 'none' | 'menu' | 'report' | 'interest';
 
-const PRIMARY_DETAIL_CATEGORIES = new Set(['walk', 'cafe', 'food', 'study']);
+const PRIMARY_DETAIL_CATEGORIES = new Set(['festival', 'walk', 'cafe', 'food', 'study']);
 
 function SelfDateDetailPageContent() {
   const params = useParams();
@@ -283,7 +288,9 @@ function SelfDateDetailPageContent() {
               <span
                 key={category}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                  PRIMARY_DETAIL_CATEGORIES.has(category)
+                  isFestivalFeedCategory(category)
+                    ? FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS
+                    : PRIMARY_DETAIL_CATEGORIES.has(category)
                     ? 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
                     : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
                 }`}
@@ -492,7 +499,9 @@ function SelfDateDetailPageContent() {
                 <span
                   key={category}
                   className={`rounded-full px-4 py-1.5 text-[14px] font-semibold ${
-                    PRIMARY_DETAIL_CATEGORIES.has(category)
+                    isFestivalFeedCategory(category)
+                      ? FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS
+                      : PRIMARY_DETAIL_CATEGORIES.has(category)
                       ? 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
                       : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
                   }`}

@@ -45,6 +45,11 @@ function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemD
       status: row.feed.status,
       expiresAt: row.feed.expires_at.toISOString(),
       viewCount: row.feed._count.views,
+      keywords: row.feed.keywords.map((keyword) => ({
+        feedKeywordId: keyword.feed_keyword.feed_keyword_id,
+        code: keyword.feed_keyword.code,
+        name: keyword.feed_keyword.name,
+      })),
         author: {
           userId: row.feed.author_user.id,
           nickname: row.feed.author_user.nickname,

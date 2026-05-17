@@ -9,7 +9,14 @@ import { CenteredModal, useToast } from '@/components/ui';
 import { FeedCard } from '@/components/self-date/FeedCard';
 import { getFeedComments, getMyCommentedFeeds, getMyFeeds, selectFeedCommentChat } from '@/lib/api/feeds';
 import { blockUser, reportTarget } from '@/lib/api/safety';
-import { SELFDATE_KEYWORD_OPTIONS, getFeedCategoryLabel } from '@/lib/constants';
+import {
+  FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS,
+  FESTIVAL_FEED_CATEGORY_SELECTED_CLASS,
+  FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS,
+  SELFDATE_KEYWORD_OPTIONS,
+  getFeedCategoryLabel,
+  isFestivalFeedCategory,
+} from '@/lib/constants';
 import { analyzeFeedImage, type FeedImageAsset } from '@/lib/utils/feedImage';
 import {
   buildChatRoomHref,
@@ -445,7 +452,11 @@ export function MyStoriesView({
                         {storyCategories.map((category) => (
                           <span
                             key={category}
-                            className="rounded-full bg-[var(--color-chip-background)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)]"
+                            className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
+                              isFestivalFeedCategory(category)
+                                ? FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS
+                                : 'bg-[var(--color-chip-background)] text-[var(--color-text-secondary)]'
+                            }`}
                           >
                             {getFeedCategoryLabel(category)}
                           </span>
@@ -851,7 +862,11 @@ export function MyStoriesView({
                       type="button"
                       onClick={() => handleToggleEditCategory(category)}
                       className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
-                        isSelected
+                        isFestivalFeedCategory(category)
+                          ? isSelected
+                            ? FESTIVAL_FEED_CATEGORY_SELECTED_CLASS
+                            : FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS
+                          : isSelected
                           ? 'bg-[var(--color-blue-secondary)] text-white'
                           : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
                       }`}

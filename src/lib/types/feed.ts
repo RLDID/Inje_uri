@@ -7,6 +7,7 @@ export interface FeedAuthorDto {
 
 export interface FeedKeywordDto {
   feedKeywordId: number;
+  code: string;
   name: string;
 }
 
@@ -78,6 +79,7 @@ export interface RecordFeedViewResultDto {
 
 export interface KeywordListItemDto {
   feedKeywordId: number;
+  code: string;
   name: string;
   sortOrder: number;
 }

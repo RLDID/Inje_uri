@@ -22,6 +22,11 @@ const FEED_PAGE_SIZE = 20;
 
 const repo = new FeedRepository(prisma);
 
+type FeedKeywordInput = {
+  ids?: number[] | null;
+  codes?: string[] | null;
+};
+
 function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
   return {
     feedId: row.id,
@@ -37,6 +42,7 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
     },
     keywords: row.keywords.map((k) => ({
       feedKeywordId: k.feed_keyword.feed_keyword_id,
+      code: k.feed_keyword.code,
       name: k.feed_keyword.name,
     })),
     primaryImage: row.images[0]?.image_url ?? null,
@@ -75,6 +81,7 @@ function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
       },
       keywords: row.keywords.map((keyword) => ({
         feedKeywordId: keyword.feed_keyword.feed_keyword_id,
+        code: keyword.feed_keyword.code,
         name: keyword.feed_keyword.name,
       })),
       images: row.images.map((image) => ({
@@ -90,14 +97,41 @@ function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
 
 function toKeywordListItemDto(row: {
   feed_keyword_id: number;
+  code: string;
   name: string;
   sort_order: number;
 }): KeywordListItemDto {
   return {
     feedKeywordId: row.feed_keyword_id,
+    code: row.code,
     name: row.name,
     sortOrder: row.sort_order,
   };
+}
+
+async function resolveFeedKeywordIds(input: FeedKeywordInput): Promise<number[]> {
+  if (input.codes && input.codes.length > 0) {
+    const codes = [...new Set(input.codes)];
+    const rows = await repo.findActiveKeywordsByCodes(codes);
+    if (rows.length !== codes.length) {
+      throw new AppError("INVALID_KEYWORD_ID", "존재하지 않거나 비활성 상태인 피드 키워드가 포함되어 있습니다.");
+    }
+
+    const idByCode = new Map(rows.map((row) => [row.code, row.feed_keyword_id]));
+    return codes.map((code) => idByCode.get(code)).filter((id): id is number => typeof id === "number");
+  }
+
+  const ids = [...new Set(input.ids ?? [])];
+  if (ids.length === 0) {
+    throw new AppError("INVALID_KEYWORDS", "피드 키워드는 1개 이상이어야 합니다.");
+  }
+
+  const validKeywords = await repo.findActiveKeywordsByIds(ids);
+  if (validKeywords.length !== ids.length) {
+    throw new AppError("INVALID_KEYWORD_ID", "존재하지 않거나 비활성 상태인 피드 키워드가 포함되어 있습니다.");
+  }
+
+  return ids;
 }
 
 export async function listFeeds(
@@ -124,7 +158,18 @@ export async function listFeeds(
     where.id = { notIn: [...commentedFeedIds] };
   }
 
-  if (keyword) where.keywords = { some: { feed_keyword: { name: keyword } } };
+  if (keyword) {
+    where.keywords = {
+      some: {
+        feed_keyword: {
+          OR: [
+            { code: keyword },
+            { name: keyword },
+          ],
+        },
+      },
+    };
+  }
 
   if (cursor) {
     const decoded = decodeFeedCursor(cursor);
@@ -155,7 +200,7 @@ export async function listFeeds(
 export async function createFeed(
   authorUserId: number,
   text: string,
-  feedKeywordIds: number[],
+  feedKeywordInput: FeedKeywordInput,
   images: File[] = [],
 ): Promise<CreateFeedResultDto> {
   const now = new Date();
@@ -165,10 +210,7 @@ export async function createFeed(
     throw new AppError("FEED_ALREADY_ACTIVE", "이미 활성 상태인 피드가 있습니다. 기존 피드가 만료된 후 작성해주세요.");
   }
 
-  const validKeywords = await repo.findActiveKeywordsByIds(feedKeywordIds);
-  if (validKeywords.length !== feedKeywordIds.length) {
-    throw new AppError("INVALID_KEYWORD_ID", "존재하지 않거나 비활성 상태인 키워드가 포함되어 있습니다.");
-  }
+  const feedKeywordIds = await resolveFeedKeywordIds(feedKeywordInput);
 
   const festivalSetting = await repo.findAppSetting("festival_mode");
   const expirySetting = await repo.findAppSetting("feed_expiry_hours");
@@ -234,7 +276,7 @@ export async function updateFeed(
   currentUserId: number,
   feedId: number,
   text: string | undefined,
-  feedKeywordIds: number[] | undefined,
+  feedKeywordInput: FeedKeywordInput | undefined,
   images: File[] = [],
   deleteImageIds: number[] = [],
 ): Promise<{ updated: true }> {
@@ -256,12 +298,7 @@ export async function updateFeed(
     throw new AppError("FEED_NOT_AVAILABLE", "만료된 피드는 수정할 수 없습니다.");
   }
 
-  if (feedKeywordIds) {
-    const validKeywords = await repo.findActiveKeywordsByIds(feedKeywordIds);
-    if (validKeywords.length !== feedKeywordIds.length) {
-      throw new AppError("INVALID_KEYWORD_ID", "존재하지 않거나 비활성 상태인 키워드가 포함되어 있습니다.");
-    }
-  }
+  const feedKeywordIds = feedKeywordInput ? await resolveFeedKeywordIds(feedKeywordInput) : undefined;
 
   const imageUrls = await Promise.all(images.map((image) => saveFeedImageFile(image)));
   const deletedImageUrls: string[] = [];

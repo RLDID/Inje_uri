@@ -18,7 +18,13 @@ import {
   writeRouteViewState,
 } from '@/lib/navigation';
 import { isValidFeed, matchesStoryFilter } from '@/lib/utils/feed';
-import { FEED_FILTER_CATEGORIES, type FeedFilterCategoryId } from '@/lib/constants';
+import {
+  FESTIVAL_FEED_CATEGORY_SELECTED_CLASS,
+  FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS,
+  FEED_FILTER_CATEGORIES,
+  isFestivalFeedCategory,
+  type FeedFilterCategoryId,
+} from '@/lib/constants';
 import {
   readSelfDateHiddenUserIds,
 } from '@/lib/utils';
@@ -485,7 +491,11 @@ function SelfDatePageContent() {
               onClick={() => updateFilter(category.id)}
               tabIndex={isFilterOpen ? 0 : -1}
               className={`shrink-0 rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
-                category.id === selectedFilter
+                isFestivalFeedCategory(category.id)
+                  ? category.id === selectedFilter
+                    ? FESTIVAL_FEED_CATEGORY_SELECTED_CLASS
+                    : FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS
+                  : category.id === selectedFilter
                   ? 'bg-[var(--color-pink-cta)] text-white shadow-sm'
                   : 'bg-[#F3F4F6] text-[var(--color-text-secondary)]'
               }`}

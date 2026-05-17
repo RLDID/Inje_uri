@@ -24,7 +24,7 @@ const feedListSelect = {
   keywords: {
     select: {
       feed_keyword: {
-        select: { feed_keyword_id: true, name: true },
+        select: { feed_keyword_id: true, code: true, name: true },
       },
     },
   },
@@ -64,7 +64,7 @@ const feedDetailSelect = {
   keywords: {
     select: {
       feed_keyword: {
-        select: { feed_keyword_id: true, name: true },
+        select: { feed_keyword_id: true, code: true, name: true },
       },
     },
   },
@@ -321,12 +321,23 @@ export class FeedRepository {
     });
   }
 
+  async findActiveKeywordsByCodes(codes: string[]) {
+    return this.db.feedKeyword.findMany({
+      where: {
+        code: { in: codes },
+        is_active: true,
+      },
+      select: { feed_keyword_id: true, code: true },
+    });
+  }
+
   async findActiveKeywords() {
     return this.db.feedKeyword.findMany({
       where: { is_active: true },
       orderBy: { sort_order: "asc" },
       select: {
         feed_keyword_id: true,
+        code: true,
         name: true,
         sort_order: true,
       },

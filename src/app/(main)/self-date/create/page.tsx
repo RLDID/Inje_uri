@@ -5,8 +5,13 @@ import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { PageContainer, PageContent } from '@/components/layout';
 import { BottomSheet, CenteredModal, useToast } from '@/components/ui';
-import { createFeed, feedCategoriesToKeywordIds } from '@/lib/api/feeds';
-import { SELFDATE_KEYWORD_OPTIONS } from '@/lib/constants';
+import { createFeed, feedCategoriesToKeywordCodes } from '@/lib/api/feeds';
+import {
+  FESTIVAL_FEED_CATEGORY_SELECTED_CLASS,
+  FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS,
+  SELFDATE_KEYWORD_OPTIONS,
+  isFestivalFeedCategory,
+} from '@/lib/constants';
 import { useSafeBack } from '@/lib/navigation';
 import {
   analyzeFeedImage,
@@ -408,7 +413,7 @@ function CreateStoryPageContent() {
       const images = await Promise.all(selectedImages.map(feedImageAssetToFile));
       await createFeed({
         text: text.trim(),
-        feedKeywordIds: feedCategoriesToKeywordIds(selectedCategories),
+        feedKeywordCodes: feedCategoriesToKeywordCodes(selectedCategories),
         images,
       });
       showToast('피드를 올렸어요!', 'success');
@@ -592,7 +597,11 @@ function CreateStoryPageContent() {
                   type="button"
                   onClick={() => handleCategoryToggle(option.id)}
                   className={`rounded-full border px-4 py-2 text-sm font-medium transition-all ${
-                    isSelected
+                    isFestivalFeedCategory(option.id)
+                      ? isSelected
+                        ? FESTIVAL_FEED_CATEGORY_SELECTED_CLASS
+                        : FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS
+                      : isSelected
                       ? 'border-[var(--color-blue-secondary)] bg-[var(--color-blue-secondary)] text-white shadow-sm'
                       : 'border-transparent bg-[var(--color-chip-background)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]'
                   }`}

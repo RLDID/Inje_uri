@@ -63,6 +63,7 @@ function hashCode(str: string): number {
 }
 
 export const FEED_CATEGORY_OPTIONS = [
+  { id: 'festival', label: '축제' },
   { id: 'walk', label: '산책' },
   { id: 'cafe', label: '카페' },
   { id: 'food', label: '맛집' },
@@ -81,6 +82,7 @@ export const SELFDATE_KEYWORD_OPTIONS = FEED_CATEGORY_OPTIONS;
 
 export const FEED_FILTER_CATEGORIES = [
   { id: 'all', label: '전체' },
+  { id: 'festival', label: '축제' },
   { id: 'walk', label: '산책' },
   { id: 'cafe', label: '카페' },
   { id: 'food', label: '맛집' },
@@ -91,11 +93,24 @@ export const FEED_FILTER_CATEGORIES = [
 export type FeedFilterCategoryId = (typeof FEED_FILTER_CATEGORIES)[number]['id'];
 
 const PRIMARY_FEED_CATEGORY_IDS = new Set([
+  'festival',
   'walk',
   'cafe',
   'food',
   'study',
 ]);
+
+export const FESTIVAL_FEED_CATEGORY_ID = 'festival';
+export const FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS =
+  'bg-[#F5F3FF] text-[#6D28D9] ring-1 ring-[#C4B5FD]';
+export const FESTIVAL_FEED_CATEGORY_SELECTED_CLASS =
+  'border-[#8B5CF6] bg-[#8B5CF6] text-white shadow-[0_4px_10px_rgba(139,92,246,0.25)]';
+export const FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS =
+  'border-[#C4B5FD] bg-[#F5F3FF] text-[#6D28D9] hover:bg-[#EDE9FE]';
+
+export function isFestivalFeedCategory(category?: string | null): boolean {
+  return category === FESTIVAL_FEED_CATEGORY_ID;
+}
 
 export function getFeedFilterCategoryId(category?: string | string[] | null): FeedFilterCategoryId {
   if (!category || (Array.isArray(category) && category.length === 0)) {
