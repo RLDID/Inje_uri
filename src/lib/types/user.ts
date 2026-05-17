@@ -6,7 +6,7 @@ export interface User {
   university: string;
   department: string;
   studentYear: number;
-  studentNumber?: number;
+  studentNumber?: number | string;
   gender: 'male' | 'female';
   profileImages: string[];
   profileImageMetas?: Array<{

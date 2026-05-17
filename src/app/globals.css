@@ -109,6 +109,20 @@ body {
   overscroll-behavior-x: none;
 }
 
+.app-container.auth-background-page {
+  background-color: var(--color-surface);
+  box-shadow: none;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 @media (max-width: 430px) {
   .app-container {
     max-width: 100%;

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { FormEvent, startTransition, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PageContainer } from '@/components/layout';
-import { Button, Card, SegmentedControl, useToast } from '@/components/ui';
+import { useToast } from '@/components/ui';
 import { APP_NAME } from '@/lib/constants';
 
 type RecoveryMode = 'id' | 'password';
@@ -189,147 +189,258 @@ export function AccountRecoveryPageClient() {
   };
 
   const isBusy = isVerifying || isResetting;
+  const isPasswordResetReady = mode === 'password' && isVerified;
 
   return (
-    <PageContainer withBottomNav={false} className="flex min-h-dvh flex-col bg-[radial-gradient(circle_at_top,#e9f7fb_0%,#f3f7f8_45%,#eef3f4_100%)]">
-      <main className="flex flex-1 items-center px-[var(--page-padding-x)] py-10">
-        <Card variant="elevated" padding="lg" className="w-full border-[color-mix(in_srgb,var(--color-primary)_12%,var(--color-border-light))] bg-white/95 backdrop-blur">
-          <div className="mb-6">
+    <PageContainer
+      withBottomNav={false}
+      className="auth-background-page relative flex min-h-dvh flex-col overflow-hidden bg-white"
+    >
+      <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-[44dvh] min-h-[300px] bg-contain bg-bottom bg-no-repeat"
+        style={{ backgroundImage: "url('/brand/reset.png')" }}
+      />
+
+      <main className="relative z-10 flex flex-1 flex-col px-[var(--page-padding-x)] pb-8 pt-10">
+        <div className="w-full p-5">
+          <div className="mb-7">
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
               {APP_NAME}
             </p>
-            <h1 className="mt-2 break-keep text-[26px] font-semibold text-[var(--color-text-primary)]">
-              계정 찾기
+            <h1 className="mt-2 break-keep text-[28px] font-semibold text-[var(--color-text-primary)]">
+              {mode === 'id' ? '아이디 찾기' : '비밀번호 재설정'}
             </h1>
             <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
               가입할 때 인증한 학번과 생년월일로 본인 확인을 진행합니다.
             </p>
           </div>
 
-          <SegmentedControl
-            options={[
-              { value: 'id', label: '아이디 찾기' },
-              { value: 'password', label: '비밀번호 재설정' },
-            ]}
-            value={mode}
-            onChange={handleModeChange}
-            className="mb-6 w-full"
-            size="sm"
-          />
-
-          <form className="space-y-4" onSubmit={handleVerify}>
-            <LabeledInput label="학번">
-              <input
-                type="text"
-                inputMode="numeric"
-                value={studentNumber}
-                onChange={(event) => {
-                  setStudentNumber(event.target.value);
-                  resetResult();
-                }}
-                placeholder="예: 20231234"
-                className={inputClassName}
-                disabled={isBusy}
-              />
-            </LabeledInput>
-
-            <LabeledInput label="생년월일 (6자리)">
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={6}
-                value={birth}
-                onChange={(event) => {
-                  setBirth(event.target.value.replace(/\D/g, '').slice(0, 6));
-                  resetResult();
-                }}
-                placeholder="예: 020408"
-                className={inputClassName}
-                disabled={isBusy}
-              />
-            </LabeledInput>
-
-            <Button type="submit" fullWidth size="lg" loading={isVerifying}>
-              본인 확인
-            </Button>
-          </form>
-
-          {isVerified && (
-            <div className="mt-5 rounded-xl border border-[var(--color-primary)]/20 bg-[var(--color-primary-light)]/55 px-4 py-3 text-sm text-[var(--color-primary-dark)]">
-              아이디는 <strong>{loginId}</strong> 입니다.
-            </div>
-          )}
-
-          {mode === 'password' && isVerified && (
-            <form className="mt-5 space-y-4" onSubmit={handleResetPassword}>
-              <LabeledInput label="새 비밀번호">
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  placeholder="8자 이상"
-                  autoComplete="new-password"
-                  className={inputClassName}
-                  disabled={isBusy}
-                />
-              </LabeledInput>
-
-              <LabeledInput label="새 비밀번호 확인">
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  placeholder="새 비밀번호 확인"
-                  autoComplete="new-password"
-                  className={inputClassName}
-                  disabled={isBusy}
-                />
-              </LabeledInput>
-
-              <Button type="submit" fullWidth size="lg" loading={isResetting}>
+          <section className="mx-auto mt-[8vh] w-full max-w-[350px]">
+            <div className="mb-5 flex items-center gap-5">
+              <ModeButton active={mode === 'id'} onClick={() => handleModeChange('id')} disabled={isBusy}>
+                아이디 찾기
+              </ModeButton>
+              <ModeButton active={mode === 'password'} onClick={() => handleModeChange('password')} disabled={isBusy}>
                 비밀번호 재설정
-              </Button>
-            </form>
-          )}
+              </ModeButton>
+            </div>
 
-          {errorMessage && (
-            <p
-              role="alert"
-              className="mt-5 rounded-xl border border-[var(--color-secondary)]/25 bg-[var(--color-secondary-light)]/70 px-3 py-2 text-sm text-[var(--color-secondary-dark)]"
-            >
-              {errorMessage}
-            </p>
-          )}
+            {isPasswordResetReady ? (
+              <form onSubmit={handleResetPassword}>
+                <div className="space-y-2">
+                  <UnderlinedField fieldId="newPassword" icon={<LockIcon />} label="새 비밀번호">
+                    <input
+                      id="newPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                      placeholder="새 비밀번호"
+                      autoComplete="new-password"
+                      className={inputClassName}
+                      disabled={isBusy}
+                    />
+                  </UnderlinedField>
 
-          <Button
-            type="button"
-            variant="ghost"
-            fullWidth
-            className="mt-5"
-            disabled={isBusy}
-            onClick={() => router.push('/login')}
-          >
-            로그인으로 돌아가기
-          </Button>
-        </Card>
+                  <UnderlinedField fieldId="confirmPassword" icon={<LockIcon />} label="새 비밀번호 확인">
+                    <input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(event) => setConfirmPassword(event.target.value)}
+                      placeholder="새 비밀번호 확인"
+                      autoComplete="new-password"
+                      className={inputClassName}
+                      disabled={isBusy}
+                    />
+                  </UnderlinedField>
+                </div>
+
+                <div className="mt-7 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={resetResult}
+                    className="min-h-11 rounded-full px-1 text-sm font-semibold text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)]"
+                  >
+                    다시 인증
+                  </button>
+                  <CircleActionButton type="submit" loading={isResetting} disabled={isBusy} label="비밀번호 재설정" />
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerify}>
+                <div className="space-y-2">
+                  <UnderlinedField fieldId="recoveryStudentNumber" icon={<span className="text-lg font-semibold">#</span>} label="학번">
+                    <input
+                      id="recoveryStudentNumber"
+                      type="text"
+                      inputMode="numeric"
+                      value={studentNumber}
+                      onChange={(event) => {
+                        setStudentNumber(event.target.value);
+                        resetResult();
+                      }}
+                      placeholder="학번"
+                      className={inputClassName}
+                      disabled={isBusy}
+                    />
+                  </UnderlinedField>
+
+                  <UnderlinedField fieldId="recoveryBirth" icon={<CalendarIcon />} label="생년월일">
+                    <input
+                      id="recoveryBirth"
+                      type="text"
+                      inputMode="numeric"
+                      maxLength={6}
+                      value={birth}
+                      onChange={(event) => {
+                        setBirth(event.target.value.replace(/\D/g, '').slice(0, 6));
+                        resetResult();
+                      }}
+                      placeholder="생년월일 6자리"
+                      className={inputClassName}
+                      disabled={isBusy}
+                    />
+                  </UnderlinedField>
+                </div>
+
+                <div className="mt-7 flex items-center justify-between gap-4">
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    onClick={() => router.push('/login')}
+                    className="min-h-11 rounded-full px-1 text-sm font-semibold text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)]"
+                  >
+                    로그인
+                  </button>
+                  <CircleActionButton type="submit" loading={isVerifying} disabled={isBusy} label="본인 확인" />
+                </div>
+              </form>
+            )}
+
+            {mode === 'id' && isVerified && (
+              <div className="mt-5 rounded-xl border border-[var(--color-pink-cta)]/25 bg-white/82 px-4 py-3 text-sm text-[var(--color-text-primary)] backdrop-blur-sm">
+                아이디는 <strong>{loginId}</strong> 입니다.
+              </div>
+            )}
+
+            {errorMessage && (
+              <p
+                role="alert"
+                className="mt-4 rounded-xl border border-[var(--color-pink-cta)]/25 bg-white/82 px-3 py-2 text-sm text-[var(--color-text-primary)] backdrop-blur-sm"
+              >
+                {errorMessage}
+              </p>
+            )}
+          </section>
+        </div>
       </main>
     </PageContainer>
   );
 }
 
-function LabeledInput({
+function ModeButton({
+  active,
+  children,
+  disabled,
+  onClick,
+}: {
+  active: boolean;
+  children: ReactNode;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className={`min-h-10 border-b-2 px-1 text-sm font-semibold transition disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)] ${
+        active
+          ? 'border-[var(--color-action-primary)] text-[var(--color-text-primary)]'
+          : 'border-transparent text-[var(--color-text-tertiary)]'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function UnderlinedField({
+  fieldId,
+  icon,
   label,
   children,
 }: {
+  fieldId: string;
+  icon: ReactNode;
   label: string;
   children: ReactNode;
 }) {
   return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-[var(--color-text-primary)]">{label}</label>
+    <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
+      <label htmlFor={fieldId} className="sr-only">
+        {label}
+      </label>
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--color-text-secondary)]">
+        {icon}
+      </span>
       {children}
     </div>
   );
 }
 
-const inputClassName = 'w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 disabled:cursor-not-allowed disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)]';
+function CircleActionButton({
+  disabled,
+  label,
+  loading,
+  type,
+}: {
+  disabled: boolean;
+  label: string;
+  loading: boolean;
+  type: 'button' | 'submit';
+}) {
+  return (
+    <button
+      type={type}
+      disabled={disabled}
+      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-action-primary)] text-[var(--color-action-primary-text)] shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)]"
+      aria-label={label}
+    >
+      {loading ? (
+        <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
+        </svg>
+      ) : (
+        <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M5 12h14" />
+          <path d="m13 6 6 6-6 6" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect x="4" y="5" width="16" height="17" rx="2" />
+      <path d="M4 10h16" />
+    </svg>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="5" y="11" width="14" height="10" rx="2" />
+      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+const inputClassName = 'min-w-0 flex-1 bg-transparent text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none disabled:cursor-not-allowed';
