@@ -8,9 +8,8 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/brand/bear-hero-face2-icon.png',
+        url: '/brand/bear-logo.png',
         type: 'image/png',
-        sizes: '1024x1024',
       },
     ],
     apple: [
