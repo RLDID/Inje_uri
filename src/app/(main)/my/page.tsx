@@ -68,6 +68,18 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
+    id: 'blocks',
+    label: '차단한 사용자',
+    description: '내가 차단한 사용자를 확인하고 해제할 수 있어요.',
+    href: '/my/blocks',
+    icon: (
+      <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z" />
+        <path d="M9 12h6" />
+      </svg>
+    ),
+  },
+  {
     id: 'support',
     label: '고객센터',
     description: '문의와 이용 안내가 준비되는 대로 이곳에서 확인할 수 있어요.',
@@ -274,7 +286,7 @@ function MyPageContent() {
                   <span className="truncate text-[22px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
                     {currentUser.nickname}
                   </span>
-                  {currentUser.isVerified && (
+                  {/*
                     <span
                       className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#5BAEF6] text-white shadow-sm"
                       aria-label="학교 인증"
@@ -283,7 +295,7 @@ function MyPageContent() {
                         <path d="m5 12 4 4 10-10" />
                       </svg>
                     </span>
-                  )}
+                  */}
                 </div>
                 <p className="mt-1.5 truncate text-[14px] font-medium text-[var(--color-text-secondary)]">
                   {getUserAcademicLabel(currentUser)}

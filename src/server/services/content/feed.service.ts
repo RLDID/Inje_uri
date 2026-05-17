@@ -140,7 +140,11 @@ export async function listFeeds(
   cursor: string | null,
 ): Promise<FeedListDto> {
   const now = new Date();
-  const blockedUserIds = await repo.findBlockedUserIds(currentUserId);
+  const [blockedUserIds, commentedFeedIds, reportedFeedIds] = await Promise.all([
+    repo.findBlockedUserIds(currentUserId),
+    repo.findCommentedFeedIdsByUser(currentUserId),
+    repo.findReportedFeedIdsByUser(currentUserId),
+  ]);
 
   const where: Prisma.SelfDateFeedWhereInput = {
     status: "active",
@@ -153,9 +157,9 @@ export async function listFeeds(
     ...(blockedUserIds.size > 0 ? { notIn: [...blockedUserIds] } : {}),
   };
 
-  const commentedFeedIds = await repo.findCommentedFeedIdsByUser(currentUserId);
-  if (commentedFeedIds.size > 0) {
-    where.id = { notIn: [...commentedFeedIds] };
+  const excludedFeedIds = new Set([...commentedFeedIds, ...reportedFeedIds]);
+  if (excludedFeedIds.size > 0) {
+    where.id = { notIn: [...excludedFeedIds] };
   }
 
   if (keyword) {

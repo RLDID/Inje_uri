@@ -102,13 +102,6 @@ function RecentViewsPageContent() {
                       <span className="truncate text-[17px] font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
                         {user.nickname}
                       </span>
-                      {user.isVerified && (
-                        <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#5BAEF6] text-white">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                            <path d="m5 12 4 4 10-10" />
-                          </svg>
-                        </span>
-                      )}
                     </div>
                     <p className="mt-1 truncate text-[13px] font-medium text-[var(--color-text-secondary)]">
                       {getUserAcademicLabel(user)}

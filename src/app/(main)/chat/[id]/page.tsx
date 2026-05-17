@@ -14,7 +14,6 @@ import {
   normalizeChatMessages,
 } from '@/lib/utils/chat';
 import {
-  blockChatRoom,
   getChatMessages,
   getChatRooms,
   leaveChatRoom,
@@ -22,7 +21,7 @@ import {
   sendChatMessage,
 } from '@/lib/api/chat';
 import { getMe } from '@/lib/api/profile';
-import { reportTarget } from '@/lib/api/safety';
+import { blockUser, reportTarget } from '@/lib/api/safety';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { usePolling } from '@/lib/hooks/usePolling';
 import { buildProfileDetailHref, useCurrentRouteContext, useSafeBack } from '@/lib/navigation';
@@ -102,6 +101,10 @@ function getLastReadableMessage(messages: Message[]): Message | undefined {
   return messages
     .filter((message) => message.type !== 'system')
     .at(-1);
+}
+
+function isChatStartedSystemMessage(message: Message): boolean {
+  return message.type === 'system' && (message.systemKind === 'match_started' || !message.systemKind);
 }
 
 function isNearPageBottom(threshold = 160): boolean {
@@ -435,7 +438,7 @@ function ChatRoomPageContent() {
 
     if (confirmAction === 'block') {
       try {
-        await blockChatRoom(chat.id);
+        await blockUser(otherUser.id);
       } catch (error) {
         showToast(error instanceof Error ? error.message : '차단하지 못했습니다.', 'error');
         return;
@@ -654,7 +657,7 @@ function ChatRoomPageContent() {
 
         <div className="px-4 pt-4">
           {messages
-            .filter((message) => !(message.type === 'system' && message.systemKind === 'match_started'))
+            .filter((message) => !isChatStartedSystemMessage(message))
             .map((message) => (
               <ChatBubble key={message.id} message={message} currentUserId={currentUser.id} />
             ))}

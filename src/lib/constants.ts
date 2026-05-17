@@ -102,11 +102,11 @@ const PRIMARY_FEED_CATEGORY_IDS = new Set([
 
 export const FESTIVAL_FEED_CATEGORY_ID = 'festival';
 export const FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS =
-  'bg-[#F5F3FF] text-[#6D28D9] ring-1 ring-[#C4B5FD]';
+  'bg-[#F8F3FF] text-[#7B5EA7]';
 export const FESTIVAL_FEED_CATEGORY_SELECTED_CLASS =
-  'border-[#8B5CF6] bg-[#8B5CF6] text-white shadow-[0_4px_10px_rgba(139,92,246,0.25)]';
+  'border-transparent bg-[#BFA8EA] text-white shadow-[0_4px_10px_rgba(191,168,234,0.32)]';
 export const FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS =
-  'border-[#C4B5FD] bg-[#F5F3FF] text-[#6D28D9] hover:bg-[#EDE9FE]';
+  'border-transparent bg-[#F8F3FF] text-[#7B5EA7] hover:bg-[#F0E8FF]';
 
 export function isFestivalFeedCategory(category?: string | null): boolean {
   return category === FESTIVAL_FEED_CATEGORY_ID;

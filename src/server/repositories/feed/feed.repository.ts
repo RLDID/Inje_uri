@@ -108,6 +108,18 @@ export class FeedRepository {
     return new Set(rows.map((r) => r.feed_id));
   }
 
+  async findReportedFeedIdsByUser(userId: number): Promise<Set<number>> {
+    const rows = await this.db.report.findMany({
+      where: {
+        reporter_user_id: userId,
+        target_type: "feed",
+      },
+      select: { target_id: true },
+      distinct: ['target_id'],
+    });
+    return new Set(rows.map((r) => r.target_id));
+  }
+
   async findBlockedUserIds(userId: number): Promise<Set<number>> {
     const rows = await this.db.block.findMany({
       where: {

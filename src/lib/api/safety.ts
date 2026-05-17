@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPost } from '@/lib/api/client';
+import type { BlockListDto, BlockUserResultDto, CreateReportResultDto, PhoneBlockResultDto, UnblockResultDto } from '@/lib/types/safety';
 
 export async function reportTarget(input: {
   targetType: string;
@@ -7,7 +8,7 @@ export async function reportTarget(input: {
   description?: string | null;
   alsoBlock?: boolean;
 }) {
-  return apiPost('/api/reports', {
+  return apiPost<CreateReportResultDto>('/api/reports', {
     targetType: input.targetType,
     targetId: Number(input.targetId),
     reasonType: input.reasonType,
@@ -17,20 +18,20 @@ export async function reportTarget(input: {
 }
 
 export async function blockUser(userId: string | number, reason?: string | null) {
-  return apiPost('/api/blocks', {
+  return apiPost<BlockUserResultDto>('/api/blocks', {
     blockedUserId: Number(userId),
     reason: reason ?? null,
   });
 }
 
 export async function unblockUser(blockId: string | number) {
-  return apiDelete('/api/blocks', { body: { blockId: Number(blockId) } });
+  return apiDelete<UnblockResultDto>('/api/blocks', { body: { blockId: Number(blockId) } });
 }
 
 export async function getBlocks() {
-  return apiGet('/api/blocks');
+  return apiGet<BlockListDto>('/api/blocks');
 }
 
 export async function blockPhone(phoneNumberE164: string) {
-  return apiPost('/api/blocks/phone', { phoneNumberE164 });
+  return apiPost<PhoneBlockResultDto>('/api/blocks/phone', { phoneNumberE164 });
 }
