@@ -1,10 +1,8 @@
 'use client';
 
-import Image from 'next/image';
 import { useState } from 'react';
 
 type BrandLogoVariant = 'sm' | 'md' | 'lg';
-type ImageStatus = 'loading' | 'loaded' | 'error';
 
 interface BrandLogoProps {
   variant?: BrandLogoVariant;
@@ -82,12 +80,9 @@ export function BrandLogo({
   text = DEFAULT_TEXT,
   framed = true,
 }: BrandLogoProps) {
-  const [imageState, setImageState] = useState<{ src: string; status: ImageStatus }>({
-    src: logoSrc,
-    status: 'loading',
-  });
+  const [erroredLogoSrc, setErroredLogoSrc] = useState<string | null>(null);
   const styles = variantStyles[variant];
-  const imageStatus = imageState.src === logoSrc ? imageState.status : 'loading';
+  const hasImageError = erroredLogoSrc === logoSrc;
 
   return (
     <span
@@ -104,23 +99,22 @@ export function BrandLogo({
           logoClassName,
         )}
       >
-        {imageStatus !== 'error' ? (
-          <Image
+        {!hasImageError ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={logoSrc}
             alt=""
             width={styles.iconSize}
             height={styles.iconSize}
-            className={cx(
-              'h-full w-full object-contain transition-opacity duration-200',
-              imageStatus === 'loaded' ? 'opacity-100' : 'opacity-0',
-            )}
-            onLoad={() => setImageState({ src: logoSrc, status: 'loaded' })}
-            onError={() => setImageState({ src: logoSrc, status: 'error' })}
-            priority={false}
+            className="h-full w-full object-contain"
+            loading="eager"
+            decoding="sync"
+            draggable={false}
+            onError={() => setErroredLogoSrc(logoSrc)}
           />
         ) : null}
 
-        {imageStatus !== 'loaded' ? (
+        {hasImageError ? (
           <span
             aria-hidden="true"
             className={cx(
