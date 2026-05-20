@@ -19,7 +19,8 @@ export type FeedCategory =
   | 'drink'
   | 'book'
   | 'talk'
-  | 'hobby';
+  | 'hobby'
+  | 'festival';
 
 export interface Story {
   id: string;

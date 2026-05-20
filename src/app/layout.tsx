@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { ToastProvider } from '@/components/ui';
+import { StartPageAnimation } from '@/components/brand/StartPageAnimation';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -8,9 +9,8 @@ export const metadata: Metadata = {
   icons: {
     icon: [
       {
-        url: '/brand/bear-hero-face2-icon.png',
+        url: '/brand/bear-logo.png',
         type: 'image/png',
-        sizes: '1024x1024',
       },
     ],
     apple: [
@@ -47,6 +47,7 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ToastProvider>
           {children}
+          <StartPageAnimation />
         </ToastProvider>
       </body>
     </html>

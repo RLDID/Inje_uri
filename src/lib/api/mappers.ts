@@ -328,8 +328,8 @@ export function mapFeedListItemToStory(dto: FeedListItemDto): Story {
         order: image.sortOrder ?? 0,
       })).filter((image) => Boolean(image.imageUrl)),
     },
-    category: mapFeedKeywordToCategory(dto.keywords[0]?.feedKeywordId),
-    categories: dto.keywords.map((keyword) => mapFeedKeywordToCategory(keyword.feedKeywordId)),
+    category: mapFeedKeywordToCategory(dto.keywords[0]),
+    categories: dto.keywords.map(mapFeedKeywordToCategory),
     viewCount: dto.viewCount,
     createdAt: new Date(dto.createdAt),
     expiresAt: new Date(dto.expiresAt),
@@ -359,8 +359,8 @@ export function mapFeedDetailToStory(dto: FeedDetailDto): Story {
         order: image.sortOrder,
       })).filter((image) => Boolean(image.imageUrl)),
     },
-    category: mapFeedKeywordToCategory(feed.keywords[0]?.feedKeywordId),
-    categories: feed.keywords.map((keyword) => mapFeedKeywordToCategory(keyword.feedKeywordId)),
+    category: mapFeedKeywordToCategory(feed.keywords[0]),
+    categories: feed.keywords.map(mapFeedKeywordToCategory),
     viewCount: feed.viewCount,
     createdAt: new Date(feed.createdAt),
     expiresAt: new Date(feed.expiresAt),
@@ -418,7 +418,26 @@ function normalizeMessageType(type: string): Message['type'] {
   return 'text';
 }
 
-function mapFeedKeywordToCategory(feedKeywordId?: number): FeedCategory {
+function mapFeedKeywordToCategory(keyword?: { feedKeywordId?: number; code?: string }): FeedCategory {
+  if (keyword?.code) {
+    const codeMap: Record<string, FeedCategory> = {
+      walk: 'walk',
+      cafe: 'cafe',
+      restaurant: 'food',
+      study: 'study',
+      movie: 'movie',
+      drive: 'drive',
+      exercise: 'exercise',
+      exhibition: 'exhibition',
+      drink: 'drink',
+      reading: 'book',
+      chat: 'talk',
+      hobby: 'hobby',
+      festival: 'festival',
+    };
+    return codeMap[keyword.code] ?? 'hobby';
+  }
+
   const map: Record<number, FeedCategory> = {
     1: 'walk',
     2: 'cafe',
@@ -433,7 +452,7 @@ function mapFeedKeywordToCategory(feedKeywordId?: number): FeedCategory {
     11: 'talk',
     12: 'hobby',
   };
-  return map[feedKeywordId ?? 0] ?? 'hobby';
+  return map[keyword?.feedKeywordId ?? 0] ?? 'hobby';
 }
 
 function getFeedImages(dto: FeedListItemDto & { images?: Array<{ imageUrl?: string | null }> }): string[] {

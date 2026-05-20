@@ -30,6 +30,7 @@ export interface MyCommentedFeedItemDto {
     status: string;
     expiresAt: string;
     viewCount: number;
+    keywords: Array<{ feedKeywordId: number; code: string; name: string }>;
     author: {
       userId: number;
       nickname: string;

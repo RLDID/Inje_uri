@@ -201,9 +201,7 @@ export function ProfileCard({
               <h3 className="truncate text-[22px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
                 {user.nickname}
               </h3>
-              {user.isVerified && (
-                <span
-                  className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#5BAEF6] text-white shadow-sm"
+              {/*
                   aria-label="학교 인증"
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -211,6 +209,7 @@ export function ProfileCard({
                   </svg>
                 </span>
               )}
+              */}
             </div>
 
             <p className="mt-1.5 truncate text-[14px] font-medium text-[var(--color-text-secondary)]">

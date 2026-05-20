@@ -3,7 +3,12 @@
 import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import type { Story } from '@/lib/types';
-import { PLACEHOLDER_PROFILE_IMAGE, getFeedCategoryLabel } from '@/lib/constants';
+import {
+  FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS,
+  PLACEHOLDER_PROFILE_IMAGE,
+  getFeedCategoryLabel,
+  isFestivalFeedCategory,
+} from '@/lib/constants';
 import { getFeedRemainingTime, getStoryCategories, markFeedAsViewed } from '@/lib/utils/feed';
 import { getUserAcademicLabel } from '@/lib/utils';
 
@@ -19,6 +24,7 @@ interface FeedCardProps {
 }
 
 const PRIMARY_CATEGORY_PRIORITY = {
+  festival: -1,
   walk: 0,
   cafe: 1,
   food: 2,
@@ -168,7 +174,9 @@ export function FeedCard({
               <span
                 key={category}
                 className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                  category in PRIMARY_CATEGORY_PRIORITY
+                  isFestivalFeedCategory(category)
+                    ? FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS
+                    : category in PRIMARY_CATEGORY_PRIORITY
                     ? 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
                     : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
                 }`}

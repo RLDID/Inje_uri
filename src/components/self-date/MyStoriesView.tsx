@@ -5,11 +5,18 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
-import { CenteredModal, useToast } from '@/components/ui';
+import { CenteredModal, ConfirmSheet, useToast } from '@/components/ui';
 import { FeedCard } from '@/components/self-date/FeedCard';
-import { getFeedComments, getMyCommentedFeeds, getMyFeeds, selectFeedCommentChat } from '@/lib/api/feeds';
+import { deleteFeed, getFeedComments, getMyCommentedFeeds, getMyFeeds, selectFeedCommentChat } from '@/lib/api/feeds';
 import { blockUser, reportTarget } from '@/lib/api/safety';
-import { SELFDATE_KEYWORD_OPTIONS, getFeedCategoryLabel } from '@/lib/constants';
+import {
+  FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS,
+  FESTIVAL_FEED_CATEGORY_SELECTED_CLASS,
+  FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS,
+  SELFDATE_KEYWORD_OPTIONS,
+  getFeedCategoryLabel,
+  isFestivalFeedCategory,
+} from '@/lib/constants';
 import { analyzeFeedImage, type FeedImageAsset } from '@/lib/utils/feedImage';
 import {
   buildChatRoomHref,
@@ -105,6 +112,8 @@ export function MyStoriesView({
   const [isUpdatingEditImage, setIsUpdatingEditImage] = useState(false);
   const [reactionMenuTarget, setReactionMenuTarget] = useState<ReactionMenuTarget | null>(null);
   const [reactionActionTarget, setReactionActionTarget] = useState<ReactionActionTarget | null>(null);
+  const [deleteTargetStory, setDeleteTargetStory] = useState<Story | null>(null);
+  const [isDeletingFeed, setIsDeletingFeed] = useState(false);
   const [myStories, setMyStories] = useState<Story[]>([]);
   const [likedStories, setLikedStories] = useState<Story[]>([]);
   const [reactionChatIds, setReactionChatIds] = useState<string[]>(() => readReactionChatIds());
@@ -171,10 +180,6 @@ export function MyStoriesView({
     );
   };
 
-  const handleEditFeed = (story: Story) => {
-    router.push(`/my/posts/${story.id}/edit`);
-  };
-
   const handleOpenEditPage = () => {
     const [firstStory] = myStories;
 
@@ -183,6 +188,35 @@ export function MyStoriesView({
     }
 
     router.push(`/my/posts/${firstStory.id}/edit`);
+  };
+
+  const handleConfirmDeleteFeed = async () => {
+    if (!deleteTargetStory || isDeletingFeed) {
+      return;
+    }
+
+    const deletedStoryId = deleteTargetStory.id;
+    setIsDeletingFeed(true);
+
+    try {
+      await deleteFeed(deletedStoryId);
+      setMyStories((prevStories) => prevStories.filter((story) => story.id !== deletedStoryId));
+
+      if (editingStory?.id === deletedStoryId) {
+        closeEditModal();
+      }
+
+      if (selectedReaction?.story.id === deletedStoryId) {
+        setSelectedReaction(null);
+      }
+
+      showToast('피드를 삭제했어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '피드를 삭제하지 못했어요.', 'error');
+    } finally {
+      setIsDeletingFeed(false);
+      setDeleteTargetStory(null);
+    }
   };
 
   const closeEditModal = () => {
@@ -425,19 +459,15 @@ export function MyStoriesView({
                         </span>
                       </div>
 
-                      {isEditMode && (
+                      <div className="flex shrink-0 items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => handleEditFeed(story)}
-                          className="inline-flex items-center gap-1 rounded-full bg-[var(--color-chip-background)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-primary)]"
+                          onClick={() => setDeleteTargetStory(story)}
+                          className="shrink-0 text-sm font-medium text-[var(--color-text-tertiary)] transition-colors hover:text-[var(--color-text-secondary)]"
                         >
-                          <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M12 20h9" />
-                            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                          </svg>
-                          수정
+                          삭제
                         </button>
-                      )}
+                      </div>
                     </div>
 
                     {storyCategories.length > 0 && (
@@ -445,7 +475,11 @@ export function MyStoriesView({
                         {storyCategories.map((category) => (
                           <span
                             key={category}
-                            className="rounded-full bg-[var(--color-chip-background)] px-3 py-1.5 text-[12px] font-semibold text-[var(--color-text-secondary)]"
+                            className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
+                              isFestivalFeedCategory(category)
+                                ? FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS
+                                : 'bg-[var(--color-chip-background)] text-[var(--color-text-secondary)]'
+                            }`}
                           >
                             {getFeedCategoryLabel(category)}
                           </span>
@@ -851,7 +885,11 @@ export function MyStoriesView({
                       type="button"
                       onClick={() => handleToggleEditCategory(category)}
                       className={`rounded-full px-4 py-2 text-[14px] font-semibold transition-colors ${
-                        isSelected
+                        isFestivalFeedCategory(category)
+                          ? isSelected
+                            ? FESTIVAL_FEED_CATEGORY_SELECTED_CLASS
+                            : FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS
+                          : isSelected
                           ? 'bg-[var(--color-blue-secondary)] text-white'
                           : 'bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
                       }`}
@@ -943,6 +981,23 @@ export function MyStoriesView({
           </div>
         )}
       </CenteredModal>
+
+      <ConfirmSheet
+        isOpen={deleteTargetStory !== null}
+        onClose={() => {
+          if (!isDeletingFeed) {
+            setDeleteTargetStory(null);
+          }
+        }}
+        onConfirm={() => {
+          void handleConfirmDeleteFeed();
+        }}
+        title="피드를 삭제할까요?"
+        description="삭제한 피드는 다시 복구할 수 없어요."
+        confirmText="삭제하기"
+        cancelText="취소"
+        destructive
+      />
 
       <input
         ref={editImageInputRef}
