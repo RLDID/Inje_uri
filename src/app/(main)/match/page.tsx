@@ -168,7 +168,6 @@ function MatchPageContent() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [feedReactionItems, setFeedReactionItems] = useState<FeedReactionNotificationItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [hiddenUserIds, setHiddenUserIds] = useState<string[]>([]);
   const [hasRestoredViewState, setHasRestoredViewState] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
@@ -198,9 +197,7 @@ function MatchPageContent() {
           return;
         }
 
-        const restoredHiddenUserIds = savedViewState?.hiddenUserIds ?? [];
-        const restoredHiddenUserIdSet = new Set(restoredHiddenUserIds);
-        const restoredUsers = todayRecommendation.users.filter((user) => !restoredHiddenUserIdSet.has(user.id));
+        const restoredUsers = todayRecommendation.users;
         const clampedIndex = Math.max(
           0,
           Math.min(savedViewState?.currentIndex ?? 0, Math.max(restoredUsers.length - 1, 0)),
@@ -216,7 +213,6 @@ function MatchPageContent() {
           setChats(rooms);
           setFeedReactionItems(feedReactions);
           setCurrentIndex(clampedIndex);
-          setHiddenUserIds(restoredHiddenUserIds);
           setRecommendation({
             ...todayRecommendation,
             users: restoredUsers,
@@ -251,8 +247,7 @@ function MatchPageContent() {
         loadMyFeedReactionItems().catch(() => []),
       ]);
 
-      const hiddenUserIdSet = new Set(hiddenUserIds);
-      const visibleUsersFromServer = todayRecommendation.users.filter((user) => !hiddenUserIdSet.has(user.id));
+      const visibleUsersFromServer = todayRecommendation.users;
 
       setCurrentUser(me);
       setReceivedInterests(interests);
@@ -280,7 +275,7 @@ function MatchPageContent() {
     } catch {
       // Keep the current recommendation and notification state during background polling.
     }
-  }, [currentUser, hiddenUserIds]);
+  }, [currentUser]);
 
   usePolling(refreshMatchData, {
     intervalMs: 7000,
@@ -298,12 +293,11 @@ function MatchPageContent() {
       viewedCount: recommendation.viewedCount,
       selectedUserId: recommendation.selectedUserId,
       isSelectionMade: recommendation.isSelectionMade,
-      hiddenUserIds,
+      hiddenUserIds: [],
     });
   }, [
     currentIndex,
     hasRestoredViewState,
-    hiddenUserIds,
     recommendation.isSelectionMade,
     recommendation.selectedUserId,
     recommendation.viewedCount,
@@ -668,7 +662,7 @@ function MatchPageContent() {
             </div>
 
             <div className="relative z-10 mt-3">
-              {visibleUsers.length > 0 && (
+              {visibleUsers.length > 0 ? (
                 <ProfileCardCarousel
                   users={visibleUsers}
                   currentIndex={visibleCurrentIndex}
@@ -678,6 +672,22 @@ function MatchPageContent() {
                   onSelect={handleSelect}
                   currentUserInterests={currentUser?.interests ?? []}
                 />
+              ) : (
+                <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[28px] border border-[#F4EDF2] bg-white px-6 py-10 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-brand-pink)] text-[var(--color-pink-cta)]">
+                    <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  </div>
+                  <h3 className="mt-5 text-[20px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
+                    {recommendation.isSelectionMade ? '오늘은 하트를 보냈어요' : '오늘의 추천이 아직 없어요'}
+                  </h3>
+                  <p className="mt-2 break-keep text-[14px] leading-6 text-[var(--color-text-secondary)]">
+                    {recommendation.isSelectionMade
+                      ? '내일 새로운 오늘우리 추천을 확인해보세요.'
+                      : '추천이 준비되면 이곳에 프로필이 표시돼요.'}
+                  </p>
+                </div>
               )}
             </div>
 

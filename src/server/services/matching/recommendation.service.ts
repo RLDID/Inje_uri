@@ -9,12 +9,11 @@ import {
   findTodayRecommendation,
   findCandidatesWithProfile,
   findItemInTodayRecommendation,
-  passItemInTx,
   getRecentlyRecommendedUserIds,
   createDailyRecommendation,
 } from "@/server/repositories/recommendation/recommendation.repository";
 import { findPendingInterest } from "@/server/repositories/interest/interest.repository";
-import { upsertDismissInTx, getDismissId, findActiveDismiss } from "@/server/repositories/interest/dismiss.repository";
+import { upsertDismissInTx, getDismissId } from "@/server/repositories/interest/dismiss.repository";
 import type {
   TodayRecommendationResponse,
   SelectCandidateResponse,
@@ -70,8 +69,6 @@ export async function getTodayRecommendations(
   }
 
   const candidates = await findCandidatesWithProfile(rec.id);
-  const blockedIds = await getBlockedUserIds(userId);
-
   const candidateUserIds = candidates.map((c) => c.candidate_user_id);
   const [keywordsMap, matchCountMap] = await Promise.all([
     fetchKeywordsForUsers(candidateUserIds),
@@ -84,26 +81,23 @@ export async function getTodayRecommendations(
     is_selection_made: rec.selected_candidate_user_id !== null,
     selected_candidate_user_id: rec.selected_candidate_user_id,
     candidates: candidates.map((c) => {
-      const isBlocked = blockedIds.has(c.candidate_user_id);
       return {
         item_id: c.item_id,
         candidate_user_id: c.candidate_user_id,
         rank_order: c.rank_order,
         keyword_match_count: matchCountMap.get(c.candidate_user_id) ?? 0,
         is_passed: c.passed_at !== null,
-        blocked: isBlocked,
-        profile: isBlocked
-          ? null
-          : {
-              nickname: c.nickname,
-              gender: c.gender,
-              age: c.age,
-              department: c.department,
-              student_year: c.student_year,
-              bio: c.bio,
-              primary_image_url: c.primary_image_url,
-              keywords: keywordsMap.get(c.candidate_user_id) ?? [],
-            },
+        blocked: false,
+        profile: {
+          nickname: c.nickname,
+          gender: c.gender,
+          age: c.age,
+          department: c.department,
+          student_year: c.student_year,
+          bio: c.bio,
+          primary_image_url: c.primary_image_url,
+          keywords: keywordsMap.get(c.candidate_user_id) ?? [],
+        },
       };
     }),
   };
@@ -136,12 +130,6 @@ export async function selectCandidate(
 
   if (item.passed_at !== null) {
     throw new ApiError(ERROR.ALREADY_DISMISSED, "이미 관심없음 처리된 항목입니다.");
-  }
-
-  // 3. ALREADY_DISMISSED: 유효한 dismiss 레코드 확인
-  const isDismissed = await findActiveDismiss(userId, item.candidate_user_id);
-  if (isDismissed) {
-    throw new ApiError(ERROR.ALREADY_DISMISSED, "관심없음 처리한 상대에게는 호감을 보낼 수 없습니다.");
   }
 
   // 4. BLOCKED_RELATIONSHIP: 차단 관계 확인
@@ -223,9 +211,8 @@ export async function dismissCandidate(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + DISMISS_COOLDOWN_DAYS);
 
-  // passed_at 업데이트 + dismiss UPSERT를 원자적으로 처리
+  // 오늘 추천 3명은 하루 동안 고정한다. dismiss는 다음 추천 생성부터만 반영한다.
   await prisma.$transaction(async (tx) => {
-    await passItemInTx(tx, itemId);
     await upsertDismissInTx(tx, userId, item.candidate_user_id, item.daily_recommendation_id, expiresAt);
   });
 

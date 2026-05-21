@@ -106,13 +106,13 @@ function getLaunchCountdown() {
   const remainingMs = LAUNCH_AT - Date.now();
   const safeRemainingMs = Math.max(0, remainingMs);
   const days = Math.floor(safeRemainingMs / DAY_MS);
-  const hours = Math.floor((safeRemainingMs % DAY_MS) / HOUR_MS);
+  const totalHours = Math.floor(safeRemainingMs / HOUR_MS);
   const minutes = Math.floor((safeRemainingMs % HOUR_MS) / MINUTE_MS);
   const seconds = Math.floor((safeRemainingMs % MINUTE_MS) / SECOND_MS);
 
   return {
     day: `D-${padTime(days)}`,
-    time: `${padTime(hours)}:${padTime(minutes)}:${padTime(seconds)}`,
+    time: `${padTime(totalHours)}:${padTime(minutes)}:${padTime(seconds)}`,
     isOpen: remainingMs <= 0,
   };
 }

@@ -55,6 +55,7 @@ function EditProfilePageContent() {
   const [deletedPhotoIds, setDeletedPhotoIds] = useState<string[]>([]);
   const [brokenPhotoIndices, setBrokenPhotoIndices] = useState<number[]>([]);
   const [photoTargetIndex, setPhotoTargetIndex] = useState<number | null>(null);
+  const [previewPhotoIndex, setPreviewPhotoIndex] = useState<number | null>(null);
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
@@ -192,6 +193,15 @@ function EditProfilePageContent() {
     setPhotos((prevPhotos) => prevPhotos.filter((_, photoIndex) => photoIndex !== index));
     setPhotoIds((prevIds) => prevIds.filter((_, photoIndex) => photoIndex !== index));
     setBrokenPhotoIndices([]);
+    setPreviewPhotoIndex((currentIndex) => {
+      if (currentIndex === null) {
+        return null;
+      }
+      if (currentIndex === index) {
+        return null;
+      }
+      return currentIndex > index ? currentIndex - 1 : currentIndex;
+    });
   };
 
   const handlePhotoError = (index: number) => {
@@ -215,6 +225,7 @@ function EditProfilePageContent() {
     return Array.isArray(selected) ? selected.length > 0 : Boolean(selected);
   });
   const hasBio = profile.bio.trim().length > 0;
+  const previewPhoto = previewPhotoIndex !== null ? photos[previewPhotoIndex] : null;
 
   const handleSave = async () => {
     if (!hasMinPhotos) {
@@ -307,8 +318,18 @@ function EditProfilePageContent() {
                     />
                     <button
                       type="button"
+                      onClick={() => {
+                        if (!brokenPhotoIndices.includes(index)) {
+                          setPreviewPhotoIndex(index);
+                        }
+                      }}
+                      className="absolute inset-0"
+                      aria-label={`프로필 사진 ${index + 1} 크게 보기`}
+                    />
+                    <button
+                      type="button"
                       onClick={() => handleRemovePhoto(index)}
-                      className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/50"
+                      className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-black/50"
                       aria-label={`프로필 사진 ${index + 1} 제거`}
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2">
@@ -316,7 +337,7 @@ function EditProfilePageContent() {
                       </svg>
                     </button>
                     {index === 0 && (
-                      <span className="absolute bottom-1.5 left-1.5 rounded-md bg-[var(--color-action-primary)] px-2 py-0.5 text-xs font-medium text-[var(--color-action-primary-text)]">
+                      <span className="absolute bottom-1.5 left-1.5 z-10 rounded-md bg-[var(--color-action-primary)] px-2 py-0.5 text-xs font-medium text-[var(--color-action-primary-text)]">
                         대표
                       </span>
                     )}
@@ -412,6 +433,85 @@ function EditProfilePageContent() {
           </svg>
         </button>
       </div>
+
+      {previewPhoto && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 px-4 py-8">
+          <button
+            type="button"
+            className="absolute inset-0"
+            aria-label="프로필 사진 크게 보기 닫기"
+            onClick={() => setPreviewPhotoIndex(null)}
+          />
+
+          <div className="relative z-10 flex w-full max-w-[430px] flex-col items-center gap-4">
+            <div className="flex w-full items-center justify-between text-white">
+              <span className="rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur">
+                {(previewPhotoIndex ?? 0) + 1}/{photos.length}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPreviewPhotoIndex(null)}
+                className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 backdrop-blur"
+                aria-label="닫기"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="relative aspect-[3/4] w-full overflow-hidden rounded-[24px] bg-black">
+              <Image
+                src={previewPhoto}
+                alt={`확대된 프로필 사진 ${(previewPhotoIndex ?? 0) + 1}`}
+                fill
+                sizes="(max-width: 430px) 100vw, 430px"
+                unoptimized={previewPhoto.startsWith('data:')}
+                className="object-contain"
+                onError={() => {
+                  if (previewPhotoIndex !== null) {
+                    handlePhotoError(previewPhotoIndex);
+                  }
+                  setPreviewPhotoIndex(null);
+                }}
+              />
+            </div>
+
+            {photos.length > 1 && (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewPhotoIndex((currentIndex) => (
+                      currentIndex === null ? null : (currentIndex + photos.length - 1) % photos.length
+                    ));
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur"
+                  aria-label="이전 프로필 사진"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m15 18-6-6 6-6" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewPhotoIndex((currentIndex) => (
+                      currentIndex === null ? null : (currentIndex + 1) % photos.length
+                    ));
+                  }}
+                  className="flex h-11 w-11 items-center justify-center rounded-full bg-white/15 text-white backdrop-blur"
+                  aria-label="다음 프로필 사진"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m9 18 6-6-6-6" />
+                  </svg>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <BottomSheet
         isOpen={showPhotoOptions}

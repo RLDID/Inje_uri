@@ -30,6 +30,8 @@ services:
       SESSION_SECRET: staging-test-session-secret-change-me
       BATCH_SECRET: change-me
       DB_ENCRYPTION_KEY: ${DB_ENCRYPTION_KEY}
+      ADMIN_ACCESS_CODE: ${ADMIN_ACCESS_CODE}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
     depends_on:
       db:
         condition: service_healthy

@@ -208,7 +208,7 @@ export function mapUserProfileToUser(input: ApiUserProfile): User {
 
 export function mapTodayRecommendation(dto: TodayRecommendationDto): DailyRecommendation {
   const users = dto.candidates
-    .filter((candidate) => !candidate.is_passed && !candidate.blocked && candidate.profile)
+    .filter((candidate) => !candidate.is_passed && candidate.profile)
     .map((candidate) => {
       const profile = candidate.profile!;
         return {
