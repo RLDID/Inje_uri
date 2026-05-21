@@ -1,5 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
+import { fieldEncryptionExtension } from "prisma-field-encryption";
 
 /**
  * Prisma 싱글톤 인스턴스
@@ -12,14 +13,14 @@ import { PrismaClient } from "@/generated/prisma/client";
  */
 
 const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
+  prisma: ReturnType<typeof createPrismaClient> | undefined;
 };
 
-function createPrismaClient(): PrismaClient {
+function createPrismaClient() {
   const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL,
   });
-  return new PrismaClient({ adapter });
+  return new PrismaClient({ adapter }).$extends(fieldEncryptionExtension());
 }
 
 const prisma = globalForPrisma.prisma ?? createPrismaClient();
