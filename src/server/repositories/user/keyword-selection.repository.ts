@@ -31,10 +31,14 @@ export async function replaceUserKeywordSelections(
     category_id: number;
     keyword_id: number;
   }>,
+  targetCategoryIds: number[],
 ) {
   await prisma.$transaction([
     prisma.userKeywordSelection.deleteMany({
-      where: { user_id: userId },
+      where: {
+        user_id: userId,
+        category_id: { in: targetCategoryIds },
+      },
     }),
     ...(rows.length > 0
       ? [

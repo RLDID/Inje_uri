@@ -269,7 +269,7 @@ export function ProfileCard({
             </span>
             <div className="min-w-0">
               <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">
-                공통 관심사 {commonInterests.length}개
+                공통 관심사 {(user as User & { keywordMatchCount?: number }).keywordMatchCount ?? commonInterests.length}개
               </p>
               <p className="mt-1 truncate text-[14px] font-medium text-[var(--color-text-secondary)]">
                 {displayedCommonInterests.length > 0

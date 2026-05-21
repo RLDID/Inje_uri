@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest) {
     const userId = user.id;
     const body = await req.json();
 
-    const { exclude_same_department, reduce_same_year, preferred_age_min, preferred_age_max } =
+    const { exclude_same_department, reduce_same_year, preferred_age_min, preferred_age_max, filter_drinking, filter_smoking } =
       body;
 
     const data = await updateRecommendationSetting(userId, {
@@ -45,6 +45,8 @@ export async function PATCH(req: NextRequest) {
       reduce_same_year,
       preferred_age_min,
       preferred_age_max,
+      filter_drinking,
+      filter_smoking,
     });
     return ok(data);
   } catch (e) {

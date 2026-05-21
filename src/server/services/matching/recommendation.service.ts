@@ -24,7 +24,29 @@ import type {
 const RECOMMEND_COUNT = 3;
 const DISMISS_COOLDOWN_DAYS = 7;
 const DECLINE_COOLDOWN_DAYS = 7;
-const RECENT_REC_EXCLUDE_DAYS = 7;
+const RECENT_REC_EXCLUDE_DAYS = 3;
+
+/**
+ * 이상형 매핑 테이블
+ * 내 선택(desired_vibe / date_style) → 상대방이 가져야 할 특성(personality / interests)
+ */
+const IDEAL_TYPE_MAPPING: Record<string, { targetCategory: string; targetCodes: string[] }> = {
+  // desired_vibe → personality
+  "desired_vibe:comfortable": { targetCategory: "personality", targetCodes: ["calm", "affectionate"] },
+  "desired_vibe:exciting":    { targetCategory: "personality", targetCodes: ["passionate", "social"] },
+  "desired_vibe:intellectual":{ targetCategory: "personality", targetCodes: ["rational", "careful"] },
+  "desired_vibe:funny":       { targetCategory: "personality", targetCodes: ["humorous"] },
+  "desired_vibe:serious":     { targetCategory: "personality", targetCodes: ["honest", "rational"] },
+  "desired_vibe:casual":      { targetCategory: "personality", targetCodes: ["social", "positive"] },
+  // date_style → interests
+  "date_style:restaurant": { targetCategory: "interests", targetCodes: ["food"] },
+  "date_style:cafe":       { targetCategory: "interests", targetCodes: ["cafe"] },
+  "date_style:movie":      { targetCategory: "interests", targetCodes: ["movies"] },
+  "date_style:walk":       { targetCategory: "interests", targetCodes: ["exercise"] },
+  "date_style:activity":   { targetCategory: "interests", targetCodes: ["exercise"] },
+  "date_style:concert":    { targetCategory: "interests", targetCodes: ["music"] },
+  "date_style:bookstore":  { targetCategory: "interests", targetCodes: ["reading"] },
+};
 
 /** KST 오늘 날짜 (YYYY-MM-DD) */
 function getKSTDateString(): string {
@@ -50,9 +72,11 @@ export async function getTodayRecommendations(
   const candidates = await findCandidatesWithProfile(rec.id);
   const blockedIds = await getBlockedUserIds(userId);
 
-  const keywordsMap = await fetchKeywordsForUsers(
-    candidates.map((c) => c.candidate_user_id),
-  );
+  const candidateUserIds = candidates.map((c) => c.candidate_user_id);
+  const [keywordsMap, matchCountMap] = await Promise.all([
+    fetchKeywordsForUsers(candidateUserIds),
+    computeKeywordMatchCounts(userId, candidateUserIds),
+  ]);
 
   return {
     recommendation_id: rec.id,
@@ -65,6 +89,7 @@ export async function getTodayRecommendations(
         item_id: c.item_id,
         candidate_user_id: c.candidate_user_id,
         rank_order: c.rank_order,
+        keyword_match_count: matchCountMap.get(c.candidate_user_id) ?? 0,
         is_passed: c.passed_at !== null,
         blocked: isBlocked,
         profile: isBlocked
@@ -281,12 +306,29 @@ export async function generateRecommendationsForUser(
   `;
   const excludeByDismiss = new Set(dismissRows.map((r) => r.dismissed_user_id));
 
-  // 이상형 키워드 ID 목록 조회 (정렬 1순위 기준)
-  const userKeywordRows = await prisma.$queryRaw<{ keyword_id: number }[]>`
-    SELECT keyword_id FROM user_keyword_selections WHERE user_id = ${userId}
+  // 이상형 매핑 기반 타겟 키워드 ID 조회
+  // desired_vibe/date_style → personality/interests 변환
+  const idealTypeIds = await resolveIdealTypeKeywordIds(userId);
+  const safeKeywordIds = idealTypeIds.length > 0 ? idealTypeIds : [-1];
+
+  // 음주/흡연 필터: settings에서 활성화 여부 확인
+  const isFilterDrinkingActive = settings?.filter_drinking ?? false;
+  const isFilterSmokingActive = settings?.filter_smoking ?? false;
+
+  // 필터 대상 키워드 ID 조회 (음주: often/sometimes, 흡연: yes)
+  const filterKeywordRows = await prisma.$queryRaw<{ keyword_id: number; cat: string; code: string }[]>`
+    SELECT k.keyword_id, c.category_code AS cat, k.keyword_code AS code
+    FROM keyword k
+    JOIN categories c ON k.category_id = c.category_id
+    WHERE (c.category_code = 'drinking' AND k.keyword_code IN ('often', 'sometimes'))
+       OR (c.category_code = 'smoking'  AND k.keyword_code = 'yes')
   `;
-  const userKeywordIds = userKeywordRows.map((r) => r.keyword_id);
-  const safeKeywordIds = userKeywordIds.length > 0 ? userKeywordIds : [-1];
+
+  const drinkingExcludeIds = filterKeywordRows.filter(k => k.cat === 'drinking').map(k => k.keyword_id);
+  const smokingExcludeIds  = filterKeywordRows.filter(k => k.cat === 'smoking').map(k => k.keyword_id);
+
+  const safeDrinkingIds = drinkingExcludeIds.length > 0 ? drinkingExcludeIds : [0];
+  const safeSmokingIds  = smokingExcludeIds.length  > 0 ? smokingExcludeIds  : [0];
 
   // 추천 조건 완화 단계별 시도
   const fallbackSteps = [
@@ -294,7 +336,7 @@ export async function generateRecommendationsForUser(
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 0, relaxDept: false },
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 2, relaxDept: false },
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 2, relaxDept: true },
-    { recentDays: 3, relaxSameYear: true, agePad: 2, relaxDept: true },
+    { recentDays: 2, relaxSameYear: true, agePad: 2, relaxDept: true },
     { recentDays: 1, relaxSameYear: true, agePad: 2, relaxDept: true },
     { recentDays: 0, relaxSameYear: true, agePad: 2, relaxDept: true },
   ];
@@ -343,6 +385,20 @@ export async function generateRecommendationsForUser(
         AND u.onboarding_completed = true
         AND u.gender != ${user.gender}
         AND u.id NOT IN (${Prisma.join(excludeIds.size > 0 ? [...excludeIds] : [-1])})
+        AND (
+          NOT ${isFilterDrinkingActive}
+          OR NOT EXISTS (
+            SELECT 1 FROM user_keyword_selections uks_d
+            WHERE uks_d.user_id = u.id AND uks_d.keyword_id IN (${Prisma.join(safeDrinkingIds)})
+          )
+        )
+        AND (
+          NOT ${isFilterSmokingActive}
+          OR NOT EXISTS (
+            SELECT 1 FROM user_keyword_selections uks_s
+            WHERE uks_s.user_id = u.id AND uks_s.keyword_id IN (${Prisma.join(safeSmokingIds)})
+          )
+        )
       GROUP BY u.id
     `;
 
@@ -432,6 +488,77 @@ async function fetchKeywordsForUsers(
   for (const row of rows) {
     if (!map.has(row.user_id)) map.set(row.user_id, []);
     map.get(row.user_id)!.push({ category: row.category_name, label: row.label });
+  }
+  return map;
+}
+
+/**
+ * 유저의 desired_vibe / date_style 선택을 매핑 테이블로 변환해
+ * 상대방이 가져야 할 personality / interests keyword_id 목록을 반환한다.
+ */
+async function resolveIdealTypeKeywordIds(userId: number): Promise<number[]> {
+  const preferenceRows = await prisma.$queryRaw<{ cat: string; code: string }[]>`
+    SELECT c.category_code AS cat, k.keyword_code AS code
+    FROM user_keyword_selections uks
+    JOIN keyword k ON k.keyword_id = uks.keyword_id
+    JOIN categories c ON c.category_id = k.category_id
+    WHERE uks.user_id = ${userId}
+      AND c.category_code IN ('desired_vibe', 'date_style')
+  `;
+
+  if (preferenceRows.length === 0) return [];
+
+  // 매핑 적용 → 타겟 카테고리별 코드 목록 집계
+  const grouped = new Map<string, Set<string>>();
+  for (const row of preferenceRows) {
+    const mapping = IDEAL_TYPE_MAPPING[`${row.cat}:${row.code}`];
+    if (!mapping) continue;
+    const existing = grouped.get(mapping.targetCategory) ?? new Set<string>();
+    mapping.targetCodes.forEach((c) => existing.add(c));
+    grouped.set(mapping.targetCategory, existing);
+  }
+
+  if (grouped.size === 0) return [];
+
+  // 타겟 keyword_id DB 조회 (카테고리별 최대 2회)
+  const resultIds: number[] = [];
+  for (const [targetCategory, targetCodes] of grouped) {
+    const rows = await prisma.$queryRaw<{ keyword_id: number }[]>`
+      SELECT k.keyword_id
+      FROM keyword k
+      JOIN categories c ON k.category_id = c.category_id
+      WHERE c.category_code = ${targetCategory}
+        AND k.keyword_code IN (${Prisma.join([...targetCodes])})
+    `;
+    resultIds.push(...rows.map((r) => r.keyword_id));
+  }
+
+  return [...new Set(resultIds)];
+}
+
+/**
+ * 후보 유저들에 대해 나의 이상형 keyword_match_count를 동적으로 계산한다.
+ */
+async function computeKeywordMatchCounts(
+  userId: number,
+  candidateUserIds: number[],
+): Promise<Map<number, number>> {
+  if (candidateUserIds.length === 0) return new Map();
+
+  const idealTypeIds = await resolveIdealTypeKeywordIds(userId);
+  if (idealTypeIds.length === 0) return new Map();
+
+  const rows = await prisma.$queryRaw<{ candidate_user_id: number; match_count: bigint }[]>`
+    SELECT uks.user_id AS candidate_user_id, COUNT(*) AS match_count
+    FROM user_keyword_selections uks
+    WHERE uks.user_id IN (${Prisma.join(candidateUserIds)})
+      AND uks.keyword_id IN (${Prisma.join(idealTypeIds)})
+    GROUP BY uks.user_id
+  `;
+
+  const map = new Map<number, number>();
+  for (const row of rows) {
+    map.set(row.candidate_user_id, Number(row.match_count));
   }
   return map;
 }
