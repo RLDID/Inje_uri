@@ -309,3 +309,7 @@ export async function createRoom(
     });
     return result.count;
   }
+export async function deleteAllChatRooms(): Promise<number> {
+  const result = await prisma.chatRoom.deleteMany({});
+  return result.count;
+}

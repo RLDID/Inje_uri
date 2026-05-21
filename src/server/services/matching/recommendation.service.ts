@@ -12,9 +12,14 @@ import {
   passItemInTx,
   getRecentlyRecommendedUserIds,
   createDailyRecommendation,
+  deleteAllDailyRecommendations,
+  deleteAllRecommendationDismisses,
+  deleteAllRecommendationSettings,
+  deleteRecommendationJobRuns,
 } from "@/server/repositories/recommendation/recommendation.repository";
-import { findPendingInterest } from "@/server/repositories/interest/interest.repository";
+import { findPendingInterest, deleteAllInterests } from "@/server/repositories/interest/interest.repository";
 import { upsertDismissInTx, getDismissId, findActiveDismiss } from "@/server/repositories/interest/dismiss.repository";
+import { deleteAllChatRooms } from "@/server/repositories/chat/chatRoom.repo";
 import type {
   TodayRecommendationResponse,
   SelectCandidateResponse,
@@ -561,4 +566,28 @@ async function computeKeywordMatchCounts(
     map.set(row.candidate_user_id, Number(row.match_count));
   }
   return map;
+}
+
+// ─────────────────────────────────────────────
+// 배포 전 테스트 데이터 초기화
+// ─────────────────────────────────────────────
+export async function resetTestData(): Promise<{
+  chatRooms: number;
+  interests: number;
+  recommendations: number;
+  dismisses: number;
+  settings: number;
+  jobRuns: number;
+}> {
+  const [chatRooms, interests, recommendations, dismisses, settings, jobRuns] =
+    await Promise.all([
+      deleteAllChatRooms(),
+      deleteAllInterests(),
+      deleteAllDailyRecommendations(),
+      deleteAllRecommendationDismisses(),
+      deleteAllRecommendationSettings(),
+      deleteRecommendationJobRuns(),
+    ]);
+
+  return { chatRooms, interests, recommendations, dismisses, settings, jobRuns };
 }
