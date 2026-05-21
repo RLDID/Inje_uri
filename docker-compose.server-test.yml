@@ -29,7 +29,7 @@ services:
       AUTH_SECRET: staging-test-auth-secret-change-me
       SESSION_SECRET: staging-test-session-secret-change-me
       BATCH_SECRET: change-me
-      PRISMA_FIELD_ENCRYPTION_KEY: k1.aesgcm256.<k1.aesgcm256.IzCEy9yhRtyGRNO9DTXCZWy8E9D_UeHCFdxDQLLrszo=>
+      DB_ENCRYPTION_KEY: ${DB_ENCRYPTION_KEY}
     depends_on:
       db:
         condition: service_healthy

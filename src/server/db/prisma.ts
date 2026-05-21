@@ -1,6 +1,6 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
-import { fieldEncryptionExtension } from "prisma-field-encryption";
+import { decryptEncryptedFields, encryptWriteData } from "@/server/lib/encryption";
 
 /**
  * Prisma 싱글톤 인스턴스
@@ -20,8 +20,26 @@ function createPrismaClient() {
   const adapter = new PrismaPg({
     connectionString: process.env.DATABASE_URL,
   });
-  return new PrismaClient({ adapter }).$extends(fieldEncryptionExtension());
+
+  return new PrismaClient({ adapter }).$extends({
+    query: {
+      $allModels: {
+        async $allOperations({ model, operation, args, query }) {
+          encryptWriteData(model, operation, args);
+          const result = await query(args);
+
+          return decryptEncryptedFields(result);
+        },
+      },
+    },
+  });
 }
+
+export type PrismaDbClient = ReturnType<typeof createPrismaClient>;
+export type PrismaTransactionClient = Omit<
+  PrismaDbClient,
+  "$connect" | "$disconnect" | "$on" | "$transaction" | "$use" | "$extends"
+>;
 
 const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
