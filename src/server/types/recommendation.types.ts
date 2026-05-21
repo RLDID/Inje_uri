@@ -15,6 +15,7 @@ export interface RecommendationCandidate {
   item_id: number;
   candidate_user_id: number;
   rank_order: number;
+  keyword_match_count: number;
   is_passed: boolean;
   blocked: boolean;
   profile: CandidateProfile | null; // null when blocked
@@ -44,5 +45,7 @@ export interface RecommendationSettingsResponse {
   reduce_same_year: boolean;
   preferred_age_min: number | null;
   preferred_age_max: number | null;
+  filter_drinking: boolean;
+  filter_smoking: boolean;
   updated_at: string | null; // 설정 미생성 시 null
 }

@@ -1,4 +1,7 @@
-import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
+import type { PrismaDbClient } from "@/server/db/prisma";
+
+type CommentRepositoryDb = Pick<PrismaDbClient, "selfDateFeed" | "block" | "feedComment" | "chatRoom">;
 
 const commentListSelect = {
   id: true,
@@ -73,7 +76,7 @@ export type MyCommentedFeedRow = Prisma.FeedCommentGetPayload<{ select: typeof m
 export type CommentForChatRow = Prisma.FeedCommentGetPayload<{ select: typeof commentForChatSelect }>;
 
 export class CommentRepository {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(private readonly db: CommentRepositoryDb) {}
 
   async findFeedForComment(feedId: number) {
     return this.db.selfDateFeed.findUnique({

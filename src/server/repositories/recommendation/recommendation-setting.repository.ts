@@ -8,6 +8,8 @@ export interface SettingRow {
   reduce_same_year: boolean;
   preferred_age_min: number | null;
   preferred_age_max: number | null;
+  filter_drinking: boolean;
+  filter_smoking: boolean;
   updated_at: Date;
 }
 
@@ -26,6 +28,8 @@ export async function upsertSetting(
     reduce_same_year: boolean;
     preferred_age_min: number | null;
     preferred_age_max: number | null;
+    filter_drinking: boolean;
+    filter_smoking: boolean;
     updated_at: Date;
   },
 ): Promise<SettingRow> {
