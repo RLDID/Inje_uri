@@ -47,10 +47,13 @@ const IDEAL_TYPE_MAPPING: Record<string, { targetCategory: string; targetCodes: 
   "date_style:bookstore":  { targetCategory: "interests", targetCodes: ["reading"] },
 };
 
-/** KST 오늘 날짜 (YYYY-MM-DD) */
+/** 오늘우리 서비스 날짜. KST 09:00 전에는 전날 추천을 유지한다. */
 function getKSTDateString(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (kst.getUTCHours() < 9) {
+    kst.setUTCDate(kst.getUTCDate() - 1);
+  }
   return kst.toISOString().split("T")[0];
 }
 

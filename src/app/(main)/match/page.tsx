@@ -159,6 +159,41 @@ function HeaderHeartIcon({
   );
 }
 
+function RecommendationCardSkeleton() {
+  return (
+    <div
+      className="w-full overflow-hidden rounded-[28px] border border-[#F4EDF2] bg-white px-5 pb-6 pt-5"
+      aria-hidden="true"
+    >
+      <div className="animate-pulse">
+        <div className="flex items-center gap-5">
+          <div className="h-[142px] w-[142px] shrink-0 rounded-full bg-[#F4EEF3]" />
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="h-6 w-24 rounded-full bg-[#F4EEF3]" />
+            <div className="h-4 w-32 rounded-full bg-[#F1F3F5]" />
+            <div className="h-7 w-16 rounded-full bg-[#FFE3EE]" />
+          </div>
+        </div>
+        <div className="mt-5 flex gap-2.5">
+          <div className="h-9 w-20 rounded-full bg-[#F1F3F5]" />
+          <div className="h-9 w-24 rounded-full bg-[#F1F3F5]" />
+          <div className="h-9 w-16 rounded-full bg-[#F1F3F5]" />
+        </div>
+        <div className="mt-4 rounded-[18px] bg-[#FFF4F8] px-5 py-4">
+          <div className="h-4 w-32 rounded-full bg-[#F5DDE7]" />
+          <div className="mt-3 h-4 w-44 rounded-full bg-[#F1E8EE]" />
+        </div>
+        <div className="mt-6 flex justify-center gap-2.5">
+          <div className="h-2.5 w-3 rounded-full bg-[#F3A7C0]" />
+          <div className="h-2.5 w-2.5 rounded-full bg-[#E8E8E8]" />
+          <div className="h-2.5 w-2.5 rounded-full bg-[#E8E8E8]" />
+        </div>
+        <div className="mt-5 h-14 rounded-[16px] bg-[#F3A7C0]/60" />
+      </div>
+    </div>
+  );
+}
+
 function MatchPageContent() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -662,7 +697,9 @@ function MatchPageContent() {
             </div>
 
             <div className="relative z-10 mt-3">
-              {visibleUsers.length > 0 ? (
+              {!hasRestoredViewState ? (
+                <RecommendationCardSkeleton />
+              ) : visibleUsers.length > 0 ? (
                 <ProfileCardCarousel
                   users={visibleUsers}
                   currentIndex={visibleCurrentIndex}

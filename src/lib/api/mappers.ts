@@ -208,7 +208,11 @@ export function mapUserProfileToUser(input: ApiUserProfile): User {
 
 export function mapTodayRecommendation(dto: TodayRecommendationDto): DailyRecommendation {
   const users = dto.candidates
-    .filter((candidate) => !candidate.is_passed && candidate.profile)
+    .filter((candidate) => {
+      if (!candidate.profile) return false;
+      if (!dto.is_selection_made) return true;
+      return candidate.candidate_user_id === dto.selected_candidate_user_id;
+    })
     .map((candidate) => {
       const profile = candidate.profile!;
         return {

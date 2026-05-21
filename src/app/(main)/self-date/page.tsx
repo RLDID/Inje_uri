@@ -53,11 +53,32 @@ function getSavedViewState(): SelfDateViewState {
 }
 
 function SlidersIcon({ onClick }: { onClick: () => void }) {
+  const pointerActivatedRef = useRef(false);
+
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors active:bg-[var(--color-chip-background)]"
+      onPointerUp={(event) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) {
+          return;
+        }
+
+        pointerActivatedRef.current = true;
+        onClick();
+
+        window.setTimeout(() => {
+          pointerActivatedRef.current = false;
+        }, 0);
+      }}
+      onClick={(event) => {
+        if (pointerActivatedRef.current) {
+          event.preventDefault();
+          return;
+        }
+
+        onClick();
+      }}
+      className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-chip-background)] active:bg-[var(--color-chip-background)]"
       aria-label="내 글 보기"
     >
       <svg
