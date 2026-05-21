@@ -400,19 +400,23 @@ export async function updateCurrentUserProfile(userId: number, body: UserPatchBo
 
   if (profile.bio !== undefined) {
     if (profile.bio === null) {
-      updateData.bio = null;
-    } else {
-      const bio = toOptionalString(profile.bio);
-      if (bio === undefined) {
-        throw new ApiError(ERROR.VALIDATION_ERROR, 'bio 형식을 확인해주세요.');
-      }
-
-      if (bio.length > 500) {
-        throw new ApiError(ERROR.VALIDATION_ERROR, '자기소개는 500자를 초과할 수 없습니다.');
-      }
-
-      updateData.bio = bio;
+      throw new ApiError(ERROR.VALIDATION_ERROR, '자기소개를 입력해주세요.');
     }
+
+    const bio = toOptionalString(profile.bio);
+    if (bio === undefined) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, 'bio 형식을 확인해주세요.');
+    }
+
+    if (!bio) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '자기소개를 입력해주세요.');
+    }
+
+    if (bio.length > 500) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, '자기소개는 500자를 초과할 수 없습니다.');
+    }
+
+    updateData.bio = bio;
   }
 
   if (profile.age !== undefined) {

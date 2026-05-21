@@ -723,26 +723,28 @@ export function RegisterPageClient() {
       />
 
       <main className={`relative z-10 flex min-h-0 flex-1 flex-col px-[var(--page-padding-x)] ${step === 'categories' ? 'h-full overflow-hidden pb-0 pt-4' : 'pb-8 pt-10'}`}>
-        <div className={step === 'categories' ? 'flex h-full min-h-0 flex-1 flex-col overflow-hidden p-5' : 'w-full p-5'}>
-          <div className={step === 'categories' ? 'mb-4' : 'mb-7'}>
+        <div className={step === 'categories' ? 'flex h-full min-h-0 flex-1 flex-col overflow-hidden p-5' : 'flex flex-1 items-center p-5 pb-[14vh]'}>
+          <div className={step === 'categories' ? 'contents' : 'mx-auto w-full max-w-[350px]'}>
+          <div className={step === 'categories' ? 'mb-4' : 'mb-8 text-center'}>
             <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
               {APP_NAME}
             </p>
             <h1 className="mt-2 break-keep text-[28px] font-semibold text-[var(--color-text-primary)]">
-              회원가입
+              {step === 'verify' ? '학번 인증' : '회원가입'}
             </h1>
-            <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-              {step === 'verify' && '학번 인증을 먼저 완료하면 가입 정보를 입력할 수 있습니다.'}
-              {step === 'account' && '로그인에 사용할 아이디와 비밀번호를 입력해주세요.'}
-              {step === 'nickname' && '프로필에 표시될 닉네임을 입력해주세요.'}
-              {step === 'academic' && '추천에 사용할 기본 정보를 선택해주세요.'}
-              {step === 'private' && '프로필에 표기되지 않는 정보를 입력해주세요.'}
-              {step === 'categories' && '성향까지 저장하면 계정 생성이 완료됩니다.'}
-            </p>
+            {step !== 'verify' && (
+              <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
+                {step === 'account' && '로그인에 사용할 아이디와 비밀번호를 입력해주세요.'}
+                {step === 'nickname' && '프로필에 표시될 닉네임을 입력해주세요.'}
+                {step === 'academic' && '추천에 사용할 기본 정보를 선택해주세요.'}
+                {step === 'private' && '프로필에 표기되지 않는 정보를 입력해주세요.'}
+                {step === 'categories' && '성향까지 저장하면 계정 생성이 완료됩니다.'}
+              </p>
+            )}
           </div>
 
           {step === 'verify' && (
-            <form key="register-verify" className="mx-auto mt-[8vh] w-full max-w-[350px]" onSubmit={handleVerifySubmit} autoComplete="off">
+            <form key="register-verify" className="w-full" onSubmit={handleVerifySubmit} autoComplete="off">
               <div className="space-y-2">
                 <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
                   <label htmlFor="studentNumber" className="sr-only">
@@ -823,7 +825,7 @@ export function RegisterPageClient() {
           )}
 
           {step === 'account' && (
-            <form key="register-account" className="mx-auto mt-[8vh] w-full max-w-[350px]" onSubmit={handleAccountSubmit} autoComplete="off">
+            <form key="register-account" className="w-full" onSubmit={handleAccountSubmit} autoComplete="off">
               <div className="space-y-2">
                 <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
                   <label htmlFor="registerLoginId" className="sr-only">
@@ -894,10 +896,10 @@ export function RegisterPageClient() {
           )}
 
           {step === 'nickname' && (
-            <form className="mx-auto mt-[8vh] w-full max-w-[350px]" onSubmit={handleNicknameSubmit}>
+            <form className="w-full" onSubmit={handleNicknameSubmit}>
               <div>
-                <label htmlFor="nickname" className="mb-3 block text-[15px] font-semibold text-[var(--color-text-primary)]">
-                  닉네임을 입력해주세요
+                <label htmlFor="nickname" className="sr-only">
+                  닉네임
                 </label>
                 <input
                   id="nickname"
@@ -905,7 +907,7 @@ export function RegisterPageClient() {
                   value={form.nickname}
                   onChange={(event) => updateField('nickname', event.target.value)}
                   placeholder="닉네임"
-                  className="w-full border-b border-[var(--color-border)] bg-transparent px-0 py-4 text-[22px] font-semibold text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none disabled:cursor-not-allowed"
+                  className="w-full rounded-t-xl border-b border-[var(--color-border)] bg-white/65 px-4 py-4 text-[22px] font-semibold text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:bg-white/85 focus:outline-none disabled:cursor-not-allowed"
                   disabled={isBusy}
                   autoComplete="nickname"
                 />
@@ -1162,6 +1164,7 @@ export function RegisterPageClient() {
               {errorMessage}
             </p>
           )}
+          </div>
         </div>
       </main>
     </PageContainer>

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useRef, useState, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation';
 import { PageContainer, PageHeader, PageContent } from '@/components/layout';
 import { KeywordSelector, ProfileSection } from '@/components/profile/KeywordSelector';
 import { BottomSheet, useToast } from '@/components/ui';
@@ -14,7 +15,7 @@ import {
 import { mapUserProfileToUser } from '@/lib/api/mappers';
 import { deleteMyProfileImage, getMeProfileRaw, updateMe, uploadMyProfileImage } from '@/lib/api/profile';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { useSafeBack } from '@/lib/navigation';
+import { SECTION_ROOTS, useSafeBack } from '@/lib/navigation';
 import {
   buildKeywordSelection,
   getKeywordSelectionValues,
@@ -37,8 +38,16 @@ function buildKeywordSelections(profile: {
 }
 
 function EditProfilePageContent() {
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const { goBack } = useSafeBack({ fallbackPath: '/my/profile' });
+  const isWaitingEntry = searchParams.get('waiting') === '1';
+  const { goBack } = useSafeBack({
+    fallbackPath: isWaitingEntry ? `${SECTION_ROOTS.my}/profile?waiting=1` : `${SECTION_ROOTS.my}/profile`,
+  });
+  const idealTypeHref = isWaitingEntry
+    ? `${SECTION_ROOTS.my}/ideal-type?waiting=1`
+    : `${SECTION_ROOTS.my}/ideal-type`;
+  const recommendationSettingsHref = `${SECTION_ROOTS.my}/settings`;
 
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoIds, setPhotoIds] = useState<Array<string | undefined>>([]);
@@ -205,6 +214,7 @@ function EditProfilePageContent() {
     const selected = profile[category.id as keyof typeof profile];
     return Array.isArray(selected) ? selected.length > 0 : Boolean(selected);
   });
+  const hasBio = profile.bio.trim().length > 0;
 
   const handleSave = async () => {
     if (!hasMinPhotos) {
@@ -214,6 +224,12 @@ function EditProfilePageContent() {
 
     if (!hasRequiredKeywords) {
       showToast('키워드는 한 개 이상 선택해야 해요.', 'error');
+      return;
+    }
+
+    const trimmedBio = profile.bio.trim();
+    if (!trimmedBio) {
+      showToast('자기소개를 입력해주세요.', 'error');
       return;
     }
 
@@ -234,7 +250,7 @@ function EditProfilePageContent() {
 
     try {
       await updateMe({
-        profile: { bio: profile.bio },
+        profile: { bio: trimmedBio },
         keywordSelections,
       });
 
@@ -340,7 +356,14 @@ function EditProfilePageContent() {
               rows={3}
               className="w-full resize-none rounded-xl bg-[var(--color-surface)] px-4 py-3 text-base leading-6 placeholder:text-[var(--color-text-tertiary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/30"
             />
-            <p className="text-right text-xs text-[var(--color-text-tertiary)]">{profile.bio.length}/100</p>
+            <div className="flex items-start justify-between gap-3">
+              {!hasBio ? (
+                <p className="text-xs text-[var(--color-text-secondary)]">
+                  자기소개는 1자 이상 입력해야 저장할 수 있어요.
+                </p>
+              ) : null}
+              <p className="shrink-0 text-right text-xs text-[var(--color-text-tertiary)]">{profile.bio.length}/100</p>
+            </div>
           </div>
 
           {aboutMeCategories.map((category) => (
@@ -354,29 +377,33 @@ function EditProfilePageContent() {
         </ProfileSection>
 
         <div className="section-card-muted rounded-2xl p-4">
-          <p className="text-sm font-semibold text-[var(--color-text-primary)]">다른 설정은 따로 관리해요</p>
+          <p className="text-sm font-semibold text-[var(--color-text-primary)]">
+            {isWaitingEntry ? '이상형 키워드도 준비해요' : '다른 설정은 따로 관리해요'}
+          </p>
           <div className="mt-3 action-stack text-sm text-[var(--color-text-secondary)]">
-            <Link href="/my/ideal-type" className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
+            <Link href={idealTypeHref} className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
               <span>이상형 키워드 수정하기</span>
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M9 18l6-6-6-6" />
               </svg>
             </Link>
-            <Link href="/my/settings" className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
-              <span>이상형 추천 설정</span>
-              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </Link>
+            {!isWaitingEntry && (
+              <Link href={recommendationSettingsHref} className="flex items-center justify-between rounded-xl bg-white px-4 py-3">
+                <span>이상형 추천 설정</span>
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </Link>
+            )}
           </div>
         </div>
       </PageContent>
 
-      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
+      <div className={`fixed right-4 z-40 ${isWaitingEntry ? 'bottom-[calc(var(--spacing-safe-bottom)+28px)]' : 'bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)]'}`}>
         <button
           type="button"
           onClick={handleSave}
-          disabled={!hasMinPhotos || !hasRequiredKeywords}
+          disabled={!hasMinPhotos || !hasRequiredKeywords || !hasBio}
           className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)] disabled:shadow-none"
           aria-label="저장하기"
         >
