@@ -88,6 +88,8 @@ type RecommendationSettingsDto = {
   reduce_same_year: boolean;
   preferred_age_min: number | null;
   preferred_age_max: number | null;
+  filter_drinking: boolean;
+  filter_smoking: boolean;
   updated_at: string | null;
 };
 
@@ -373,8 +375,8 @@ export function mapRecommendationSettings(dto: RecommendationSettingsDto): Recom
   return {
     excludeSameDepartment: dto.exclude_same_department,
     reduceSameYear: dto.reduce_same_year,
-    excludeSmokers: false,
-    excludeFrequentDrinkers: false,
+    excludeSmokers: dto.filter_smoking,
+    excludeFrequentDrinkers: dto.filter_drinking,
     preferredAgeRange: {
       min: dto.preferred_age_min ?? 20,
       max: dto.preferred_age_max ?? 29,
@@ -390,6 +392,8 @@ export function mapRecommendationSettingsPatch(settings: RecommendationSettings)
     reduce_same_year: settings.reduceSameYear,
     preferred_age_min: settings.preferredAgeRange.min,
     preferred_age_max: settings.preferredAgeRange.max,
+    filter_smoking: settings.excludeSmokers,
+    filter_drinking: settings.excludeFrequentDrinkers,
   };
 }
 

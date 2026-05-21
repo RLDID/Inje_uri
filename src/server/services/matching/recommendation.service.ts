@@ -288,6 +288,25 @@ export async function generateRecommendationsForUser(
   const userKeywordIds = userKeywordRows.map((r) => r.keyword_id);
   const safeKeywordIds = userKeywordIds.length > 0 ? userKeywordIds : [-1];
 
+  // 음주/흡연 필터: settings에서 활성화 여부 확인
+  const isFilterDrinkingActive = settings?.filter_drinking ?? false;
+  const isFilterSmokingActive = settings?.filter_smoking ?? false;
+
+  // 필터 대상 키워드 ID 조회 (음주: often/sometimes, 흡연: yes)
+  const filterKeywordRows = await prisma.$queryRaw<{ keyword_id: number; cat: string; code: string }[]>`
+    SELECT k.keyword_id, c.category_code AS cat, k.keyword_code AS code
+    FROM keyword k
+    JOIN categories c ON k.category_id = c.category_id
+    WHERE (c.category_code = 'drinking' AND k.keyword_code IN ('often', 'sometimes'))
+       OR (c.category_code = 'smoking'  AND k.keyword_code = 'yes')
+  `;
+
+  const drinkingExcludeIds = filterKeywordRows.filter(k => k.cat === 'drinking').map(k => k.keyword_id);
+  const smokingExcludeIds  = filterKeywordRows.filter(k => k.cat === 'smoking').map(k => k.keyword_id);
+
+  const safeDrinkingIds = drinkingExcludeIds.length > 0 ? drinkingExcludeIds : [0];
+  const safeSmokingIds  = smokingExcludeIds.length  > 0 ? smokingExcludeIds  : [0];
+
   // 추천 조건 완화 단계별 시도
   const fallbackSteps = [
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: false, agePad: 0, relaxDept: false },
@@ -343,6 +362,20 @@ export async function generateRecommendationsForUser(
         AND u.onboarding_completed = true
         AND u.gender != ${user.gender}
         AND u.id NOT IN (${Prisma.join(excludeIds.size > 0 ? [...excludeIds] : [-1])})
+        AND (
+          NOT ${isFilterDrinkingActive}
+          OR NOT EXISTS (
+            SELECT 1 FROM user_keyword_selections uks_d
+            WHERE uks_d.user_id = u.id AND uks_d.keyword_id IN (${Prisma.join(safeDrinkingIds)})
+          )
+        )
+        AND (
+          NOT ${isFilterSmokingActive}
+          OR NOT EXISTS (
+            SELECT 1 FROM user_keyword_selections uks_s
+            WHERE uks_s.user_id = u.id AND uks_s.keyword_id IN (${Prisma.join(safeSmokingIds)})
+          )
+        )
       GROUP BY u.id
     `;
 

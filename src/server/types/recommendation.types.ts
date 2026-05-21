@@ -44,5 +44,7 @@ export interface RecommendationSettingsResponse {
   reduce_same_year: boolean;
   preferred_age_min: number | null;
   preferred_age_max: number | null;
+  filter_drinking: boolean;
+  filter_smoking: boolean;
   updated_at: string | null; // 설정 미생성 시 null
 }
