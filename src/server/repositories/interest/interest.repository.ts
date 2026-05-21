@@ -159,3 +159,8 @@ export async function rollbackMatch(
     WHERE id IN (${interestId1}, ${interestId2})
   `;
 }
+
+export async function deleteAllInterests(): Promise<number> {
+  const result = await prisma.interest.deleteMany({});
+  return result.count;
+}

@@ -15,6 +15,17 @@ import type {
   ApiResponse,
 } from '@/lib/types';
 
+interface AdminRecommendationResetResultDto {
+  deleted: {
+    chat_rooms: number;
+    interests: number;
+    daily_recommendations: number;
+    recommendation_dismisses: number;
+    recommendation_settings: number;
+    internal_job_runs: number;
+  };
+}
+
 const STATUS_FILTERS: Array<{ value: AdminReportStatusFilter; label: string }> = [
   { value: 'all', label: '전체' },
   { value: 'pending', label: '대기' },
@@ -320,6 +331,8 @@ export default function AdminPage() {
   const [runningActionKey, setRunningActionKey] = useState<string | null>(null);
   const [actionTarget, setActionTarget] = useState<{ item: AdminReportListItemDto; action: AdminReportAction } | null>(null);
   const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
+  const [isResettingRecommendations, setIsResettingRecommendations] = useState(false);
 
   const loadReports = useCallback(async (nextFilter: AdminReportStatusFilter) => {
     setIsLoadingReports(true);
@@ -393,6 +406,8 @@ export default function AdminPage() {
     setDraftStatuses({});
     setRunningActionKey(null);
     setActionTarget(null);
+    setIsResetConfirmOpen(false);
+    setIsResettingRecommendations(false);
   };
 
   const handleApplyStatus = async (item: AdminReportListItemDto) => {
@@ -447,6 +462,25 @@ export default function AdminPage() {
     }
   };
 
+  const handleResetRecommendations = async () => {
+    setIsResettingRecommendations(true);
+
+    try {
+      const data = await adminRequest<AdminRecommendationResetResultDto>('/api/admin/recommendations/reset', {
+        method: 'POST',
+      });
+      const deletedCount = Object.values(data.deleted).reduce((sum, count) => sum + count, 0);
+
+      await loadReports(filterStatus);
+      showToast(`추천 데이터를 초기화했어요. 삭제된 데이터 ${deletedCount}건`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '추천 데이터를 초기화하지 못했어요.', 'error');
+    } finally {
+      setIsResettingRecommendations(false);
+      setIsResetConfirmOpen(false);
+    }
+  };
+
   if (isAuthenticated === null) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--color-surface-secondary)]">
@@ -475,7 +509,17 @@ export default function AdminPage() {
             <p className="text-sm font-semibold text-[var(--color-text-secondary)]">관리자</p>
             <h1 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">신고 관리</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              loading={isResettingRecommendations}
+              disabled={isLoadingReports}
+              onClick={() => setIsResetConfirmOpen(true)}
+            >
+              추천 초기화
+            </Button>
             <Button type="button" variant="secondary" size="sm" loading={isLoadingReports} onClick={() => void loadReports(filterStatus)}>
               새로고침
             </Button>
@@ -547,6 +591,21 @@ export default function AdminPage() {
           </div>
         </section>
       </div>
+
+      <ConfirmSheet
+        isOpen={isResetConfirmOpen}
+        onClose={() => {
+          if (!isResettingRecommendations) {
+            setIsResetConfirmOpen(false);
+          }
+        }}
+        onConfirm={() => void handleResetRecommendations()}
+        title="추천 데이터를 초기화할까요?"
+        description="채팅방, 호감, 오늘우리 추천, 추천 제외 설정, 추천 생성 기록이 삭제돼요. 배포 전 테스트 데이터 초기화가 필요할 때만 실행해주세요."
+        confirmText="추천 초기화"
+        cancelText="취소"
+        destructive
+      />
 
       <ConfirmSheet
         isOpen={Boolean(actionTarget)}

@@ -82,8 +82,8 @@ const menuItems: MenuItem[] = [
   {
     id: 'support',
     label: '고객센터',
-    description: '문의와 이용 안내가 준비되는 대로 이곳에서 확인할 수 있어요.',
-    comingSoonMessage: '고객센터 화면은 준비 중이에요.',
+    description: '자주 묻는 질문과 안전/신고 안내를 확인할 수 있어요.',
+    href: '/my/support',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="10" />
@@ -92,7 +92,7 @@ const menuItems: MenuItem[] = [
       </svg>
     ),
   },
-];
+].filter((item) => item.id !== 'notification');
 
 const idealKeywordLabelMap: Record<string, string> = {
   comfortable: '편안함',
