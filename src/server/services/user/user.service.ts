@@ -403,7 +403,7 @@ export async function updateCurrentUserProfile(userId: number, body: UserPatchBo
       updateData.bio = null;
     } else {
       const bio = toOptionalString(profile.bio);
-      if (bio === undefined) {
+      if (!bio) {
         throw new ApiError(ERROR.VALIDATION_ERROR, 'bio 형식을 확인해주세요.');
       }
 
