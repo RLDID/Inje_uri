@@ -112,6 +112,7 @@ model User {
   phoneBlocks                PhoneBlock[]              @relation("phone_blocks_user_idTousers")
   userContacts               UserContact[]             @relation("user_contacts_user_idTousers")
   matchedContacts            UserContact[]             @relation("user_contacts_matched_user_idTousers")
+  messageReads               MessageRead[]
 
   @@map("users")
 }
@@ -331,9 +332,24 @@ model Message {
   chat_room                 ChatRoom              @relation(fields: [chat_room_id], references: [id], onDelete: Cascade)
   sender_user               User                  @relation("messages_sender_user_idTousers", fields: [sender_user_id], references: [id], onDelete: Cascade)
   last_read_by_participants ChatRoomParticipant[] @relation("chat_room_participants_last_read_message_idTomessages")
+  messageReads              MessageRead[]
 
   @@index([chat_room_id, created_at])
   @@map("messages")
+}
+
+model MessageRead {
+  id         Int      @id @default(autoincrement())
+  message_id Int
+  user_id    Int
+  read_at    DateTime @default(now()) @db.Timestamptz(6)
+
+  message    Message  @relation(fields: [message_id], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([message_id, user_id])
+  @@index([user_id])
+  @@map("message_reads")
 }
 
 model SelfDateFeed {
