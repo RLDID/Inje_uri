@@ -7,8 +7,8 @@
    */             
 
   import { prisma } from "@/server/db/prisma";
+  import type { PrismaTransactionClient } from "@/server/db/prisma";
   import { chat_room_status, chat_room_source_type } from "@/generated/prisma/client";  
-  import type { Prisma } from "@/generated/prisma/client";                                         
 
   // ─────────────────────────────────────────────
   // 타입
@@ -132,7 +132,7 @@
   export async function findActiveRoomBetweenUsers(
     userIdA: number,
     userIdB: number,
-    tx?: Prisma.TransactionClient
+    tx?: PrismaTransactionClient
   ) {
     const db = tx ?? prisma;
     return db.chatRoom.findFirst({
@@ -158,7 +158,7 @@
   export async function findLastLeftRoomBetweenUsers(
     userIdA: number,
     userIdB: number,
-    tx?: Prisma.TransactionClient
+    tx?: PrismaTransactionClient
   ) {
     const db = tx ?? prisma;
     return db.chatRoom.findFirst({
@@ -200,7 +200,7 @@
   
 export async function createRoom(
   input: CreateChatRoomInput,
-  tx?: Prisma.TransactionClient
+  tx?: PrismaTransactionClient
 ) {
   const db = tx ?? prisma;
   return db.chatRoom.create({
@@ -271,7 +271,7 @@ export async function createRoom(
   export async function blockActiveRoomsBetweenUsers(
     blockerUserId: number,
     blockedUserId: number,
-    tx?: Prisma.TransactionClient,
+    tx?: PrismaTransactionClient,
   ) {
     const db = tx ?? prisma;
     const result = await db.chatRoom.updateMany({

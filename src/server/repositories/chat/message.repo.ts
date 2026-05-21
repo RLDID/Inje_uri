@@ -6,7 +6,8 @@
    */
 
 import { prisma } from "@/server/db/prisma";
-import { message_type, type Prisma } from "@/generated/prisma/client";   
+import type { PrismaTransactionClient } from "@/server/db/prisma";
+import { message_type } from "@/generated/prisma/client";   
 
   // ─────────────────────────────────────────────
   // 타입
@@ -74,7 +75,7 @@ export async function findMessageById(messageId: number) {
    * 시스템 메시지(채팅방 생성 안내)도 type: "system"으로 이
   함수 사용.
    */
-export async function insertMessage(input: InsertMessageInput,  tx?: Prisma.TransactionClient) {
+export async function insertMessage(input: InsertMessageInput,  tx?: PrismaTransactionClient) {
   const db = tx ?? prisma;
   return db.message.create({
     data: {

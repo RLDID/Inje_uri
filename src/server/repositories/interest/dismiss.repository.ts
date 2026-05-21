@@ -1,7 +1,7 @@
 // recommendation_dismisses 테이블 UPSERT
 
 import { prisma } from "@/server/db/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import type { PrismaTransactionClient } from "@/server/db/prisma";
 
 /** 관심없음 UPSERT (독립 실행): 기존 레코드 있으면 expires_at 갱신, 없으면 INSERT */
 export async function upsertDismiss(
@@ -31,7 +31,7 @@ export async function upsertDismiss(
 
 /** 관심없음 UPSERT (트랜잭션 내 호출용): passed_at 업데이트와 원자적으로 처리 */
 export async function upsertDismissInTx(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   userId: number,
   dismissedUserId: number,
   dailyRecommendationId: number,

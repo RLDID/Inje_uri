@@ -2,6 +2,7 @@
 
 import { prisma } from "@/server/db/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import type { PrismaTransactionClient } from "@/server/db/prisma";
 
 export interface InterestRow {
   id: number;
@@ -137,7 +138,7 @@ export async function declineInterestById(
 export async function confirmMatch(
   interestId1: number,
   interestId2: number,
-  tx?: Prisma.TransactionClient,
+  tx?: PrismaTransactionClient,
 ): Promise<void> {
   const db = tx ?? prisma;
   await db.$executeRaw`

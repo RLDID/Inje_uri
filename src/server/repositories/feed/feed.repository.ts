@@ -1,4 +1,16 @@
-import type { PrismaClient, Prisma } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
+import type { PrismaDbClient, PrismaTransactionClient } from "@/server/db/prisma";
+
+type FeedRepositoryDb = Pick<
+  PrismaDbClient,
+  | "feedComment"
+  | "report"
+  | "block"
+  | "selfDateFeed"
+  | "feedView"
+  | "feedKeyword"
+  | "appSetting"
+>;
 
 const FEED_PAGE_SIZE = 20;
 
@@ -94,7 +106,7 @@ export type FeedForUpdateRow = Prisma.SelfDateFeedGetPayload<{ select: typeof fe
 export type FeedForViewRow = Prisma.SelfDateFeedGetPayload<{ select: typeof feedForViewSelect }>;
 
 export class FeedRepository {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(private readonly db: FeedRepositoryDb) {}
 
   async findCommentedFeedIdsByUser(userId: number): Promise<Set<number>> {
     const rows = await this.db.feedComment.findMany({
@@ -196,7 +208,7 @@ export class FeedRepository {
   }
 
   async updateFeedText(
-    tx: Prisma.TransactionClient,
+    tx: PrismaTransactionClient,
     feedId: number,
     text: string,
     now: Date,
@@ -208,7 +220,7 @@ export class FeedRepository {
   }
 
   async replaceFeedKeywords(
-    tx: Prisma.TransactionClient,
+    tx: PrismaTransactionClient,
     feedId: number,
     feedKeywordIds: number[],
   ) {
@@ -225,7 +237,7 @@ export class FeedRepository {
   }
 
   async createFeedImages(
-    tx: Prisma.TransactionClient,
+    tx: PrismaTransactionClient,
     feedId: number,
     images: Array<{ imageUrl: string; sortOrder: number }>,
   ) {
@@ -243,7 +255,7 @@ export class FeedRepository {
   }
 
   async findFeedImagesByIds(
-    tx: Prisma.TransactionClient,
+    tx: PrismaTransactionClient,
     feedId: number,
     imageIds: number[],
   ) {
@@ -262,7 +274,7 @@ export class FeedRepository {
   }
 
   async deleteFeedImagesByIds(
-    tx: Prisma.TransactionClient,
+    tx: PrismaTransactionClient,
     feedId: number,
     imageIds: number[],
   ) {
@@ -278,7 +290,7 @@ export class FeedRepository {
     });
   }
 
-  async getMaxImageSortOrder(tx: Prisma.TransactionClient, feedId: number): Promise<number> {
+  async getMaxImageSortOrder(tx: PrismaTransactionClient, feedId: number): Promise<number> {
     const aggregate = await tx.selfDateFeedImage.aggregate({
       where: { feed_id: feedId },
       _max: { sort_order: true },
@@ -364,7 +376,7 @@ export class FeedRepository {
   }
 
   async createFeedWithKeywords(
-    tx: Prisma.TransactionClient,
+    tx: PrismaTransactionClient,
     data: { authorUserId: number; text: string; expiresAt: Date },
     feedKeywordIds: number[],
   ) {
