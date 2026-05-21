@@ -24,7 +24,7 @@ import type {
 const RECOMMEND_COUNT = 3;
 const DISMISS_COOLDOWN_DAYS = 7;
 const DECLINE_COOLDOWN_DAYS = 7;
-const RECENT_REC_EXCLUDE_DAYS = 7;
+const RECENT_REC_EXCLUDE_DAYS = 3;
 
 /**
  * 이상형 매핑 테이블
@@ -336,7 +336,7 @@ export async function generateRecommendationsForUser(
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 0, relaxDept: false },
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 2, relaxDept: false },
     { recentDays: RECENT_REC_EXCLUDE_DAYS, relaxSameYear: true, agePad: 2, relaxDept: true },
-    { recentDays: 3, relaxSameYear: true, agePad: 2, relaxDept: true },
+    { recentDays: 2, relaxSameYear: true, agePad: 2, relaxDept: true },
     { recentDays: 1, relaxSameYear: true, agePad: 2, relaxDept: true },
     { recentDays: 0, relaxSameYear: true, agePad: 2, relaxDept: true },
   ];
