@@ -43,6 +43,7 @@ type TodayRecommendationDto = {
   candidates: Array<{
     item_id: number;
     candidate_user_id: number;
+    keyword_match_count: number;
     is_passed: boolean;
     blocked: boolean;
     profile: {
@@ -230,7 +231,8 @@ export function mapTodayRecommendation(dto: TodayRecommendationDto): DailyRecomm
         lastActive: new Date(),
         createdAt: new Date(),
         recommendationItemId: candidate.item_id,
-      } satisfies User & { recommendationItemId: number };
+        keywordMatchCount: candidate.keyword_match_count,
+      } satisfies User & { recommendationItemId: number; keywordMatchCount: number };
     });
 
   return {
