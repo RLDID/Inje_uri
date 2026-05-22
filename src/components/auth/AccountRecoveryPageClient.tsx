@@ -38,6 +38,7 @@ export function AccountRecoveryPageClient() {
   const [mode, setMode] = useState<RecoveryMode>(() => resolveMode(searchParams.get('mode')));
   const [studentNumber, setStudentNumber] = useState('');
   const [birth, setBirth] = useState('');
+  const [email, setEmail] = useState('');
   const [loginId, setLoginId] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -62,6 +63,7 @@ export function AccountRecoveryPageClient() {
   const handleModeChange = (nextMode: RecoveryMode) => {
     setMode(nextMode);
     resetResult();
+    setEmail('');
     startTransition(() => {
       router.replace(`/account-recovery?mode=${nextMode}`);
     });
@@ -72,6 +74,7 @@ export function AccountRecoveryPageClient() {
 
     const normalizedStudentNumber = studentNumber.trim();
     const normalizedBirth = birth.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     if (!normalizedStudentNumber || !normalizedBirth) {
       const message = '학번과 생년월일을 모두 입력해주세요.';
       setErrorMessage(message);
@@ -86,6 +89,20 @@ export function AccountRecoveryPageClient() {
       return;
     }
 
+    if (mode === 'password' && !normalizedEmail) {
+      const message = '가입할 때 작성한 이메일을 입력해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+      return;
+    }
+
+    if (mode === 'password' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      const message = '이메일 형식을 확인해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+      return;
+    }
+
     setIsVerifying(true);
     setErrorMessage('');
 
@@ -94,8 +111,10 @@ export function AccountRecoveryPageClient() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode,
           studentNumber: normalizedStudentNumber,
           birth: normalizedBirth,
+          email: mode === 'password' ? normalizedEmail : undefined,
         }),
       });
 
@@ -211,7 +230,9 @@ export function AccountRecoveryPageClient() {
               {mode === 'id' ? '아이디 찾기' : '비밀번호 재설정'}
             </h1>
             <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-              가입할 때 인증한 학번과 생년월일로 본인 확인을 진행합니다.
+              {mode === 'password'
+                ? '가입할 때 인증한 학번, 생년월일, 이메일로 본인 확인을 진행합니다.'
+                : '가입할 때 인증한 학번과 생년월일로 본인 확인을 진행합니다.'}
             </p>
           </div>
 
@@ -302,6 +323,24 @@ export function AccountRecoveryPageClient() {
                       disabled={isBusy}
                     />
                   </UnderlinedField>
+
+                  {mode === 'password' ? (
+                    <UnderlinedField fieldId="recoveryEmail" icon={<span className="text-lg font-semibold">@</span>} label="가입 이메일">
+                      <input
+                        id="recoveryEmail"
+                        type="email"
+                        value={email}
+                        onChange={(event) => {
+                          setEmail(event.target.value);
+                          resetResult();
+                        }}
+                        placeholder="가입 이메일"
+                        className={inputClassName}
+                        disabled={isBusy}
+                        autoComplete="email"
+                      />
+                    </UnderlinedField>
+                  ) : null}
                 </div>
 
                 <div className="mt-7 flex items-center justify-between gap-4">

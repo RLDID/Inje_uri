@@ -65,6 +65,7 @@ export interface PreSignupPayload {
 
 export interface AccountRecoveryPayload {
   userId: number;
+  purpose: 'password-reset';
 }
 
 export type AuthedHandler<T> = (request: NextRequest, auth: AuthContext) => Promise<T> | T;
@@ -288,6 +289,7 @@ export async function clearPreSignupVerificationToken(token: string | null) {
 export function issueAccountRecoveryToken(userId: number): string {
   const payload = Buffer.from(JSON.stringify({
     userId,
+    purpose: 'password-reset',
     expiresAt: Date.now() + ACCOUNT_RECOVERY_TOKEN_MAX_AGE_SECONDS * 1000,
   })).toString('base64url');
   const signature = signAccountRecoveryPayload(payload);
@@ -313,6 +315,7 @@ export function verifyAccountRecoveryToken(token: string | null): AccountRecover
   try {
     const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')) as {
       userId?: unknown;
+      purpose?: unknown;
       expiresAt?: unknown;
     };
 
@@ -324,7 +327,11 @@ export function verifyAccountRecoveryToken(token: string | null): AccountRecover
       return null;
     }
 
-    return { userId: parsed.userId };
+    if (parsed.purpose !== 'password-reset') {
+      return null;
+    }
+
+    return { userId: parsed.userId, purpose: 'password-reset' };
   } catch {
     return null;
   }

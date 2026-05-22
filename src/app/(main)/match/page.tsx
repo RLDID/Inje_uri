@@ -12,6 +12,7 @@ import { getFeedComments, getMyFeeds } from '@/lib/api/feeds';
 import { getReceivedInterests } from '@/lib/api/interests';
 import { getMe } from '@/lib/api/profile';
 import { getTodayRecommendation, selectRecommendation } from '@/lib/api/recommendations';
+import { trackTodayWooriHeartSent } from '@/lib/analytics';
 import { usePolling } from '@/lib/hooks/usePolling';
 import { getOtherParticipant, isChatInExpiryWarningWindow } from '@/lib/utils/chat';
 import { buildChatRoomHref, readRouteViewState, writeRouteViewState } from '@/lib/navigation';
@@ -159,6 +160,41 @@ function HeaderHeartIcon({
   );
 }
 
+function RecommendationCardSkeleton() {
+  return (
+    <div
+      className="w-full overflow-hidden rounded-[28px] border border-[#F4EDF2] bg-white px-5 pb-6 pt-5"
+      aria-hidden="true"
+    >
+      <div className="animate-pulse">
+        <div className="flex items-center gap-5">
+          <div className="h-[142px] w-[142px] shrink-0 rounded-full bg-[#F4EEF3]" />
+          <div className="min-w-0 flex-1 space-y-3">
+            <div className="h-6 w-24 rounded-full bg-[#F4EEF3]" />
+            <div className="h-4 w-32 rounded-full bg-[#F1F3F5]" />
+            <div className="h-7 w-16 rounded-full bg-[#FFE3EE]" />
+          </div>
+        </div>
+        <div className="mt-5 flex gap-2.5">
+          <div className="h-9 w-20 rounded-full bg-[#F1F3F5]" />
+          <div className="h-9 w-24 rounded-full bg-[#F1F3F5]" />
+          <div className="h-9 w-16 rounded-full bg-[#F1F3F5]" />
+        </div>
+        <div className="mt-4 rounded-[18px] bg-[#FFF4F8] px-5 py-4">
+          <div className="h-4 w-32 rounded-full bg-[#F5DDE7]" />
+          <div className="mt-3 h-4 w-44 rounded-full bg-[#F1E8EE]" />
+        </div>
+        <div className="mt-6 flex justify-center gap-2.5">
+          <div className="h-2.5 w-3 rounded-full bg-[#F3A7C0]" />
+          <div className="h-2.5 w-2.5 rounded-full bg-[#E8E8E8]" />
+          <div className="h-2.5 w-2.5 rounded-full bg-[#E8E8E8]" />
+        </div>
+        <div className="mt-5 h-14 rounded-[16px] bg-[#F3A7C0]/60" />
+      </div>
+    </div>
+  );
+}
+
 function MatchPageContent() {
   const router = useRouter();
   const { showToast } = useToast();
@@ -168,7 +204,6 @@ function MatchPageContent() {
   const [chats, setChats] = useState<Chat[]>([]);
   const [feedReactionItems, setFeedReactionItems] = useState<FeedReactionNotificationItem[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [hiddenUserIds, setHiddenUserIds] = useState<string[]>([]);
   const [hasRestoredViewState, setHasRestoredViewState] = useState(false);
   const [now, setNow] = useState<number | null>(null);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
@@ -198,9 +233,7 @@ function MatchPageContent() {
           return;
         }
 
-        const restoredHiddenUserIds = savedViewState?.hiddenUserIds ?? [];
-        const restoredHiddenUserIdSet = new Set(restoredHiddenUserIds);
-        const restoredUsers = todayRecommendation.users.filter((user) => !restoredHiddenUserIdSet.has(user.id));
+        const restoredUsers = todayRecommendation.users;
         const clampedIndex = Math.max(
           0,
           Math.min(savedViewState?.currentIndex ?? 0, Math.max(restoredUsers.length - 1, 0)),
@@ -216,7 +249,6 @@ function MatchPageContent() {
           setChats(rooms);
           setFeedReactionItems(feedReactions);
           setCurrentIndex(clampedIndex);
-          setHiddenUserIds(restoredHiddenUserIds);
           setRecommendation({
             ...todayRecommendation,
             users: restoredUsers,
@@ -251,8 +283,7 @@ function MatchPageContent() {
         loadMyFeedReactionItems().catch(() => []),
       ]);
 
-      const hiddenUserIdSet = new Set(hiddenUserIds);
-      const visibleUsersFromServer = todayRecommendation.users.filter((user) => !hiddenUserIdSet.has(user.id));
+      const visibleUsersFromServer = todayRecommendation.users;
 
       setCurrentUser(me);
       setReceivedInterests(interests);
@@ -280,7 +311,7 @@ function MatchPageContent() {
     } catch {
       // Keep the current recommendation and notification state during background polling.
     }
-  }, [currentUser, hiddenUserIds]);
+  }, [currentUser]);
 
   usePolling(refreshMatchData, {
     intervalMs: 7000,
@@ -298,12 +329,11 @@ function MatchPageContent() {
       viewedCount: recommendation.viewedCount,
       selectedUserId: recommendation.selectedUserId,
       isSelectionMade: recommendation.isSelectionMade,
-      hiddenUserIds,
+      hiddenUserIds: [],
     });
   }, [
     currentIndex,
     hasRestoredViewState,
-    hiddenUserIds,
     recommendation.isSelectionMade,
     recommendation.selectedUserId,
     recommendation.viewedCount,
@@ -410,14 +440,19 @@ function MatchPageContent() {
       const hasPendingReceivedHeart = receivedInterests.some(
         (interest) => interest.status === 'pending' && interest.fromUser.id === userId,
       );
+      const chatStartedUserIds = readRouteViewState<string[]>(INTEREST_CHAT_STARTED_USER_IDS_KEY, []);
+      const hasChatStartedFromReceivedHeart = chatStartedUserIds.includes(userId);
+
+      trackTodayWooriHeartSent({
+        candidateRank: selectedIndex + 1,
+        matched: Boolean(result.chat_room_id || hasChatStartedFromReceivedHeart),
+        hadReceivedHeart: hasPendingReceivedHeart,
+      });
 
       if (!hasPendingReceivedHeart) {
         showToast('하트를 보냈어요!', 'success');
         return;
       }
-
-      const chatStartedUserIds = readRouteViewState<string[]>(INTEREST_CHAT_STARTED_USER_IDS_KEY, []);
-      const hasChatStartedFromReceivedHeart = chatStartedUserIds.includes(userId);
 
       addUserIdToRouteState(INTEREST_HIDDEN_USER_IDS_KEY, userId);
       addUserIdToRouteState(INTEREST_CHAT_STARTED_USER_IDS_KEY, userId);
@@ -668,7 +703,9 @@ function MatchPageContent() {
             </div>
 
             <div className="relative z-10 mt-3">
-              {visibleUsers.length > 0 && (
+              {!hasRestoredViewState ? (
+                <RecommendationCardSkeleton />
+              ) : visibleUsers.length > 0 ? (
                 <ProfileCardCarousel
                   users={visibleUsers}
                   currentIndex={visibleCurrentIndex}
@@ -678,6 +715,22 @@ function MatchPageContent() {
                   onSelect={handleSelect}
                   currentUserInterests={currentUser?.interests ?? []}
                 />
+              ) : (
+                <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[28px] border border-[#F4EDF2] bg-white px-6 py-10 text-center">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[var(--color-brand-pink)] text-[var(--color-pink-cta)]">
+                    <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  </div>
+                  <h3 className="mt-5 text-[20px] font-semibold tracking-[-0.03em] text-[var(--color-text-primary)]">
+                    {recommendation.isSelectionMade ? '오늘은 하트를 보냈어요' : '오늘의 추천이 아직 없어요'}
+                  </h3>
+                  <p className="mt-2 break-keep text-[14px] leading-6 text-[var(--color-text-secondary)]">
+                    {recommendation.isSelectionMade
+                      ? '내일 새로운 오늘우리 추천을 확인해보세요.'
+                      : '추천이 준비되면 이곳에 프로필이 표시돼요.'}
+                  </p>
+                </div>
               )}
             </div>
 

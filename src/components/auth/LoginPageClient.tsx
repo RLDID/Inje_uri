@@ -2,6 +2,7 @@
 
 import { FormEvent, startTransition, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { StartPageAnimation } from '@/components/brand/StartPageAnimation';
 import { PageContainer } from '@/components/layout';
 import { useToast } from '@/components/ui';
 import { APP_NAME } from '@/lib/constants';
@@ -122,116 +123,116 @@ export function LoginPageClient() {
       />
 
       <main className="relative z-10 flex flex-1 flex-col px-[var(--page-padding-x)] pb-8 pt-10">
-        <div className="w-full p-5">
-          <div className="mb-7">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
-              {APP_NAME}
-            </p>
-            <h1 className="mt-2 break-keep text-[28px] font-semibold text-[var(--color-text-primary)]">
-              로그인
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
-              가입된 계정으로 로그인하세요.
-            </p>
-          </div>
-
-          <form className="mx-auto mt-[8vh] w-full max-w-[350px]" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
-                <label htmlFor="loginId" className="sr-only">
-                  아이디
-                </label>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center text-xl font-semibold text-[var(--color-text-secondary)]">
-                  @
-                </span>
-                <input
-                  id="loginId"
-                  name="loginId"
-                  type="text"
-                  autoComplete="username"
-                  value={loginId}
-                  onChange={(event) => setLoginId(event.target.value)}
-                  placeholder="아이디"
-                  className="min-w-0 flex-1 bg-transparent text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none disabled:cursor-not-allowed"
-                  disabled={isBusy}
-                />
-              </div>
-
-              <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
-                <label htmlFor="password" className="sr-only">
-                  비밀번호
-                </label>
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--color-text-secondary)]">
-                  <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <rect x="5" y="11" width="14" height="10" rx="2" />
-                    <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-                  </svg>
-                </span>
-                <input
-                  id="password"
-                  name="password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  placeholder="비밀번호"
-                  className="min-w-0 flex-1 bg-transparent text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none disabled:cursor-not-allowed"
-                  disabled={isBusy}
-                />
-              </div>
-            </div>
-
-            {errorMessage && (
-              <p
-                role="alert"
-                className="mt-4 rounded-xl border border-[var(--color-pink-cta)]/25 bg-white/82 px-3 py-2 text-sm text-[var(--color-text-primary)] backdrop-blur-sm"
-              >
-                {errorMessage}
+        <div className="flex flex-1 items-center p-5 pb-[14vh]">
+          <div className="mx-auto w-full max-w-[350px]">
+            <div className="mb-8 text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-primary)]">
+                {APP_NAME}
               </p>
-            )}
-
-            <div className="mt-7 flex items-center justify-between gap-4">
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={() => router.push('/account-recovery?mode=id')}
-                className="min-h-11 rounded-full px-1 text-sm font-semibold text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)]"
-              >
-                문제가 있나요?
-              </button>
-              <button
-                type="submit"
-                disabled={isBusy}
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-action-primary)] text-[var(--color-action-primary-text)] shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)]"
-                aria-label="로그인"
-              >
-                {isSubmitting ? (
-                  <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
-                  </svg>
-                ) : (
-                  <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M5 12h14" />
-                    <path d="m13 6 6 6-6 6" />
-                  </svg>
-                )}
-              </button>
+              <h1 className="mt-2 break-keep text-[28px] font-semibold text-[var(--color-text-primary)]">
+                로그인
+              </h1>
             </div>
 
-            <div className="mt-4 text-right">
-              <button
-                type="button"
-                disabled={isBusy}
-                onClick={() => pushAuthPath('/register')}
-                className="rounded-full px-1 py-2 text-xs font-semibold text-[var(--color-text-secondary)] underline underline-offset-4 disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)]"
-              >
-                회원가입
-              </button>
-            </div>
-          </form>
+            <form className="w-full" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
+                  <label htmlFor="loginId" className="sr-only">
+                    아이디
+                  </label>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center text-xl font-semibold text-[var(--color-text-secondary)]">
+                    @
+                  </span>
+                  <input
+                    id="loginId"
+                    name="loginId"
+                    type="text"
+                    autoComplete="username"
+                    value={loginId}
+                    onChange={(event) => setLoginId(event.target.value)}
+                    placeholder="아이디"
+                    className="min-w-0 flex-1 bg-transparent text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none disabled:cursor-not-allowed"
+                    disabled={isBusy}
+                  />
+                </div>
+
+                <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
+                  <label htmlFor="password" className="sr-only">
+                    비밀번호
+                  </label>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center text-[var(--color-text-secondary)]">
+                    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <rect x="5" y="11" width="14" height="10" rx="2" />
+                      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+                    </svg>
+                  </span>
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    placeholder="비밀번호"
+                    className="min-w-0 flex-1 bg-transparent text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none disabled:cursor-not-allowed"
+                    disabled={isBusy}
+                  />
+                </div>
+              </div>
+
+              {errorMessage && (
+                <p
+                  role="alert"
+                  className="mt-4 rounded-xl border border-[var(--color-pink-cta)]/25 bg-white/82 px-3 py-2 text-sm text-[var(--color-text-primary)] backdrop-blur-sm"
+                >
+                  {errorMessage}
+                </p>
+              )}
+
+              <div className="mt-7 flex items-center justify-between gap-4">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => router.push('/account-recovery?mode=id')}
+                  className="min-h-11 rounded-full px-1 text-sm font-semibold text-[var(--color-text-secondary)] disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)]"
+                >
+                  문제가 있나요?
+                </button>
+                <button
+                  type="submit"
+                  disabled={isBusy}
+                  className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[var(--color-action-primary)] text-[var(--color-action-primary-text)] shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition active:scale-95 disabled:cursor-not-allowed disabled:bg-[var(--color-border)] disabled:text-[var(--color-text-tertiary)]"
+                  aria-label="로그인"
+                >
+                  {isSubmitting ? (
+                    <svg className="h-5 w-5 animate-spin" viewBox="0 0 24 24" aria-hidden="true">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4Z" />
+                    </svg>
+                  ) : (
+                    <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M5 12h14" />
+                      <path d="m13 6 6 6-6 6" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+
+              <div className="mt-4 text-right">
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  onClick={() => pushAuthPath('/register')}
+                  className="rounded-full px-1 py-2 text-xs font-semibold text-[var(--color-text-secondary)] underline underline-offset-4 disabled:cursor-not-allowed disabled:text-[var(--color-text-tertiary)]"
+                >
+                  회원가입
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </main>
+      <StartPageAnimation />
     </PageContainer>
   );
 }
