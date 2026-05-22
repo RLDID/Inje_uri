@@ -27,7 +27,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://postgres:postgres@db:5432/injeuri?schema=public
-      COOKIE_SECURE: "false"
+      COOKIE_SECURE: "true"
       AUTH_SECRET: staging-test-auth-secret-change-me
       SESSION_SECRET: staging-test-session-secret-change-me
       BATCH_SECRET: change-me

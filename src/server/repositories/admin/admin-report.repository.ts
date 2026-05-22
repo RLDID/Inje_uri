@@ -4,7 +4,7 @@ import type { report_status } from '@/generated/prisma/enums';
 export type AdminReportRow = Awaited<ReturnType<AdminReportRepository['findReports']>>[number];
 
 export class AdminReportRepository {
-  constructor(private readonly db: Pick<PrismaDbClient, 'report' | 'user'>) {}
+  constructor(private readonly db: PrismaDbClient) {}
 
   async findReports(status?: report_status) {
     return this.db.report.findMany({
