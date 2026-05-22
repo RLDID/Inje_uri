@@ -9,6 +9,7 @@
   import * as chatRoomRepo from "@/server/repositories/chat/chatRoom.repo";
   import * as participantRepo from "@/server/repositories/chat/participant.repo";
   import * as messageRepo from "@/server/repositories/chat/message.repo";
+  import * as messageReadRepo from "@/server/repositories/chat/messageRead.repo";
   import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
   import { chat_room_source_type } from "@/generated/prisma/client";
   import { prisma } from "@/server/db/prisma";
@@ -136,62 +137,43 @@
    * 응답은 ChatRoomListItemDto로 매핑되며, 차단 상태(isBlocked, blockedByMe)를
    * 명시적으로 노출한다. 정책상 차단된 방도 목록에 그대로 포함된다 (히스토리 유지).
    */
-  export async function getChatRooms(
+export async function getChatRooms(
     userId: number,
     tab: "all" | "unread",
   ): Promise<ChatRoomListItemDto[]> {
     const rooms = await chatRoomRepo.findRoomsByUserId(userId);
 
-    // 마지막 메시지 시각 기준 내림차순 정렬
-    for (let i = 0; i < rooms.length - 1; i++) {
-        for (let j = i + 1; j < rooms.length; j++) {
-            const aTime = rooms[i].messages[0]?.created_at ?? rooms[i].created_at;
-            const bTime = rooms[j].messages[0]?.created_at ?? rooms[j].created_at;
-            if (bTime.getTime() > aTime.getTime()) {
-                const temp = rooms[i];
-                rooms[i] = rooms[j];
-                rooms[j] = temp;
-            }
-        }
+    rooms.sort((a, b) => {
+      const aTime = a.messages[0]?.created_at ?? a.created_at;
+      const bTime = b.messages[0]?.created_at ?? b.created_at;
+      return bTime.getTime() - aTime.getTime();
+    });
+
+    const unreadCounts = await Promise.all(
+      rooms.map((room) => messageReadRepo.getUnreadCount(userId, room.id))
+    );
+
+    const result: ChatRoomListItemDto[] = [];
+    for (let i = 0; i < rooms.length; i++) {
+      const unreadCount = unreadCounts[i];
+      if (tab === "unread" && unreadCount === 0) continue;
+      result.push(toChatRoomListItemDto(rooms[i], userId, unreadCount));
     }
 
-    const filtered: typeof rooms = [];
-    for (const room of rooms) {
-      let me: (typeof room.participants)[number] | null = null;
-      for (const p of room.participants) {
-        if (p.user_id === userId) {
-          me = p;
-          break;
-        }
-      }
-      if (me === null) continue;
-
-      if (tab === "unread") {
-        const lastMsg = room.messages[0];
-        if (!lastMsg) continue;
-        if ((me.last_read_message_id ?? 0) >= lastMsg.id) continue;
-      }
-
-      filtered.push(room);
-    }
-
-    return filtered.map((room) => toChatRoomListItemDto(room, userId));
+    return result;
   }
 
   function toChatRoomListItemDto(
     room: Awaited<ReturnType<typeof chatRoomRepo.findRoomsByUserId>>[number],
     currentUserId: number,
+    unreadCount: number,
   ): ChatRoomListItemDto {
-    let me: (typeof room.participants)[number] | null = null;
     let other: (typeof room.participants)[number] | null = null;
     for (const p of room.participants) {
-      if (p.user_id === currentUserId) me = p;
-      else if (other === null) other = p;
+      if (p.user_id !== currentUserId) { other = p; break; }
     }
 
     const lastMsg = room.messages[0] ?? null;
-    const lastReadId = me?.last_read_message_id ?? 0;
-    const unreadCount = lastMsg && lastMsg.id > lastReadId ? 1 : 0;
 
     return {
       roomId: room.id,
@@ -200,22 +182,18 @@
       blockedByMe: room.blocked_by_user_id === currentUserId,
       createdAt: room.created_at.toISOString(),
       expiresAt: room.expires_at.toISOString(),
-      otherUser: other
-        ? {
-            userId: other.user.id,
-            nickname: other.user.nickname,
-            profileImage: other.user.userProfileImages[0]?.image_url ?? null,
-          }
-        : null,
-      lastMessage: lastMsg
-        ? {
-            id: lastMsg.id,
-            content: lastMsg.content,
-            type: lastMsg.type,
-            senderUserId: lastMsg.sender_user_id,
-            createdAt: lastMsg.created_at.toISOString(),
-          }
-        : null,
+      otherUser: other ? {
+        userId: other.user.id,
+        nickname: other.user.nickname,
+        profileImage: other.user.userProfileImages[0]?.image_url ?? null,
+      } : null,
+      lastMessage: lastMsg ? {
+        id: lastMsg.id,
+        content: lastMsg.content,
+        type: lastMsg.type,
+        senderUserId: lastMsg.sender_user_id,
+        createdAt: lastMsg.created_at.toISOString(),
+      } : null,
       unreadCount,
     };
   }

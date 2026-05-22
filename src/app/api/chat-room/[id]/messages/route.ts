@@ -7,7 +7,7 @@ import * as messageService from "@/server/services/conversation/message.service"
 export async function GET(req: NextRequest,{ params }: { params: Promise<{ id: string }> }) {
     const user = await getAuthUser(req);
     if (!user) return fail(ERROR.UNAUTHORIZED, "인증이 필요합니다.");
-
+    // const user = {id:1}as any;
     const { id } = await params;
     const roomId = Number(id);
     if (isNaN(roomId)) return fail(ERROR.NOT_FOUND,  "찾을 수 없습니다." );
@@ -29,6 +29,7 @@ export async function GET(req: NextRequest,{ params }: { params: Promise<{ id: s
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const user = await getAuthUser(req);
     if (!user) return fail(ERROR.UNAUTHORIZED,  "인증이 필요합니다." );
+    // const user = {id:2}as any;
 
     const { id } = await params;
     const roomId = Number(id);
