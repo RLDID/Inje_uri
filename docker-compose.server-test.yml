@@ -21,7 +21,9 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_AMPLITUDE_API_KEY: ${NEXT_PUBLIC_AMPLITUDE_API_KEY}
+        NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID}
+        NEXT_PUBLIC_CLARITY_PROJECT_ID: ${NEXT_PUBLIC_CLARITY_PROJECT_ID}
+        WAITING_BYPASS: ${WAITING_BYPASS:-false}
     container_name: injeuri-app-test
     environment:
       NODE_ENV: production
@@ -34,7 +36,9 @@ services:
       DB_ENCRYPTION_KEY: ${DB_ENCRYPTION_KEY}
       ADMIN_ACCESS_CODE: ${ADMIN_ACCESS_CODE}
       ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
-      NEXT_PUBLIC_AMPLITUDE_API_KEY: ${NEXT_PUBLIC_AMPLITUDE_API_KEY}
+      NEXT_PUBLIC_GA_MEASUREMENT_ID: ${NEXT_PUBLIC_GA_MEASUREMENT_ID}
+      NEXT_PUBLIC_CLARITY_PROJECT_ID: ${NEXT_PUBLIC_CLARITY_PROJECT_ID}
+      WAITING_BYPASS: ${WAITING_BYPASS:-false}
     depends_on:
       db:
         condition: service_healthy

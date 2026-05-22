@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Suspense } from 'react';
-import { AmplitudeRouteTracker } from '@/components/analytics/AmplitudeRouteTracker';
+import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
+import { MicrosoftClarity } from '@/components/analytics/MicrosoftClarity';
 import { ToastProvider } from '@/components/ui';
 import './globals.css';
 
@@ -48,7 +49,8 @@ export default function RootLayout({
       <body suppressHydrationWarning>
         <ToastProvider>
           <Suspense fallback={null}>
-            <AmplitudeRouteTracker />
+            <GoogleAnalytics />
+            <MicrosoftClarity />
           </Suspense>
           {children}
         </ToastProvider>

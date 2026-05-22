@@ -26,6 +26,37 @@ interface AdminRecommendationResetResultDto {
   };
 }
 
+type AdminSection = 'reports' | 'support';
+type AdminInquiryStatus = 'received' | 'in_review' | 'answered';
+type AdminInquiryStatusFilter = 'all' | AdminInquiryStatus;
+
+interface AdminSupportInquiryDto {
+  id: number;
+  userId: number | null;
+  category: string;
+  screen: string;
+  title: string;
+  content: string;
+  email: string | null;
+  status: AdminInquiryStatus;
+  createdAt: string;
+  updatedAt: string;
+  user: { id: number; nickname: string } | null;
+}
+
+interface AdminSupportInquiryListDto {
+  items: AdminSupportInquiryDto[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+const ADMIN_SECTIONS: Array<{ value: AdminSection; label: string }> = [
+  { value: 'reports', label: '신고 관리' },
+  { value: 'support', label: '문의 관리' },
+];
+
 const STATUS_FILTERS: Array<{ value: AdminReportStatusFilter; label: string }> = [
   { value: 'all', label: '전체' },
   { value: 'pending', label: '대기' },
@@ -34,11 +65,24 @@ const STATUS_FILTERS: Array<{ value: AdminReportStatusFilter; label: string }> =
   { value: 'dismissed', label: '기각' },
 ];
 
+const INQUIRY_STATUS_FILTERS: Array<{ value: AdminInquiryStatusFilter; label: string }> = [
+  { value: 'all', label: '전체' },
+  { value: 'received', label: '접수' },
+  { value: 'in_review', label: '검토중' },
+  { value: 'answered', label: '답변완료' },
+];
+
 const REPORT_STATUSES: Array<{ value: AdminReportStatus; label: string }> = [
   { value: 'pending', label: '대기' },
   { value: 'reviewed', label: '검토' },
   { value: 'actioned', label: '조치' },
   { value: 'dismissed', label: '기각' },
+];
+
+const INQUIRY_STATUSES: Array<{ value: AdminInquiryStatus; label: string }> = [
+  { value: 'received', label: '접수' },
+  { value: 'in_review', label: '검토중' },
+  { value: 'answered', label: '답변완료' },
 ];
 
 const TARGET_LABELS: Record<string, string> = {
@@ -164,6 +208,23 @@ function getStatusClass(status: AdminReportStatus): string {
   }
 }
 
+function getInquiryStatusLabel(status: AdminInquiryStatus): string {
+  return INQUIRY_STATUSES.find((item) => item.value === status)?.label ?? status;
+}
+
+function getInquiryStatusClass(status: AdminInquiryStatus): string {
+  switch (status) {
+    case 'received':
+      return 'border-[#F8C7D8] bg-[#FFF1F6] text-[#9A3155]';
+    case 'in_review':
+      return 'border-[#BFD7FF] bg-[#EFF6FF] text-[#25578F]';
+    case 'answered':
+      return 'border-[#BFE8D1] bg-[#F0FDF4] text-[#24734A]';
+    default:
+      return 'border-[var(--color-border)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]';
+  }
+}
+
 function LoginPanel({
   code,
   errorMessage,
@@ -185,7 +246,7 @@ function LoginPanel({
       >
         <div className="mb-6">
           <p className="text-sm font-semibold text-[var(--color-text-secondary)]">관리자</p>
-          <h1 className="mt-2 text-2xl font-bold text-[var(--color-text-primary)]">신고 관리</h1>
+          <h1 className="mt-2 text-2xl font-bold text-[var(--color-text-primary)]">운영 관리</h1>
         </div>
 
         <label htmlFor="admin-code" className="mb-2 block text-sm font-semibold text-[var(--color-text-primary)]">
@@ -317,12 +378,96 @@ function ReportItem({
   );
 }
 
+function InquiryStatusBadge({ status }: { status: AdminInquiryStatus }) {
+  return (
+    <span className={`inline-flex h-7 items-center rounded-full border px-2.5 text-xs font-semibold ${getInquiryStatusClass(status)}`}>
+      {getInquiryStatusLabel(status)}
+    </span>
+  );
+}
+
+function InquiryItem({
+  item,
+  draftStatus,
+  isUpdating,
+  onDraftChange,
+  onApply,
+}: {
+  item: AdminSupportInquiryDto;
+  draftStatus: AdminInquiryStatus;
+  isUpdating: boolean;
+  onDraftChange: (status: AdminInquiryStatus) => void;
+  onApply: () => void;
+}) {
+  const isChanged = draftStatus !== item.status;
+  const canApply = isChanged && draftStatus !== 'received';
+
+  return (
+    <article className="rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-[0_3px_10px_rgba(34,34,34,0.045)]">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-light)] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <p className="text-sm font-bold text-[var(--color-text-primary)]">#{item.id}</p>
+          <InquiryStatusBadge status={item.status} />
+          <p className="text-xs font-medium text-[var(--color-text-tertiary)]">{formatDateTime(item.createdAt)}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select
+            value={draftStatus}
+            onChange={(event) => onDraftChange(event.target.value as AdminInquiryStatus)}
+            className="h-9 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/15"
+          >
+            {INQUIRY_STATUSES.map((status) => (
+              <option key={status.value} value={status.value} disabled={status.value === 'received' && item.status !== 'received'}>
+                {status.label}
+              </option>
+            ))}
+          </select>
+          <Button type="button" size="sm" variant="secondary" loading={isUpdating} disabled={!canApply} onClick={onApply}>
+            적용
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid gap-4 px-4 py-4 md:grid-cols-[1fr_1fr_1.4fr]">
+        <div>
+          <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">문의자</p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">
+            {item.user?.nickname ?? '알 수 없는 사용자'}
+          </p>
+          <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
+            {item.userId ? `ID ${item.userId}` : '사용자 ID 없음'}
+          </p>
+          <p className="mt-1 break-all text-xs text-[var(--color-text-secondary)]">
+            {item.email ?? '회신 이메일 없음'}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">분류</p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">{item.category}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">화면: {item.screen}</p>
+          <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">수정: {formatDateTime(item.updatedAt)}</p>
+        </div>
+
+        <div>
+          <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">문의 내용</p>
+          <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">{item.title}</p>
+          <p className="mt-2 min-h-10 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
+            {item.content.trim() || '내용 없음'}
+          </p>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 export default function AdminPage() {
   const { showToast } = useToast();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [code, setCode] = useState('');
   const [loginError, setLoginError] = useState('');
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
+  const [activeSection, setActiveSection] = useState<AdminSection>('reports');
   const [filterStatus, setFilterStatus] = useState<AdminReportStatusFilter>('pending');
   const [reports, setReports] = useState<AdminReportListItemDto[]>([]);
   const [summary, setSummary] = useState<AdminReportListDto['summary'] | null>(null);
@@ -331,6 +476,13 @@ export default function AdminPage() {
   const [runningActionKey, setRunningActionKey] = useState<string | null>(null);
   const [actionTarget, setActionTarget] = useState<{ item: AdminReportListItemDto; action: AdminReportAction } | null>(null);
   const [isLoadingReports, setIsLoadingReports] = useState(false);
+  const [inquiryFilterStatus, setInquiryFilterStatus] = useState<AdminInquiryStatusFilter>('received');
+  const [inquiries, setInquiries] = useState<AdminSupportInquiryDto[]>([]);
+  const [inquiryTotal, setInquiryTotal] = useState(0);
+  const [inquiryDraftStatuses, setInquiryDraftStatuses] = useState<Record<number, AdminInquiryStatus>>({});
+  const [updatingInquiryId, setUpdatingInquiryId] = useState<number | null>(null);
+  const [isLoadingInquiries, setIsLoadingInquiries] = useState(false);
+  const [inquiryLoadError, setInquiryLoadError] = useState('');
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResettingRecommendations, setIsResettingRecommendations] = useState(false);
 
@@ -362,9 +514,54 @@ export default function AdminPage() {
     }
   }, [showToast]);
 
+  const loadInquiries = useCallback(async (nextFilter: AdminInquiryStatusFilter) => {
+    setIsLoadingInquiries(true);
+    setInquiryLoadError('');
+
+    try {
+      const params = new URLSearchParams({ page: '1', limit: '50' });
+      if (nextFilter !== 'all') {
+        params.set('status', nextFilter);
+      }
+
+      const data = await adminRequest<AdminSupportInquiryListDto>(`/api/admin/support-inquiries?${params.toString()}`);
+      setInquiries(data.items);
+      setInquiryTotal(data.total);
+      setInquiryDraftStatuses(Object.fromEntries(data.items.map((item) => [item.id, item.status])));
+      setIsAuthenticated(true);
+      setLoginError('');
+    } catch (error) {
+      if (error instanceof AdminApiError && error.status === 401) {
+        setIsAuthenticated(false);
+        return;
+      }
+
+      if (error instanceof AdminApiError && error.status === 503) {
+        setIsAuthenticated(false);
+        setLoginError(error.message);
+        return;
+      }
+
+      setInquiries([]);
+      setInquiryTotal(0);
+      setInquiryDraftStatuses({});
+      setInquiryLoadError(error instanceof Error ? error.message : '문의 목록을 불러오지 못했어요.');
+    } finally {
+      setIsLoadingInquiries(false);
+    }
+  }, []);
+
   useEffect(() => {
-    void loadReports(filterStatus);
-  }, [filterStatus, loadReports]);
+    if (activeSection === 'reports') {
+      void loadReports(filterStatus);
+    }
+  }, [activeSection, filterStatus, loadReports]);
+
+  useEffect(() => {
+    if (activeSection === 'support') {
+      void loadInquiries(inquiryFilterStatus);
+    }
+  }, [activeSection, inquiryFilterStatus, loadInquiries]);
 
   const filteredCountLabel = useMemo(() => {
     if (!summary) {
@@ -378,6 +575,8 @@ export default function AdminPage() {
     return `${summary[filterStatus]}건`;
   }, [filterStatus, summary]);
 
+  const inquiryCountLabel = useMemo(() => `${inquiryTotal}건`, [inquiryTotal]);
+
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoginError('');
@@ -390,7 +589,11 @@ export default function AdminPage() {
       });
       setCode('');
       setIsAuthenticated(true);
-      await loadReports(filterStatus);
+      if (activeSection === 'support') {
+        await loadInquiries(inquiryFilterStatus);
+      } else {
+        await loadReports(filterStatus);
+      }
     } catch (error) {
       setLoginError(error instanceof Error ? error.message : '관리자 인증에 실패했어요.');
     } finally {
@@ -406,6 +609,11 @@ export default function AdminPage() {
     setDraftStatuses({});
     setRunningActionKey(null);
     setActionTarget(null);
+    setInquiries([]);
+    setInquiryTotal(0);
+    setInquiryDraftStatuses({});
+    setUpdatingInquiryId(null);
+    setInquiryLoadError('');
     setIsResetConfirmOpen(false);
     setIsResettingRecommendations(false);
   };
@@ -462,6 +670,40 @@ export default function AdminPage() {
     }
   };
 
+  const handleApplyInquiryStatus = async (item: AdminSupportInquiryDto) => {
+    const nextStatus = inquiryDraftStatuses[item.id] ?? item.status;
+
+    if (nextStatus === item.status || nextStatus === 'received') {
+      return;
+    }
+
+    setUpdatingInquiryId(item.id);
+
+    try {
+      const data = await adminRequest<AdminSupportInquiryDto>(`/api/admin/support-inquiries/${item.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status: nextStatus }),
+      });
+
+      setInquiries((prevInquiries) => prevInquiries.map((inquiry) => (
+        inquiry.id === item.id
+          ? {
+            ...inquiry,
+            status: data.status,
+            updatedAt: data.updatedAt,
+          }
+          : inquiry
+      )));
+      setInquiryDraftStatuses((prev) => ({ ...prev, [item.id]: data.status }));
+      await loadInquiries(inquiryFilterStatus);
+      showToast('문의 상태를 변경했어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '문의 상태를 변경하지 못했어요.', 'error');
+    } finally {
+      setUpdatingInquiryId(null);
+    }
+  };
+
   const handleResetRecommendations = async () => {
     setIsResettingRecommendations(true);
 
@@ -507,7 +749,7 @@ export default function AdminPage() {
         <header className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] px-4 py-4 shadow-[0_3px_10px_rgba(34,34,34,0.045)]">
           <div>
             <p className="text-sm font-semibold text-[var(--color-text-secondary)]">관리자</p>
-            <h1 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">신고 관리</h1>
+            <h1 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">운영 관리</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button
@@ -515,12 +757,22 @@ export default function AdminPage() {
               variant="danger"
               size="sm"
               loading={isResettingRecommendations}
-              disabled={isLoadingReports}
+              disabled={isLoadingReports || isLoadingInquiries}
               onClick={() => setIsResetConfirmOpen(true)}
             >
               추천 초기화
             </Button>
-            <Button type="button" variant="secondary" size="sm" loading={isLoadingReports} onClick={() => void loadReports(filterStatus)}>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              loading={activeSection === 'support' ? isLoadingInquiries : isLoadingReports}
+              onClick={() => (
+                activeSection === 'support'
+                  ? void loadInquiries(inquiryFilterStatus)
+                  : void loadReports(filterStatus)
+              )}
+            >
               새로고침
             </Button>
             <Button type="button" variant="ghost" size="sm" onClick={() => void handleLogout()}>
@@ -529,6 +781,29 @@ export default function AdminPage() {
           </div>
         </header>
 
+        <section className="grid gap-2 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] p-2 sm:grid-cols-2">
+          {ADMIN_SECTIONS.map((section) => {
+            const isSelected = activeSection === section.value;
+
+            return (
+              <button
+                key={section.value}
+                type="button"
+                onClick={() => setActiveSection(section.value)}
+                className={`rounded-lg px-4 py-3 text-sm font-bold transition ${
+                  isSelected
+                    ? 'bg-[var(--color-pink-cta)] text-white shadow-[0_3px_10px_rgba(34,34,34,0.08)]'
+                    : 'text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]'
+                }`}
+              >
+                {section.label}
+              </button>
+            );
+          })}
+        </section>
+
+        {activeSection === 'reports' && (
+          <>
         <section className="grid gap-2 sm:grid-cols-5">
           {STATUS_FILTERS.map((status) => {
             const count = status.value === 'all' ? summary?.total : summary?.[status.value];
@@ -590,6 +865,74 @@ export default function AdminPage() {
             )}
           </div>
         </section>
+          </>
+        )}
+
+        {activeSection === 'support' && (
+          <>
+            <section className="grid gap-2 sm:grid-cols-4">
+              {INQUIRY_STATUS_FILTERS.map((status) => {
+                const isSelected = inquiryFilterStatus === status.value;
+
+                return (
+                  <button
+                    key={status.value}
+                    type="button"
+                    onClick={() => setInquiryFilterStatus(status.value)}
+                    className={`rounded-lg border px-3 py-3 text-left transition ${
+                      isSelected
+                        ? 'border-[var(--color-pink-cta)] bg-[var(--color-surface)] shadow-[0_3px_10px_rgba(34,34,34,0.06)]'
+                        : 'border-[var(--color-border-light)] bg-[var(--color-surface)] hover:border-[var(--color-border)]'
+                    }`}
+                  >
+                    <p className="text-xs font-semibold text-[var(--color-text-secondary)]">{status.label}</p>
+                    <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">
+                      {isSelected ? inquiryCountLabel : '보기'}
+                    </p>
+                  </button>
+                );
+              })}
+            </section>
+
+            <section className="rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-light)] px-4 py-3">
+                <div>
+                  <h2 className="text-base font-bold text-[var(--color-text-primary)]">문의 목록</h2>
+                  <p className="mt-1 text-sm text-[var(--color-text-secondary)]">{inquiryCountLabel}</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 p-3 sm:p-4">
+                {isLoadingInquiries ? (
+                  <div className="py-16 text-center text-sm font-medium text-[var(--color-text-secondary)]">
+                    불러오는 중이에요
+                  </div>
+                ) : inquiryLoadError ? (
+                  <div className="py-16 text-center">
+                    <p className="text-base font-bold text-[var(--color-text-primary)]">문의 목록을 불러오지 못했어요</p>
+                    <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{inquiryLoadError}</p>
+                  </div>
+                ) : inquiries.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <p className="text-base font-bold text-[var(--color-text-primary)]">표시할 문의가 없어요</p>
+                    <p className="mt-2 text-sm text-[var(--color-text-secondary)]">선택한 상태의 문의가 없습니다.</p>
+                  </div>
+                ) : (
+                  inquiries.map((item) => (
+                    <InquiryItem
+                      key={item.id}
+                      item={item}
+                      draftStatus={inquiryDraftStatuses[item.id] ?? item.status}
+                      isUpdating={updatingInquiryId === item.id}
+                      onDraftChange={(status) => setInquiryDraftStatuses((prev) => ({ ...prev, [item.id]: status }))}
+                      onApply={() => void handleApplyInquiryStatus(item)}
+                    />
+                  ))
+                )}
+              </div>
+            </section>
+          </>
+        )}
       </div>
 
       <ConfirmSheet

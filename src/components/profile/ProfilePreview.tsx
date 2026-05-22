@@ -140,7 +140,7 @@ export function ProfilePreview({
 
           {user.bio && (
             <div className="relative z-10 mt-5 rounded-[14px] border border-[var(--color-brand-pink)]/45 bg-[linear-gradient(100deg,#FFF8FA_0%,#FFF1F5_100%)] p-4">
-              <p className="whitespace-pre-wrap text-sm leading-6 text-[var(--color-text-secondary)]">{user.bio}</p>
+              <p data-clarity-mask className="whitespace-pre-wrap text-sm leading-6 text-[var(--color-text-secondary)]">{user.bio}</p>
             </div>
           )}
 

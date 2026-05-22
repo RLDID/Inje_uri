@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { SESSION_COOKIE_NAME, isProtectedAppPath } from '@/lib/auth/constants';
 
 const LAUNCH_AT_MS = new Date('2026-05-25T00:00:00+09:00').getTime();
+const WAITING_BYPASS_ENABLED = process.env.WAITING_BYPASS === 'true';
 const WAITING_ALIAS_PATH = '/p/w8t2k';
 const WAITING_PATHS = new Set(['/waiting', '/p/w8t2k']);
 const MATCH_ALIAS_PATH = '/p/a83k2';
@@ -42,7 +43,7 @@ function isPreLaunchRestrictedPath(pathname: string): boolean {
 export function proxy(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const isAuthenticated = request.cookies.has(SESSION_COOKIE_NAME);
-  const isBeforeLaunch = Date.now() < LAUNCH_AT_MS;
+  const isBeforeLaunch = !WAITING_BYPASS_ENABLED && Date.now() < LAUNCH_AT_MS;
 
   if (WAITING_PATHS.has(pathname) && !isBeforeLaunch) {
     return NextResponse.redirect(new URL(MATCH_ALIAS_PATH, request.url));

@@ -633,6 +633,7 @@ function CreateStoryPageContent() {
           </div>
 
           <textarea
+            data-clarity-mask
             value={text}
             onChange={(event) => setText(event.target.value)}
             placeholder="예: 중앙도서관 1층 테이블이 조용해서 같이 공부하기 좋아요. 끝나고 바로 앞 카페 가도 좋을 것 같아요."

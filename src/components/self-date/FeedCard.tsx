@@ -219,7 +219,7 @@ export function FeedCard({
       <div className="mt-3">
         {hasSingleContentImage ? (
           <div className="flex gap-3">
-            <p className="line-clamp-4 min-w-0 flex-1 text-[14px] leading-6 text-[var(--color-text-primary)]">
+            <p data-clarity-mask className="line-clamp-4 min-w-0 flex-1 text-[14px] leading-6 text-[var(--color-text-primary)]">
               {content.text}
             </p>
             <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-[10px] bg-[var(--color-surface-secondary)]">
@@ -241,7 +241,7 @@ export function FeedCard({
             </div>
           </div>
         ) : (
-          <p className="line-clamp-3 text-[14px] leading-6 text-[var(--color-text-primary)]">
+          <p data-clarity-mask className="line-clamp-3 text-[14px] leading-6 text-[var(--color-text-primary)]">
             {content.text}
           </p>
         )}

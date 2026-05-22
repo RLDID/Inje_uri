@@ -115,8 +115,10 @@ export function LoginPageClient() {
   return (
     <PageContainer
       withBottomNav={false}
+      data-clarity-mask
       className="auth-background-page relative flex min-h-dvh flex-col overflow-hidden bg-white"
     >
+      <StartPageAnimation />
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 h-[44dvh] min-h-[300px] bg-contain bg-bottom bg-no-repeat"
         style={{ backgroundImage: "url('/brand/login.png')" }}
@@ -232,7 +234,6 @@ export function LoginPageClient() {
           </div>
         </div>
       </main>
-      <StartPageAnimation />
     </PageContainer>
   );
 }

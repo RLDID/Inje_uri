@@ -38,7 +38,7 @@ export function ChatBubble({ message, currentUserId }: ChatBubbleProps) {
           }
         `}
       >
-        <p className="text-[15px] leading-5 whitespace-pre-wrap break-words">
+        <p data-clarity-mask className="text-[15px] leading-5 whitespace-pre-wrap break-words">
           {message.content}
         </p>
         <p suppressHydrationWarning className={`mt-0.5 text-[10px] leading-[14px] ${isMine ? 'text-white/75' : 'text-[var(--color-text-tertiary)]'}`}>
