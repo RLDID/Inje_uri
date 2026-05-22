@@ -6,13 +6,11 @@
    */
 
   import { ERROR } from "@/server/lib/errors";
-  import * as messageRepo from
-  "@/server/repositories/chat/message.repo";
-  import * as participantRepo from
-  "@/server/repositories/chat/participant.repo";
-  import * as chatRoomRepo from
-  "@/server/repositories/chat/chatRoom.repo";
-
+  import * as messageRepo from "@/server/repositories/chat/message.repo";
+  import * as participantRepo from "@/server/repositories/chat/participant.repo";
+  import * as chatRoomRepo from "@/server/repositories/chat/chatRoom.repo";
+  import * as messageReadRepo from "@/server/repositories/chat/messageRead.repo";
+  import { prisma, PrismaTransactionClient } from "@/server/db/prisma";
   // ─────────────────────────────────────────────
   // 메시지 전송
   // ─────────────────────────────────────────────
@@ -28,37 +26,30 @@
   ROOM_EXPIRED)
    * 5. 메시지 INSERT
    */
-  export async function sendMessage(
-    roomId: number,
-    userId: number,
-    content: string
-  ) {
-    const participant = await
-  participantRepo.findParticipant(roomId, userId);
-    if (!participant) return { error: ERROR.FORBIDDEN } as const;
-    if (participant.left_at !== null) return { error:
-  ERROR.FORBIDDEN } as const;
+export async function sendMessage(roomId: number, userId: number, content: string) {
+  const participant = await participantRepo.findParticipant(roomId, userId);
+  if (!participant) return { error: ERROR.FORBIDDEN } as const;
+  if (participant.left_at !== null) return { error:ERROR.FORBIDDEN } as const;
 
-    const room = await chatRoomRepo.findRoomById(roomId);
-    if (!room) return { error: ERROR.NOT_FOUND } as const;
+  const room = await chatRoomRepo.findRoomById(roomId);
+  if (!room) return { error: ERROR.NOT_FOUND } as const;
 
-    if (room.status === "blocked" || room.status === "closed") {
-      return { error: ERROR.ROOM_NOT_ACTIVE } as const;
-    }
-
-    if (room.status === "expired" || room.expires_at < new Date())
-  {
-      return { error: ERROR.ROOM_EXPIRED } as const;
-    }
-
-    const message = await messageRepo.insertMessage({
-      chat_room_id: roomId,
-      sender_user_id: userId,
-      content,
-    });
-
-    return { message };
+  if (room.status === "blocked" || room.status === "closed") {
+    return { error: ERROR.ROOM_NOT_ACTIVE } as const;
   }
+
+  if (room.status === "expired" || room.expires_at < new Date()){
+    return { error: ERROR.ROOM_EXPIRED } as const;
+  }
+
+  const message = await messageRepo.insertMessage({
+    chat_room_id: roomId,
+    sender_user_id: userId,
+    content,
+  });
+
+  return { message };
+}
 
   // ─────────────────────────────────────────────
   // 메시지 목록 조회
@@ -71,32 +62,29 @@
    * - 조회 성공 시 가장 최신 메시지 id로 last_read_message_id 갱신
    * - cursor 없으면 최신 30건, cursor 있으면 그 이전 30건
    */
-  export async function getMessages(
-    roomId: number,
-    userId: number,
-    cursor?: number,
-    limit: number = 30
-  ) {
-    const participant = await
+export async function getMessages(roomId: number, userId: number, cursor?: number, limit: number = 30) {
+  const participant = await
   participantRepo.findParticipant(roomId, userId);
-    if (!participant) return { error: ERROR.FORBIDDEN } as const;
+  if (!participant) return { error: ERROR.FORBIDDEN } as const;
 
-    const messages = await messageRepo.findMessagesByRoomId(roomId,
-   cursor, limit);
+  const messages = await messageRepo.findMessagesByRoomId(roomId, cursor, limit);
 
-    // 조회된 메시지 중 가장 최신(id 가장 큰) 것으로 읽음 갱신
-    if (messages.length > 0) {
-      const latestId = messages[0].id; // id DESC 정렬이므로 첫 번째가 최신
-      const currentLastRead = participant.last_read_message_id ??
-  0;
-      if (latestId > currentLastRead) {
-        await participantRepo.updateLastRead(roomId, userId,
-  latestId);
-      }
+  // 조회된 메시지 중 가장 최신(id 가장 큰) 것으로 읽음 갱신
+  if (messages.length > 0) {
+    const latestId = messages[0].id; // id DESC 정렬이므로 첫 번째가 최신
+    const currentLastRead = participant.last_read_message_id ??  0;
+    if (latestId > currentLastRead) {
+      await participantRepo.updateLastRead(roomId, userId, latestId);
     }
 
-    return { messages };
+    const otherIds = messages
+      .filter((m) => m.sender_user_id !== userId)
+      .map((m) => m.id);
+    await messageReadRepo.markMessagesAsRead(userId, otherIds);
   }
+
+  return { messages };
+}
 
   // ─────────────────────────────────────────────
   // 읽음 갱신
@@ -109,26 +97,23 @@
   메시지 id.
    * 현재 last_read보다 작으면 갱신하지 않음 (역방향 갱신 방지).
    */
-  export async function markAsRead(
-    roomId: number,
-    userId: number,
-    lastReadMessageId: number
-  ) {
-    const participant = await participantRepo.findParticipant(roomId, userId);
-    if (!participant) return { error: ERROR.FORBIDDEN } as const;
+export async function markAsRead(roomId: number, userId: number, upToMessageId: number) {
+  const participant = await participantRepo.findParticipant(roomId, userId);
+  if (!participant) return { error: ERROR.FORBIDDEN } as const;
 
-    const message = await messageRepo.findMessageById(lastReadMessageId);
+  const message = await messageRepo.findMessageById(upToMessageId);
 
-    if (!message || message.chat_room_id !== roomId) {
-      return { error: ERROR.INVALID_CURSOR } as const;
-    }
-
-    const currentLastRead = participant.last_read_message_id ?? 0;
-
-    if (lastReadMessageId <= currentLastRead) {
-      return { success: true }; // 이미 더 앞까지 읽음, 무시
-    }
-
-    await participantRepo.updateLastRead(roomId, userId, lastReadMessageId);
-    return { success: true };
+  if (!message || message.chat_room_id !== roomId) {
+    return { error: ERROR.INVALID_CURSOR } as const;
   }
+
+  const currentLastRead = participant.last_read_message_id ?? 0;
+
+  if (upToMessageId <= currentLastRead) {
+    return { success: true }; // 이미 더 앞까지 읽음, 무시
+  }
+  //await participantRepo.updateLastRead(roomId, userId, upToMessageId);
+  await messageReadRepo.markMessagesAsReadUpTo(userId, roomId, upToMessageId);
+
+  return { success: true };
+}
