@@ -13,6 +13,7 @@ import type { User } from '@/lib/types';
 import { getUserAcademicLabel } from '@/lib/utils';
 
 const IDEAL_KEYWORD_CHIP_GAP = 8;
+const LOGIN_PATH = '/p/l0g8n';
 
 type MenuItem =
   | {
@@ -238,7 +239,9 @@ function MyPageContent() {
   const handleLogout = async () => {
     try {
       await logout();
-      router.replace('/login');
+      setCurrentUser(null);
+      router.replace(LOGIN_PATH);
+      router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : '로그아웃하지 못했어요.', 'error');
     }
@@ -446,9 +449,9 @@ function MyPageContent() {
           </button>
           <p className="text-xs text-[var(--color-text-tertiary)]">인제우리 v0.3.0</p>
           <div className="mt-3 flex justify-center gap-4 text-xs text-[var(--color-text-tertiary)]">
-            <button className="transition-colors hover:text-[var(--color-text-secondary)]">이용약관</button>
+            <Link href="/my/terms" className="transition-colors hover:text-[var(--color-text-secondary)]">이용약관</Link>
             <span className="text-[var(--color-border)]">|</span>
-            <button className="transition-colors hover:text-[var(--color-text-secondary)]">개인정보처리방침</button>
+            <Link href="/my/privacy" className="transition-colors hover:text-[var(--color-text-secondary)]">개인정보처리방침</Link>
           </div>
         </div>
       </PageContent>

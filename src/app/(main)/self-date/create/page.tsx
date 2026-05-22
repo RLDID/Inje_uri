@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { PageContainer, PageContent } from '@/components/layout';
 import { BottomSheet, CenteredModal, useToast } from '@/components/ui';
 import { createFeed, feedCategoriesToKeywordCodes } from '@/lib/api/feeds';
+import { trackNowWooriFeedCreated } from '@/lib/analytics';
 import {
   FESTIVAL_FEED_CATEGORY_SELECTED_CLASS,
   FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS,
@@ -415,6 +416,11 @@ function CreateStoryPageContent() {
         text: text.trim(),
         feedKeywordCodes: feedCategoriesToKeywordCodes(selectedCategories),
         images,
+      });
+      trackNowWooriFeedCreated({
+        categoryCount: selectedCategories.length,
+        imageCount: images.length,
+        textLength: text.trim().length,
       });
       showToast('피드를 올렸어요!', 'success');
       router.push('/self-date?filter=all');

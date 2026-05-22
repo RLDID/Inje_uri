@@ -12,6 +12,7 @@ import { getFeedComments, getMyFeeds } from '@/lib/api/feeds';
 import { getReceivedInterests } from '@/lib/api/interests';
 import { getMe } from '@/lib/api/profile';
 import { getTodayRecommendation, selectRecommendation } from '@/lib/api/recommendations';
+import { trackTodayWooriHeartSent } from '@/lib/analytics';
 import { usePolling } from '@/lib/hooks/usePolling';
 import { getOtherParticipant, isChatInExpiryWarningWindow } from '@/lib/utils/chat';
 import { buildChatRoomHref, readRouteViewState, writeRouteViewState } from '@/lib/navigation';
@@ -439,14 +440,19 @@ function MatchPageContent() {
       const hasPendingReceivedHeart = receivedInterests.some(
         (interest) => interest.status === 'pending' && interest.fromUser.id === userId,
       );
+      const chatStartedUserIds = readRouteViewState<string[]>(INTEREST_CHAT_STARTED_USER_IDS_KEY, []);
+      const hasChatStartedFromReceivedHeart = chatStartedUserIds.includes(userId);
+
+      trackTodayWooriHeartSent({
+        candidateRank: selectedIndex + 1,
+        matched: Boolean(result.chat_room_id || hasChatStartedFromReceivedHeart),
+        hadReceivedHeart: hasPendingReceivedHeart,
+      });
 
       if (!hasPendingReceivedHeart) {
         showToast('하트를 보냈어요!', 'success');
         return;
       }
-
-      const chatStartedUserIds = readRouteViewState<string[]>(INTEREST_CHAT_STARTED_USER_IDS_KEY, []);
-      const hasChatStartedFromReceivedHeart = chatStartedUserIds.includes(userId);
 
       addUserIdToRouteState(INTEREST_HIDDEN_USER_IDS_KEY, userId);
       addUserIdToRouteState(INTEREST_CHAT_STARTED_USER_IDS_KEY, userId);

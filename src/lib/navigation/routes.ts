@@ -218,6 +218,8 @@ export function getDefaultFallbackPath(pathname: string, searchParams?: SearchPa
     || canonicalPathname.startsWith('/my/posts')
     || canonicalPathname.startsWith('/my/ideal-type')
     || canonicalPathname.startsWith('/my/support')
+    || canonicalPathname.startsWith('/my/privacy')
+    || canonicalPathname.startsWith('/my/terms')
   ) {
     return '/p/m6y2p';
   }

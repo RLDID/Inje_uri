@@ -23,6 +23,7 @@ import {
   getUserAcademicLabel,
 } from '@/lib/utils';
 import { getFeedRemainingTime, getStoryCategories } from '@/lib/utils/feed';
+import { trackNowWooriHeartSent } from '@/lib/analytics';
 import type { Story } from '@/lib/types';
 
 type OverlayState = 'none' | 'menu' | 'report' | 'interest';
@@ -154,6 +155,10 @@ function SelfDateDetailPageContent() {
     const message = interestMessage.trim();
     try {
       await createFeedComment(story.id, message || '하트만 보냈어요.');
+      trackNowWooriHeartSent({
+        source: 'feed_detail',
+        hasMessage: message.length > 0,
+      });
       const nextLikedFeedIds = new Set(likedFeedIds);
       nextLikedFeedIds.add(story.id);
       setLikedFeedIds(nextLikedFeedIds);

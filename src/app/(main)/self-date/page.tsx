@@ -9,6 +9,7 @@ import { PageContainer, PageContent } from '@/components/layout';
 import { FeedCard } from '@/components/self-date/FeedCard';
 import { NoStories, BottomSheet, useToast } from '@/components/ui';
 import { createFeedComment, getFeeds } from '@/lib/api/feeds';
+import { trackNowWooriHeartSent } from '@/lib/analytics';
 import {
   buildProfileDetailHref,
   buildSelfDateMyPostsHref,
@@ -390,6 +391,10 @@ function SelfDatePageContent() {
 
     try {
       await createFeedComment(targetFeedId, message || '하트만 보냈어요.');
+      trackNowWooriHeartSent({
+        source: 'feed_list',
+        hasMessage: message.length > 0,
+      });
       showToast(message ? '호감과 인사를 보냈어요!' : '호감을 보냈어요!', 'success');
     } catch {
       setLikedFeedIds((prevLikedFeedIds) => {

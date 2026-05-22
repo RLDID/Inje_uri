@@ -1,4 +1,6 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
+import { AmplitudeRouteTracker } from '@/components/analytics/AmplitudeRouteTracker';
 import { ToastProvider } from '@/components/ui';
 import './globals.css';
 
@@ -45,6 +47,9 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <ToastProvider>
+          <Suspense fallback={null}>
+            <AmplitudeRouteTracker />
+          </Suspense>
           {children}
         </ToastProvider>
       </body>

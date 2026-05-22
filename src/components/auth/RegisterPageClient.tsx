@@ -194,7 +194,6 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 - 생년월일 6자리
 - 생년월일 해시값
 - 본교 인증 여부
-- 인증 일시
 
 이용 목적:
 - 인제대학교 구성원 여부 확인
@@ -306,7 +305,6 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 
 보유 및 이용 기간:
 - 회원 탈퇴 시까지
-- 채팅방 만료, 메시지 삭제 또는 회원 탈퇴 시 관련 정보는 삭제 또는 비식별 처리합니다.
 - 단, 신고·분쟁 처리와 관련된 대화 또는 기록은 처리 완료 후 1년간 보관할 수 있습니다.
 
 공개 여부:
@@ -376,6 +374,9 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 - 세션 토큰 해시값
 - 인증 쿠키 정보
 - 서비스 이용 기록
+- 화면 방문 및 주요 버튼 클릭 등 서비스 이용 이벤트
+- 기기 및 브라우저 정보
+- 서비스 분석 도구가 생성하는 익명 기기 식별자
 - 오류 기록
 - 계정 상태
 - 탈퇴 일시
@@ -383,6 +384,8 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 이용 목적:
 - 로그인 상태 유지
 - 비정상 접근 탐지
+- 서비스 이용 통계 분석
+- 기능 개선 및 사용성 확인
 - 서비스 오류 확인
 - 보안 관리
 - 부정 이용 방지
@@ -390,7 +393,11 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 
 보유 및 이용 기간:
 - 접속 기록 및 보안 관련 기록은 수집일로부터 3개월간 보관할 수 있습니다.
+- 서비스 이용 통계 분석 기록은 서비스 분석 도구의 설정 및 운영 기준에 따라 보관될 수 있습니다.
 - 계정 상태 및 탈퇴 기록은 부정 이용 방지를 위하여 회원 탈퇴 후 1년간 보관할 수 있습니다.
+
+공개 여부:
+- 인제우리는 서비스 이용 통계 분석 이벤트에 이름, 이메일, 전체 학번, 생년월일, 비밀번호 등 직접 식별정보를 포함하지 않습니다.
 
 8. 개인정보의 보유 및 이용 기간
 
@@ -402,7 +409,6 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 라. 신고, 차단 및 제재 기록: 처리 완료일 또는 회원 탈퇴일 중 늦은 날로부터 1년
 마. 채팅, 피드, 댓글 등 신고·분쟁 관련 기록: 처리 완료 후 1년
 바. 접속 기록 및 보안 로그: 수집일로부터 3개월
-사. 개인정보 수집·이용 동의 이력: 회원 탈퇴 후 3년
 
 보유 기간이 경과하거나 처리 목적이 달성된 개인정보는 복구 또는 재생되지 않도록 파기합니다.
 
@@ -418,32 +424,35 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
     summary: '학번과 생년월일을 본교 구성원 인증 시스템에 제공하는 내용을 확인합니다.',
     body: `본교 구성원 인증을 위한 개인정보 제3자 제공 동의
 
-인제우리 운영팀은 회원가입 과정에서 이용자가 인제대학교 구성원인지 확인하기 위하여 아래와 같이 개인정보를 제3자에게 제공합니다.
+인제우리 운영팀은 회원가입 과정에서 이용자가 인제대학교 구성원인지 확인하기 위하여 학번과 생년월일을 본교 통학버스 인증 시스템에 전송하여 인증 결과를 확인합니다.
 
-1. 개인정보를 제공받는 자
+1. 개인정보를 제공하는 자
 
-- [인제대학교 또는 본교 인증 시스템 운영기관명]
-- [예: 인제대학교 통학버스 인증 시스템 운영기관]
-- 정확한 기관명은 실제 인증 시스템 운영 주체를 확인한 후 기재합니다.
+- 인제우리 운영팀
 
-2. 제공 목적
+2. 개인정보를 제공받는 자
+
+- 인제대학교 통학버스 인증 시스템
+- 위 시스템의 실제 운영 주체가 별도로 확인되는 경우 해당 운영 주체 또는 수탁 운영기관
+
+3. 제공 목적
 
 - 인제대학교 구성원 여부 확인
 - 학번 및 생년월일 기반 본교 인증
 - 인제우리 회원가입 자격 확인
 - 타인 학번을 이용한 부정 가입 방지
 
-3. 제공하는 개인정보 항목
+4. 제공하는 개인정보 항목
 
 - 학번
 - 생년월일 6자리
 
-4. 제공받는 자의 개인정보 보유 및 이용 기간
+5. 제공받는 자의 개인정보 보유 및 이용 기간
 
 - 본교 구성원 인증 처리 완료 시까지
 - 단, 제공받는 자의 시스템 정책 또는 관계 법령에 따라 별도 보관이 필요한 경우 해당 기간 동안 보관될 수 있습니다.
 
-5. 동의 거부권 및 거부 시 불이익
+6. 동의 거부권 및 거부 시 불이익
 
 이용자는 본교 구성원 인증을 위한 개인정보 제3자 제공에 동의하지 않을 수 있습니다. 다만, 동의하지 않을 경우 본교 구성원 인증이 불가능하여 인제우리 회원가입 및 서비스 이용이 제한될 수 있습니다.
 
@@ -717,12 +726,10 @@ export function RegisterPageClient() {
   const searchParams = useSearchParams();
   const { showToast } = useToast();
   const stepParam = searchParams.get('step');
-  const initialConsentAcceptedRef = useRef(hasStoredRequiredConsent());
 
-  const [step, setStep] = useState<RegisterStep>(() => resolveInitialStep(stepParam, initialConsentAcceptedRef.current));
-  const [consents, setConsents] = useState<Record<ConsentKey, boolean>>(
-    initialConsentAcceptedRef.current ? ALL_CONSENTS : EMPTY_CONSENTS,
-  );
+  const [step, setStep] = useState<RegisterStep>(() => resolveInitialStep(stepParam));
+  const [consents, setConsents] = useState<Record<ConsentKey, boolean>>(EMPTY_CONSENTS);
+  const [hasLoadedStoredConsent, setHasLoadedStoredConsent] = useState(false);
   const [activeAgreementKey, setActiveAgreementKey] = useState<AgreementKey | null>(null);
   const [studentNumber, setStudentNumber] = useState('');
   const [verifyBirth, setVerifyBirth] = useState('');
@@ -751,13 +758,29 @@ export function RegisterPageClient() {
   }, [router, searchParams]);
 
   useEffect(() => {
+    if (hasLoadedStoredConsent) {
+      return;
+    }
+
+    if (hasStoredRequiredConsent()) {
+      setConsents(ALL_CONSENTS);
+    }
+
+    setHasLoadedStoredConsent(true);
+  }, [hasLoadedStoredConsent]);
+
+  useEffect(() => {
+    if (!hasLoadedStoredConsent) {
+      return;
+    }
+
     if (stepParam) {
       setStep(resolveInitialStep(stepParam, hasRequiredConsent));
       return;
     }
 
     moveToStep(hasRequiredConsent ? 'verify' : 'consent', 'replace');
-  }, [hasRequiredConsent, moveToStep, stepParam]);
+  }, [hasLoadedStoredConsent, hasRequiredConsent, moveToStep, stepParam]);
 
   useEffect(() => {
     if (step !== 'consent' && !hasRequiredConsent) {

@@ -19,6 +19,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 ENV DATABASE_URL="postgresql://postgres:postgres@db:5432/injeuri?schema=public"
+ARG NEXT_PUBLIC_AMPLITUDE_API_KEY=""
+ENV NEXT_PUBLIC_AMPLITUDE_API_KEY=${NEXT_PUBLIC_AMPLITUDE_API_KEY}
 
 RUN npx prisma generate
 RUN npm run build
