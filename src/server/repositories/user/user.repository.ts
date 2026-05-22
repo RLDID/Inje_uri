@@ -16,6 +16,7 @@ export type UserUpdateData = Partial<{
 export type AccountRecoveryUser = {
   id: number;
   login_id: string | null;
+  email: string;
   birth_hash: string | null;
   status: string;
   deleted_at: Date | null;
@@ -52,17 +53,26 @@ export async function findUserByNickname(nickname: string, excludeUserId?: numbe
 
 export async function findUserByStudentNumber(studentNumber: string) {
   return prisma.user.findFirst({
-    where: { student_number: studentNumber },
+    where: {
+      student_number: studentNumber,
+      login_id: { not: null },
+      birth_hash: { not: null },
+    },
     select: { id: true },
   });
 }
 
 export async function findUserForAccountRecovery(studentNumber: string): Promise<AccountRecoveryUser | null> {
   return prisma.user.findFirst({
-    where: { student_number: studentNumber },
+    where: {
+      student_number: studentNumber,
+      login_id: { not: null },
+      birth_hash: { not: null },
+    },
     select: {
       id: true,
       login_id: true,
+      email: true,
       birth_hash: true,
       status: true,
       deleted_at: true,

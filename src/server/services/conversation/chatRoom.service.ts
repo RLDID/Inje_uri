@@ -11,8 +11,8 @@
   import * as messageRepo from "@/server/repositories/chat/message.repo";
   import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
   import { chat_room_source_type } from "@/generated/prisma/client";
-  import type { Prisma } from "@/generated/prisma/client";
   import { prisma } from "@/server/db/prisma";
+  import type { PrismaTransactionClient } from "@/server/db/prisma";
   import type { ChatRoomListItemDto } from "@/lib/types/chat";
 
   const safetyRepo = new SafetyRepository(prisma);
@@ -27,7 +27,7 @@
     sourceType: chat_room_source_type;
     sourceInterestId?: number;
     sourceCommentId?: number;
-    tx?: Prisma.TransactionClient;
+    tx?: PrismaTransactionClient;
   };
 
   // ─────────────────────────────────────────────
@@ -91,7 +91,7 @@
     }
 
     // 4. 채팅방 + 참여자 생성
-  const doCreate = async (db: Prisma.TransactionClient) => {
+  const doCreate = async (db: PrismaTransactionClient) => {
     const newRoom = await chatRoomRepo.createRoom(
       {
         source_type: sourceType,

@@ -43,6 +43,7 @@ type TodayRecommendationDto = {
   candidates: Array<{
     item_id: number;
     candidate_user_id: number;
+    keyword_match_count: number;
     is_passed: boolean;
     blocked: boolean;
     profile: {
@@ -88,6 +89,8 @@ type RecommendationSettingsDto = {
   reduce_same_year: boolean;
   preferred_age_min: number | null;
   preferred_age_max: number | null;
+  filter_drinking: boolean;
+  filter_smoking: boolean;
   updated_at: string | null;
 };
 
@@ -205,7 +208,11 @@ export function mapUserProfileToUser(input: ApiUserProfile): User {
 
 export function mapTodayRecommendation(dto: TodayRecommendationDto): DailyRecommendation {
   const users = dto.candidates
-    .filter((candidate) => !candidate.is_passed && !candidate.blocked && candidate.profile)
+    .filter((candidate) => {
+      if (!candidate.profile) return false;
+      if (!dto.is_selection_made) return true;
+      return candidate.candidate_user_id === dto.selected_candidate_user_id;
+    })
     .map((candidate) => {
       const profile = candidate.profile!;
         return {
@@ -228,7 +235,8 @@ export function mapTodayRecommendation(dto: TodayRecommendationDto): DailyRecomm
         lastActive: new Date(),
         createdAt: new Date(),
         recommendationItemId: candidate.item_id,
-      } satisfies User & { recommendationItemId: number };
+        keywordMatchCount: candidate.keyword_match_count,
+      } satisfies User & { recommendationItemId: number; keywordMatchCount: number };
     });
 
   return {
@@ -373,8 +381,8 @@ export function mapRecommendationSettings(dto: RecommendationSettingsDto): Recom
   return {
     excludeSameDepartment: dto.exclude_same_department,
     reduceSameYear: dto.reduce_same_year,
-    excludeSmokers: false,
-    excludeFrequentDrinkers: false,
+    excludeSmokers: dto.filter_smoking,
+    excludeFrequentDrinkers: dto.filter_drinking,
     preferredAgeRange: {
       min: dto.preferred_age_min ?? 20,
       max: dto.preferred_age_max ?? 29,
@@ -390,6 +398,8 @@ export function mapRecommendationSettingsPatch(settings: RecommendationSettings)
     reduce_same_year: settings.reduceSameYear,
     preferred_age_min: settings.preferredAgeRange.min,
     preferred_age_max: settings.preferredAgeRange.max,
+    filter_smoking: settings.excludeSmokers,
+    filter_drinking: settings.excludeFrequentDrinkers,
   };
 }
 

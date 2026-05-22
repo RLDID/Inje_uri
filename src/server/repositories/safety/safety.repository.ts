@@ -1,4 +1,18 @@
-import type { Prisma, PrismaClient } from "@/generated/prisma/client";
+import type { Prisma } from "@/generated/prisma/client";
+import type { PrismaDbClient } from "@/server/db/prisma";
+
+type SafetyRepositoryDb = Pick<
+  PrismaDbClient,
+  | "$transaction"
+  | "user"
+  | "selfDateFeed"
+  | "feedComment"
+  | "chatRoomParticipant"
+  | "message"
+  | "report"
+  | "block"
+  | "phoneBlock"
+>;
 
 const activeBlockListSelect = {
   id: true,
@@ -20,7 +34,7 @@ const activeBlockListSelect = {
 export type ActiveBlockListRow = Prisma.BlockGetPayload<{ select: typeof activeBlockListSelect }>;
 
 export class SafetyRepository {
-  constructor(private readonly db: PrismaClient) {}
+  constructor(private readonly db: SafetyRepositoryDb) {}
 
   async findTargetOwnerUserId(targetType: string, targetId: number, reporterUserId: number): Promise<number | null> {
     switch (targetType) {

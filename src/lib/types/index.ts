@@ -6,6 +6,7 @@ export * from './keywords';
 export * from './feed';
 export * from './comment';
 export * from './safety';
+export * from './admin';
 
 export interface ApiError {
   code: string;

@@ -13,6 +13,7 @@ import type { User } from '@/lib/types';
 import { getUserAcademicLabel } from '@/lib/utils';
 
 const IDEAL_KEYWORD_CHIP_GAP = 8;
+const LOGIN_PATH = '/p/l0g8n';
 
 type MenuItem =
   | {
@@ -82,8 +83,8 @@ const menuItems: MenuItem[] = [
   {
     id: 'support',
     label: '고객센터',
-    description: '문의와 이용 안내가 준비되는 대로 이곳에서 확인할 수 있어요.',
-    comingSoonMessage: '고객센터 화면은 준비 중이에요.',
+    description: '자주 묻는 질문과 안전/신고 안내를 확인할 수 있어요.',
+    href: '/my/support',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <circle cx="12" cy="12" r="10" />
@@ -92,7 +93,7 @@ const menuItems: MenuItem[] = [
       </svg>
     ),
   },
-];
+].filter((item) => item.id !== 'notification');
 
 const idealKeywordLabelMap: Record<string, string> = {
   comfortable: '편안함',
@@ -238,7 +239,9 @@ function MyPageContent() {
   const handleLogout = async () => {
     try {
       await logout();
-      router.replace('/login');
+      setCurrentUser(null);
+      router.replace(LOGIN_PATH);
+      router.refresh();
     } catch (error) {
       showToast(error instanceof Error ? error.message : '로그아웃하지 못했어요.', 'error');
     }
@@ -446,9 +449,9 @@ function MyPageContent() {
           </button>
           <p className="text-xs text-[var(--color-text-tertiary)]">인제우리 v0.3.0</p>
           <div className="mt-3 flex justify-center gap-4 text-xs text-[var(--color-text-tertiary)]">
-            <button className="transition-colors hover:text-[var(--color-text-secondary)]">이용약관</button>
+            <Link href="/my/terms" className="transition-colors hover:text-[var(--color-text-secondary)]">이용약관</Link>
             <span className="text-[var(--color-border)]">|</span>
-            <button className="transition-colors hover:text-[var(--color-text-secondary)]">개인정보처리방침</button>
+            <Link href="/my/privacy" className="transition-colors hover:text-[var(--color-text-secondary)]">개인정보처리방침</Link>
           </div>
         </div>
       </PageContent>

@@ -18,11 +18,19 @@ export interface NavigationContext {
 const VALID_SECTIONS: AppSection[] = ['match', 'self-date', 'chat', 'my'];
 const PROFILE_SOURCES: ProfileEntrySource[] = ['recommendation', 'interest', 'self-date', 'chat'];
 
+const ROUTE_PREFIX_ALIASES = [
+  { canonical: '/match', alias: '/p/a83k2' },
+  { canonical: '/interest', alias: '/p/h7n4d' },
+  { canonical: '/chat', alias: '/p/q91mz' },
+  { canonical: '/self-date', alias: '/p/r5t8u' },
+  { canonical: '/my', alias: '/p/m6y2p' },
+] as const;
+
 export const SECTION_ROOTS: Record<AppSection, string> = {
-  match: '/match',
-  'self-date': '/self-date',
-  chat: '/chat',
-  my: '/my',
+  match: '/p/a83k2',
+  'self-date': '/p/r5t8u',
+  chat: '/p/q91mz',
+  my: '/p/m6y2p',
 };
 
 export const NAV_QUERY_KEYS = {
@@ -38,6 +46,31 @@ function isValidSection(value: string | null | undefined): value is AppSection {
 
 function isProfileEntrySource(value: string | null | undefined): value is ProfileEntrySource {
   return PROFILE_SOURCES.includes(value as ProfileEntrySource);
+}
+
+function hasPathPrefix(pathname: string, prefix: string): boolean {
+  return pathname === prefix || pathname.startsWith(`${prefix}/`);
+}
+
+export function toObfuscatedPath(path: string): string {
+  const url = new URL(path, 'https://injeuri.local');
+  const alias = ROUTE_PREFIX_ALIASES.find(({ canonical }) => hasPathPrefix(url.pathname, canonical));
+
+  if (alias) {
+    url.pathname = `${alias.alias}${url.pathname.slice(alias.canonical.length)}`;
+  }
+
+  return formatUrl(url);
+}
+
+function toCanonicalPathname(pathname: string): string {
+  const alias = ROUTE_PREFIX_ALIASES.find(({ alias: aliasPath }) => hasPathPrefix(pathname, aliasPath));
+
+  if (!alias) {
+    return pathname;
+  }
+
+  return `${alias.canonical}${pathname.slice(alias.alias.length)}`;
 }
 
 export function isInternalAppPath(value: string | null | undefined): value is string {
@@ -72,7 +105,7 @@ export function buildCurrentPath(pathname: string, searchParams?: SearchParamsLi
   params.delete(NAV_QUERY_KEYS.fallbackPath);
 
   const nextSearch = params.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+  return toObfuscatedPath(nextSearch ? `${pathname}?${nextSearch}` : pathname);
 }
 
 function formatUrl(url: URL): string {
@@ -83,11 +116,11 @@ export function appendNavigationContext(targetPath: string, context: NavigationC
   const url = new URL(targetPath, 'https://injeuri.local');
 
   if (context.sourcePath && isInternalAppPath(context.sourcePath)) {
-    url.searchParams.set(NAV_QUERY_KEYS.sourcePath, context.sourcePath);
+    url.searchParams.set(NAV_QUERY_KEYS.sourcePath, toObfuscatedPath(context.sourcePath));
   }
 
   if (context.fallbackPath && isInternalAppPath(context.fallbackPath)) {
-    url.searchParams.set(NAV_QUERY_KEYS.fallbackPath, context.fallbackPath);
+    url.searchParams.set(NAV_QUERY_KEYS.fallbackPath, toObfuscatedPath(context.fallbackPath));
   }
 
   if (context.targetSection) {
@@ -102,7 +135,7 @@ export function buildProfileDetailHref(
   source: ProfileEntrySource,
   context: NavigationContext = {},
 ): string {
-  const href = appendNavigationContext(`/match/${userId}`, {
+  const href = appendNavigationContext(`/p/a83k2/${userId}`, {
     ...context,
     targetSection: context.targetSection ?? context.sourceSection ?? getSectionFromProfileSource(source),
   });
@@ -112,22 +145,23 @@ export function buildProfileDetailHref(
 }
 
 export function buildChatRoomHref(chatId: string, context: NavigationContext = {}): string {
-  return appendNavigationContext(`/chat/${chatId}`, context);
+  return appendNavigationContext(`/p/q91mz/${chatId}`, context);
 }
 
 export function buildSelfDateDetailHref(storyId: string, context: NavigationContext = {}): string {
-  return appendNavigationContext(`/self-date/${storyId}`, context);
+  return appendNavigationContext(`/p/r5t8u/${storyId}`, context);
 }
 
 export function buildMyPostsHref(context: NavigationContext = {}): string {
-  return appendNavigationContext('/my/posts', context);
+  return appendNavigationContext('/p/m6y2p/posts', context);
 }
 
 export function buildSelfDateMyPostsHref(context: NavigationContext = {}): string {
-  return appendNavigationContext('/self-date/mine', context);
+  return appendNavigationContext('/p/r5t8u/mine', context);
 }
 
 export function resolveOwnerSection(pathname: string, searchParams?: SearchParamsLike): AppSection {
+  const canonicalPathname = toCanonicalPathname(pathname);
   const explicitSection = searchParams?.get(NAV_QUERY_KEYS.section);
   if (isValidSection(explicitSection)) {
     return explicitSection;
@@ -138,19 +172,19 @@ export function resolveOwnerSection(pathname: string, searchParams?: SearchParam
     return getSectionFromProfileSource(source);
   }
 
-  if (pathname.startsWith('/my')) {
+  if (canonicalPathname.startsWith('/my')) {
     return 'my';
   }
 
-  if (pathname.startsWith('/interest')) {
+  if (canonicalPathname.startsWith('/interest')) {
     return 'match';
   }
 
-  if (pathname.startsWith('/chat')) {
+  if (canonicalPathname.startsWith('/chat')) {
     return 'chat';
   }
 
-  if (pathname.startsWith('/self-date')) {
+  if (canonicalPathname.startsWith('/self-date')) {
     return 'self-date';
   }
 
@@ -158,35 +192,39 @@ export function resolveOwnerSection(pathname: string, searchParams?: SearchParam
 }
 
 export function getDefaultFallbackPath(pathname: string, searchParams?: SearchParamsLike): string {
+  const canonicalPathname = toCanonicalPathname(pathname);
   const explicitFallback = searchParams?.get(NAV_QUERY_KEYS.fallbackPath);
   if (isInternalAppPath(explicitFallback)) {
-    return explicitFallback;
+    return toObfuscatedPath(explicitFallback);
   }
 
   const sourcePath = searchParams?.get(NAV_QUERY_KEYS.sourcePath);
   if (isInternalAppPath(sourcePath)) {
-    return sourcePath;
+    return toObfuscatedPath(sourcePath);
   }
 
   const source = searchParams?.get(NAV_QUERY_KEYS.source);
   if (isProfileEntrySource(source)) {
-    return source === 'interest' ? '/interest' : getSectionRoot(getSectionFromProfileSource(source));
+    return source === 'interest' ? '/p/h7n4d' : getSectionRoot(getSectionFromProfileSource(source));
   }
 
-  if (pathname.startsWith('/interest')) {
-    return '/match';
+  if (canonicalPathname.startsWith('/interest')) {
+    return '/p/a83k2';
   }
 
   if (
-    pathname.startsWith('/my/profile')
-    || pathname.startsWith('/my/settings')
-    || pathname.startsWith('/my/posts')
-    || pathname.startsWith('/my/ideal-type')
+    canonicalPathname.startsWith('/my/profile')
+    || canonicalPathname.startsWith('/my/settings')
+    || canonicalPathname.startsWith('/my/posts')
+    || canonicalPathname.startsWith('/my/ideal-type')
+    || canonicalPathname.startsWith('/my/support')
+    || canonicalPathname.startsWith('/my/privacy')
+    || canonicalPathname.startsWith('/my/terms')
   ) {
-    return '/my';
+    return '/p/m6y2p';
   }
 
-  return getSectionRoot(resolveOwnerSection(pathname, searchParams));
+  return getSectionRoot(resolveOwnerSection(canonicalPathname, searchParams));
 }
 
 export function pathsMatch(left?: string | null, right?: string | null): boolean {
@@ -194,5 +232,5 @@ export function pathsMatch(left?: string | null, right?: string | null): boolean
     return false;
   }
 
-  return left === right;
+  return toObfuscatedPath(left) === toObfuscatedPath(right);
 }

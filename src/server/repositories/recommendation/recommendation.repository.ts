@@ -1,7 +1,7 @@
 //daily_recommendations 테이블 조회/생성
 
 import { prisma } from "@/server/db/prisma";
-import { Prisma } from "@/generated/prisma/client";
+import type { PrismaTransactionClient } from "@/server/db/prisma";
 
 export interface CandidateRow {
   item_id: number;
@@ -136,7 +136,7 @@ export async function passItem(itemId: number): Promise<void> {
 
 /** 단일 item passed_at 처리 (트랜잭션 내 호출용) */
 export async function passItemInTx(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   itemId: number,
 ): Promise<void> {
   await tx.$executeRaw`
@@ -221,4 +221,26 @@ export async function createDailyRecommendation(
 
     return recId;
   });
+}
+
+export async function deleteAllDailyRecommendations(): Promise<number> {
+  const result = await prisma.dailyRecommendation.deleteMany({});
+  return result.count;
+}
+
+export async function deleteAllRecommendationDismisses(): Promise<number> {
+  const result = await prisma.recommendationDismiss.deleteMany({});
+  return result.count;
+}
+
+export async function deleteAllRecommendationSettings(): Promise<number> {
+  const result = await prisma.recommendationSetting.deleteMany({});
+  return result.count;
+}
+
+export async function deleteRecommendationJobRuns(): Promise<number> {
+  const result = await prisma.internalJobRun.deleteMany({
+    where: { job_name: 'daily_recommendations' },
+  });
+  return result.count;
 }

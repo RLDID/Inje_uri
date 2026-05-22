@@ -20,6 +20,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_AMPLITUDE_API_KEY: ${NEXT_PUBLIC_AMPLITUDE_API_KEY}
     container_name: injeuri-app-test
     environment:
       NODE_ENV: production
@@ -29,6 +31,10 @@ services:
       AUTH_SECRET: staging-test-auth-secret-change-me
       SESSION_SECRET: staging-test-session-secret-change-me
       BATCH_SECRET: change-me
+      DB_ENCRYPTION_KEY: ${DB_ENCRYPTION_KEY}
+      ADMIN_ACCESS_CODE: ${ADMIN_ACCESS_CODE}
+      ADMIN_SESSION_SECRET: ${ADMIN_SESSION_SECRET}
+      NEXT_PUBLIC_AMPLITUDE_API_KEY: ${NEXT_PUBLIC_AMPLITUDE_API_KEY}
     depends_on:
       db:
         condition: service_healthy

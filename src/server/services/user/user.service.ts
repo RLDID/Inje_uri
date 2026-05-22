@@ -403,7 +403,7 @@ export async function updateCurrentUserProfile(userId: number, body: UserPatchBo
       updateData.bio = null;
     } else {
       const bio = toOptionalString(profile.bio);
-      if (bio === undefined) {
+      if (!bio) {
         throw new ApiError(ERROR.VALIDATION_ERROR, 'bio 형식을 확인해주세요.');
       }
 
@@ -491,6 +491,7 @@ export async function updateCurrentUserProfile(userId: number, body: UserPatchBo
   }
 
   if (keywordSelections !== null) {
+    const targetCategoryIds = [...new Set(keywordSelections.map((s) => s.categoryId))];
     const rows = keywordSelections.flatMap((selection) => (
       selection.keywordIds.map((keywordId) => ({
         category_id: selection.categoryId,
@@ -498,7 +499,7 @@ export async function updateCurrentUserProfile(userId: number, body: UserPatchBo
       }))
     ));
 
-    await replaceUserKeywordSelections(userId, rows);
+    await replaceUserKeywordSelections(userId, rows, targetCategoryIds);
   }
 
   if (shouldGenerateTodayRecommendations) {

@@ -4,7 +4,7 @@ import { Suspense, type ReactNode } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { CountBadge } from '@/components/ui';
-import { resolveOwnerSection } from '@/lib/navigation';
+import { SECTION_ROOTS, resolveOwnerSection } from '@/lib/navigation';
 import type { MainTab } from '@/lib/types';
 
 interface NavItem {
@@ -133,25 +133,25 @@ const navItems: NavItem[] = [
   {
     id: 'match',
     label: '오늘 우리',
-    href: '/match',
+    href: SECTION_ROOTS.match,
     icon: (active) => <HomeIcon active={active} />,
   },
   {
     id: 'self-date',
     label: '지금 우리',
-    href: '/self-date',
+    href: SECTION_ROOTS['self-date'],
     icon: (active) => <GridIcon active={active} />,
   },
   {
     id: 'chat',
     label: '채팅',
-    href: '/chat',
+    href: SECTION_ROOTS.chat,
     icon: (active) => <ChatIcon active={active} />,
   },
   {
     id: 'my',
     label: '마이',
-    href: '/my',
+    href: SECTION_ROOTS.my,
     icon: (active) => <PawIcon active={active} />,
   },
 ];
@@ -164,6 +164,10 @@ function BottomNavContent({ unreadChats = 0 }: BottomNavProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const activeSection = resolveOwnerSection(pathname, searchParams);
+
+  if (searchParams.get('waiting') === '1') {
+    return null;
+  }
 
   const getBadge = (id: MainTab) => {
     if (id === 'chat' && unreadChats > 0) return unreadChats;

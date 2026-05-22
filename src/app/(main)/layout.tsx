@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { AuthSessionGuard } from '@/components/auth/AuthSessionGuard';
 import { NavigationTracker } from '@/components/navigation/NavigationTracker';
 import { ChatExpiryNotifier } from '@/components/chat/ChatExpiryNotifier';
 import { BottomNavWithUnread } from '@/components/layout/BottomNavWithUnread';
@@ -10,6 +11,9 @@ export default function MainLayout({
 }) {
   return (
     <>
+      <Suspense fallback={null}>
+        <AuthSessionGuard />
+      </Suspense>
       <Suspense fallback={null}>
         <NavigationTracker />
       </Suspense>

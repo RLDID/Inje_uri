@@ -2,6 +2,7 @@
 
 import { prisma } from "@/server/db/prisma";
 import { Prisma } from "@/generated/prisma/client";
+import type { PrismaTransactionClient } from "@/server/db/prisma";
 
 export interface InterestRow {
   id: number;
@@ -137,7 +138,7 @@ export async function declineInterestById(
 export async function confirmMatch(
   interestId1: number,
   interestId2: number,
-  tx?: Prisma.TransactionClient,
+  tx?: PrismaTransactionClient,
 ): Promise<void> {
   const db = tx ?? prisma;
   await db.$executeRaw`
@@ -157,4 +158,9 @@ export async function rollbackMatch(
     SET matched_at = NULL, status = 'pending'
     WHERE id IN (${interestId1}, ${interestId2})
   `;
+}
+
+export async function deleteAllInterests(): Promise<number> {
+  const result = await prisma.interest.deleteMany({});
+  return result.count;
 }
