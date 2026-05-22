@@ -17,9 +17,9 @@ export const metadata: Metadata = {
     ],
     apple: [
       {
-        url: '/brand/bear-hero-face2-icon.png',
+        url: '/brand/launchericon-512x512.png',
         type: 'image/png',
-        sizes: '1024x1024',
+        sizes: '512x512',
       },
     ],
   },
