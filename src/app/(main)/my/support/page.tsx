@@ -482,10 +482,9 @@ function SupportPageContent() {
     </PageContainer>
   );
 }
-
 export default function SupportPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<div />}>
       <SupportPageContent />
     </Suspense>
   );
