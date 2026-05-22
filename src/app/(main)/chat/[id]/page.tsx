@@ -22,6 +22,7 @@ import {
 } from '@/lib/api/chat';
 import { getMe } from '@/lib/api/profile';
 import { blockUser, reportTarget } from '@/lib/api/safety';
+import { trackChatOpened } from '@/lib/analytics';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { usePolling } from '@/lib/hooks/usePolling';
 import { buildProfileDetailHref, useCurrentRouteContext, useSafeBack } from '@/lib/navigation';
@@ -178,6 +179,7 @@ function ChatRoomPageContent() {
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const didInitialScrollRef = useRef(false);
+  const trackedChatOpenIdRef = useRef<string | null>(null);
   const lastReadMessageIdRef = useRef<string | null>(null);
 
   const otherParticipant = currentUser
@@ -269,6 +271,21 @@ function ChatRoomPageContent() {
     enabled: Boolean(chat),
     immediate: false,
   });
+
+  useEffect(() => {
+    if (!chat || trackedChatOpenIdRef.current === chat.id) {
+      return;
+    }
+
+    trackedChatOpenIdRef.current = chat.id;
+    const { isExpired } = getChatRemainingTime(chat);
+    trackChatOpened({
+      chatType: chat.chatType,
+      chatStatus: chat.status,
+      entrySection: ownerSection,
+      isExpired,
+    });
+  }, [chat, ownerSection]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {

@@ -98,6 +98,10 @@ body {
   overscroll-behavior-x: none;
 }
 
+html[data-start-screen-seen="true"] .start-screen-overlay {
+  display: none;
+}
+
 .app-container {
   position: relative;
   margin: 0 auto;

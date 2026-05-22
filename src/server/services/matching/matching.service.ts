@@ -5,7 +5,6 @@ import {
   findReversePendingInterest,
   confirmMatch,
 } from "@/server/repositories/interest/interest.repository";
-import { passMatchedCandidateItem } from "@/server/repositories/recommendation/recommendation.repository";
 import * as chatRoomService from "@/server/services/conversation/chatRoom.service";
 import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
 
@@ -14,13 +13,6 @@ const safetyRepo = new SafetyRepository(prisma);
 export interface MatchResult {
   matched: boolean;
   chat_room_id: number | null;
-}
-
-/** KST 오늘 날짜 (YYYY-MM-DD) */
-function getKSTDateString(): string {
-  const now = new Date();
-  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
-  return kst.toISOString().split("T")[0];
 }
 
 /**
@@ -60,13 +52,6 @@ export async function checkAndCreateMatch(
   const myCreatedAt = myInterestRow[0]?.created_at ?? new Date();
   const sourceInterestId =
     reverseInterest.created_at <= myCreatedAt ? reverseInterest.id : myInterestId;
-
-  // 매칭된 두 유저의 오늘 추천 목록에서 서로를 passed_at 처리 (트랜잭션 밖)
-  const today = getKSTDateString();
-  await Promise.allSettled([
-    passMatchedCandidateItem(myUserId, targetUserId, today),
-    passMatchedCandidateItem(targetUserId, myUserId, today),
-  ]);
 
   // confirmMatch + 채팅방 생성을 단일 트랜잭션으로 원자적 처리
   try {
