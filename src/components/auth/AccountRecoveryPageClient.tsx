@@ -213,6 +213,7 @@ export function AccountRecoveryPageClient() {
   return (
     <PageContainer
       withBottomNav={false}
+      data-clarity-mask
       className="auth-background-page relative flex min-h-dvh flex-col overflow-hidden bg-white"
     >
       <div

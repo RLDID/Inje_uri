@@ -1,49 +1,20 @@
-import * as amplitude from '@amplitude/analytics-browser';
-
 type AnalyticsValue = string | number | boolean | null | undefined;
 type AnalyticsProperties = Record<string, AnalyticsValue>;
 
-let isInitialized = false;
-
-function getAmplitudeApiKey(): string {
-  return process.env.NEXT_PUBLIC_AMPLITUDE_API_KEY?.trim() ?? '';
-}
-
-function canUseAnalytics(): boolean {
-  return typeof window !== 'undefined' && getAmplitudeApiKey().length > 0;
-}
-
-export function initAnalytics(): boolean {
-  if (!canUseAnalytics()) {
-    return false;
+declare global {
+  interface Window {
+    gtag?: (...args: unknown[]) => void;
   }
-
-  if (isInitialized) {
-    return true;
-  }
-
-  amplitude.init(getAmplitudeApiKey(), {
-    autocapture: false,
-  });
-  isInitialized = true;
-  return true;
 }
 
 export function trackEvent(eventName: string, properties: AnalyticsProperties = {}) {
-  if (!initAnalytics()) {
-    return;
+  const cleanedProperties = Object.fromEntries(
+    Object.entries(properties).filter(([, value]) => value !== undefined),
+  ) as Record<string, string | number | boolean | null>;
+
+  if (typeof window !== 'undefined' && window.gtag) {
+    window.gtag('event', eventName, cleanedProperties);
   }
-
-  amplitude.track(eventName, properties);
-}
-
-export function trackScreenView(properties: {
-  screen: string;
-  section: string;
-  path: string;
-  filter?: string | null;
-}) {
-  trackEvent('screen_viewed', properties);
 }
 
 export function trackTodayWooriHeartSent(properties: {

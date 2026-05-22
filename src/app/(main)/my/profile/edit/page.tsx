@@ -370,6 +370,7 @@ function EditProfilePageContent() {
         >
           <div className="space-y-2">
             <textarea
+              data-clarity-mask
               value={profile.bio}
               onChange={(event) => setProfile((prevProfile) => ({ ...prevProfile, bio: event.target.value }))}
               placeholder="예: 여유로운 카페를 좋아하고, 편하게 대화하는 시간을 좋아해요."

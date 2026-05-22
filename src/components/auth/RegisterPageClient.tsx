@@ -377,6 +377,7 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 - 화면 방문 및 주요 버튼 클릭 등 서비스 이용 이벤트
 - 기기 및 브라우저 정보
 - 서비스 분석 도구가 생성하는 익명 기기 식별자
+- 세션 재생, 히트맵 등 사용성 분석 정보
 - 오류 기록
 - 계정 상태
 - 탈퇴 일시
@@ -386,6 +387,7 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 - 비정상 접근 탐지
 - 서비스 이용 통계 분석
 - 기능 개선 및 사용성 확인
+- 화면 흐름 및 사용 불편 지점 확인
 - 서비스 오류 확인
 - 보안 관리
 - 부정 이용 방지
@@ -398,6 +400,7 @@ const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; 
 
 공개 여부:
 - 인제우리는 서비스 이용 통계 분석 이벤트에 이름, 이메일, 전체 학번, 생년월일, 비밀번호 등 직접 식별정보를 포함하지 않습니다.
+- 채팅 내용, 피드 내용, 자기소개, 인증·로그인 입력값 등 민감하거나 사적인 내용은 분석 도구에서 마스킹 처리합니다.
 
 8. 개인정보의 보유 및 이용 기간
 
@@ -1234,6 +1237,7 @@ export function RegisterPageClient() {
   return (
     <PageContainer
       withBottomNav={false}
+      data-clarity-mask
       className={`auth-background-page relative flex flex-col overflow-hidden bg-white ${step === 'categories' ? 'h-dvh max-h-dvh' : 'min-h-dvh'}`}
     >
       <div

@@ -487,7 +487,7 @@ export function MyStoriesView({
                       </div>
                     )}
 
-                    <p className="mt-3 leading-7 text-[var(--color-text-primary)]">
+                    <p data-clarity-mask className="mt-3 leading-7 text-[var(--color-text-primary)]">
                       {story.content.text}
                     </p>
 
@@ -571,7 +571,7 @@ export function MyStoriesView({
                                   </div>
 
                                   {reaction.message ? (
-                                    <p className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                                    <p data-clarity-mask className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
                                       &ldquo;{reaction.message}&rdquo;
                                     </p>
                                   ) : (
@@ -692,7 +692,7 @@ export function MyStoriesView({
                 <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[var(--color-text-tertiary)]">
                   남긴 한마디
                 </p>
-                <p className="mt-2 text-sm leading-6 text-[var(--color-text-primary)]">
+                <p data-clarity-mask className="mt-2 text-sm leading-6 text-[var(--color-text-primary)]">
                   &ldquo;{selectedReaction.reaction.message}&rdquo;
                 </p>
               </div>
@@ -910,6 +910,7 @@ export function MyStoriesView({
               </div>
 
               <textarea
+                data-clarity-mask
                 value={editText}
                 onChange={(event) => setEditText(event.target.value.slice(0, 200))}
                 placeholder="피드 내용을 수정해주세요."
