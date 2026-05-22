@@ -280,12 +280,12 @@ export default function WaitingPage() {
       withBottomNav={false}
       className="bg-[#FAFAFA]"
     >
-      <main className="h-dvh overflow-y-auto overscroll-contain px-3 py-3 min-[390px]:px-4 min-[390px]:py-4 [@media(max-height:650px)]:pb-[calc(env(safe-area-inset-bottom)+108px)] [@media(max-height:650px)]:py-2">
+      <main className="min-h-dvh touch-pan-y overflow-x-hidden px-3 py-3 min-[390px]:px-4 min-[390px]:py-4 [@media(max-height:650px)]:pb-[calc(env(safe-area-inset-bottom)+108px)] [@media(max-height:650px)]:py-2">
         <section
-          className="flex h-[calc(100dvh-24px)] flex-col overflow-hidden rounded-[28px] border border-[#F0F0F0] bg-[#FDFCFD] px-5 pb-3 pt-4 text-center shadow-[0_16px_46px_rgba(28,31,35,0.08)] min-[390px]:h-[calc(100dvh-32px)] min-[390px]:px-6 min-[390px]:pb-4 min-[390px]:pt-7 [@media(max-height:650px)]:h-[596px]"
+          className="flex h-[calc(100dvh-24px)] flex-col overflow-hidden rounded-[28px] border border-[#F0F0F0] bg-[#FDFCFD] px-5 pb-3 pt-4 text-center shadow-[0_16px_46px_rgba(28,31,35,0.08)] min-[390px]:h-[calc(100dvh-32px)] min-[390px]:px-6 min-[390px]:pb-4 min-[390px]:pt-7 [@media(max-height:650px)]:h-auto [@media(max-height:650px)]:min-h-0 [@media(max-height:650px)]:pb-4 [@media(max-height:650px)]:overflow-visible"
         >
           <div
-            className="min-h-0 flex-1 overflow-hidden touch-pan-y"
+            className="min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [@media(max-height:650px)]:h-auto [@media(max-height:650px)]:flex-none [@media(max-height:650px)]:[overflow-x:clip] [@media(max-height:650px)]:[overflow-y:visible]"
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
             onPointerCancel={() => {
@@ -299,14 +299,14 @@ export default function WaitingPage() {
             }}
           >
             <div
-              className={`flex h-full ${isResetting ? 'transition-none' : 'transition-transform duration-300 ease-out'}`}
+              className={`flex h-full [@media(max-height:650px)]:h-auto ${isResetting ? 'transition-none' : 'transition-transform duration-300 ease-out'}`}
               style={{ transform: `translateX(-${activeIndex * 100}%)` }}
               onTransitionEnd={handleSlideTransitionEnd}
             >
               {LOOP_SLIDES.map((slide, index) => (
                 <article
                   key={`${slide.id}-${index}`}
-                  className="flex h-full w-full shrink-0 flex-col px-1 pb-1 pt-2 min-[390px]:pt-4 [@media(max-height:760px)]:pt-1"
+                  className="flex h-full min-h-0 w-full shrink-0 flex-col overflow-y-auto overscroll-contain px-1 pb-1 pt-2 [scrollbar-width:none] min-[390px]:pt-4 [&::-webkit-scrollbar]:hidden [@media(max-height:760px)]:pt-1 [@media(max-height:650px)]:h-auto [@media(max-height:650px)]:overflow-visible [@media(max-height:650px)]:pb-3"
                 >
                   <div className={`shrink-0 ${slide.badge ? 'min-h-[clamp(110px,18dvh,164px)]' : 'min-h-[clamp(108px,16dvh,150px)] pt-3 min-[390px]:pt-5 [@media(max-height:760px)]:pt-2'}`}>
                     {slide.badge ? (
@@ -361,7 +361,7 @@ export default function WaitingPage() {
                   )}
 
                   {slide.panel.kind === 'countdown' ? (
-                    <div className="mx-1 mb-1 mt-3 overflow-hidden rounded-[22px] bg-white/92 px-4 py-3 ring-1 ring-[#F1ECFA] min-[390px]:py-4">
+                    <div className="mx-1 mb-1 mt-3 shrink-0 overflow-hidden rounded-[22px] bg-white/92 px-4 py-3 ring-1 ring-[#F1ECFA] min-[390px]:py-4">
                       <p className="text-[13px] font-medium text-[#595959] min-[390px]:text-[14px]">{slide.panel.eyebrow}</p>
                       <p className="mt-2 text-[36px] font-bold leading-none text-[#9B72F0] min-[390px]:mt-3 min-[390px]:text-[42px]">{countdown?.day ?? 'D-00'}</p>
                       <p className="mt-2 font-mono text-[23px] font-semibold leading-none text-[#303030] min-[390px]:mt-3 min-[390px]:text-[26px]">{countdown?.time ?? '00:00:00'}</p>
@@ -377,7 +377,7 @@ export default function WaitingPage() {
           </div>
 
           <div className="contents [@media(max-height:650px)]:block">
-            <div className="mt-1 flex shrink-0 justify-center gap-2.5 min-[390px]:mt-2 min-[390px]:gap-3 [@media(max-height:650px)]:fixed [@media(max-height:650px)]:bottom-[calc(env(safe-area-inset-bottom)+56px)] [@media(max-height:650px)]:left-0 [@media(max-height:650px)]:right-0 [@media(max-height:650px)]:z-50 [@media(max-height:650px)]:mt-0 [@media(max-height:650px)]:gap-2">
+            <div className="mt-1 flex shrink-0 justify-center gap-2.5 min-[390px]:mt-2 min-[390px]:gap-3 [@media(max-height:650px)]:fixed [@media(max-height:650px)]:bottom-[calc(env(safe-area-inset-bottom)+58px)] [@media(max-height:650px)]:left-0 [@media(max-height:650px)]:right-0 [@media(max-height:650px)]:z-50 [@media(max-height:650px)]:mt-0 [@media(max-height:650px)]:gap-2">
               {WAITING_SLIDES.map((slide, index) => (
                 <button
                   type="button"
@@ -389,7 +389,7 @@ export default function WaitingPage() {
                 />
               ))}
             </div>
-            <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 hidden h-[calc(env(safe-area-inset-bottom)+92px)] bg-[#FAFAFA] [@media(max-height:650px)]:block" />
+            <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 hidden h-[calc(env(safe-area-inset-bottom)+76px)] bg-[#FAFAFA] [@media(max-height:650px)]:block" />
             <Link
               href={MY_PROFILE_HREF}
               className="mt-2 flex min-h-10 w-full shrink-0 items-center justify-center rounded-[16px] bg-[var(--color-pink-cta)] px-4 text-[14px] font-bold text-white shadow-[0_8px_18px_rgba(243,167,192,0.18)] transition hover:bg-[var(--color-action-primary-hover)] active:scale-[0.99] min-[390px]:mt-3 min-[390px]:min-h-12 min-[390px]:rounded-[18px] min-[390px]:text-[16px] [@media(max-height:650px)]:fixed [@media(max-height:650px)]:bottom-[calc(env(safe-area-inset-bottom)+8px)] [@media(max-height:650px)]:left-5 [@media(max-height:650px)]:right-5 [@media(max-height:650px)]:z-50 [@media(max-height:650px)]:mx-auto [@media(max-height:650px)]:w-auto [@media(max-height:650px)]:max-w-[430px]"
@@ -413,7 +413,7 @@ function StepPanel({
   const styles = PANEL_STYLES[tone];
 
   return (
-    <div className={`mx-1 mb-1 mt-3 overflow-hidden rounded-[22px] px-4 py-2.5 text-left ring-1 ring-white/80 min-[390px]:px-5 min-[390px]:py-3 [@media(max-height:760px)]:mt-2 [@media(max-height:760px)]:px-3.5 [@media(max-height:760px)]:py-1.5 ${styles.background}`}>
+    <div className={`mx-1 mb-1 mt-3 shrink-0 overflow-hidden rounded-[22px] px-4 py-2.5 text-left ring-1 ring-white/80 min-[390px]:px-5 min-[390px]:py-3 [@media(max-height:760px)]:mt-2 [@media(max-height:760px)]:px-3.5 [@media(max-height:760px)]:py-1.5 ${styles.background}`}>
       {items.map((item, index) => (
         <div
           key={item.title}
@@ -456,9 +456,6 @@ function InstallPreview({
           className={`${imageClassName} rounded-[22px] object-contain`}
         />
       </div>
-      <p className="absolute bottom-2 text-[12px] font-bold text-[#6E6E6E] min-[390px]:bottom-3">
-        인제우리
-      </p>
     </div>
   );
 }
@@ -469,7 +466,7 @@ function InstallPanel({
   items: readonly { platform: string; browser: string; steps: readonly string[] }[];
 }) {
   return (
-    <div className="mx-1 mb-1 mt-3 rounded-[22px] bg-[linear-gradient(135deg,rgba(248,242,255,0.98),rgba(239,247,255,0.98))] px-3 py-2 text-left ring-1 ring-white/80 min-[390px]:px-4 min-[390px]:py-2.5">
+    <div className="mx-1 mb-1 mt-3 shrink-0 rounded-[22px] bg-[linear-gradient(135deg,rgba(248,242,255,0.98),rgba(239,247,255,0.98))] px-3 py-2 text-left ring-1 ring-white/80 min-[390px]:px-4 min-[390px]:py-2.5">
       <div className="grid gap-1.5 min-[390px]:gap-2">
         {items.map((item) => (
           <div key={`${item.platform}-${item.browser}`} className="rounded-[16px] bg-white/72 px-3 py-1.5 ring-1 ring-[#EEE5FF] min-[390px]:px-4 min-[390px]:py-2">
