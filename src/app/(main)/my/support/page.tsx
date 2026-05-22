@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { FormEvent, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { Button, useToast } from '@/components/ui';
 import { useSafeBack } from '@/lib/navigation';
@@ -186,7 +186,7 @@ function SupportIcon({ children }: { children: ReactNode }) {
   );
 }
 
-export default function SupportPage() {
+function SupportPageContent() {
   const { goBack } = useSafeBack({ fallbackPath: '/my' });
   const { showToast } = useToast();
   const [activeTab, setActiveTab] = useState<SupportTab>('faq');
@@ -480,5 +480,13 @@ export default function SupportPage() {
         )}
       </PageContent>
     </PageContainer>
+  );
+}
+
+export default function SupportPage() {
+  return (
+    <Suspense fallback={null}>
+      <SupportPageContent />
+    </Suspense>
   );
 }

@@ -60,6 +60,12 @@ enum job_status {
   failed
 }
 
+enum support_inquiry_status {
+  received
+  in_review
+  answered
+}
+
 enum chat_room_source_type {
   interest
   comment
@@ -113,6 +119,7 @@ model User {
   userContacts               UserContact[]             @relation("user_contacts_user_idTousers")
   matchedContacts            UserContact[]             @relation("user_contacts_matched_user_idTousers")
   messageReads               MessageRead[]
+  supportInquiries           SupportInquiry[]
 
   @@map("users")
 }
@@ -539,6 +546,25 @@ model ChatRoomPlaceSuggestion {
   place             Place    @relation(fields: [place_id], references: [id], onDelete: Cascade)
 
   @@map("chat_room_place_suggestions")
+}
+
+model SupportInquiry {
+  id         Int                    @id @default(autoincrement())
+  user_id    Int?
+  category   String                 @db.VarChar(50)
+  screen     String                 @db.VarChar(50)
+  title      String                 @db.VarChar(60)
+  content    String                 @db.Text
+  email      String?                @db.VarChar(80)
+  status     support_inquiry_status @default(received)
+  created_at DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at DateTime               @updatedAt @db.Timestamptz(6)
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id, created_at])
+  @@index([status])
+  @@map("support_inquiries")
 }
 
 model UserContact {

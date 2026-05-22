@@ -1,4 +1,5 @@
 import { prisma } from '@/server/db/prisma';
+import type { PrismaTransactionClient } from '@/server/db/prisma';
 import { Prisma } from '@/generated/prisma/client';
 import type { report_status } from '@/generated/prisma/enums';
 import { AdminReportRepository, type AdminReportRow } from '@/server/repositories/admin/admin-report.repository';
@@ -105,7 +106,7 @@ function assertActionAllowedForTarget(action: AdminReportAction, targetType: str
 }
 
 async function resolveTargetOwnerUserId(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   report: Pick<AdminReportForAction, 'reporter_user_id' | 'target_type' | 'target_id'>,
 ): Promise<number | null> {
   switch (report.target_type) {
@@ -179,7 +180,7 @@ async function resolveTargetOwnerUserId(
 }
 
 async function applyActionInTransaction(
-  tx: Prisma.TransactionClient,
+  tx: PrismaTransactionClient,
   report: AdminReportForAction,
   action: AdminReportAction,
 ): Promise<{ targetType: string; targetId: number; targetUserId: number | null }> {
