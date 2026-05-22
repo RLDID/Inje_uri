@@ -24,8 +24,8 @@ const WAITING_SLIDES = [
     ],
     description: ['지금은 프로필을 먼저 준비하는 기간이에요.', '오픈되면 오늘우리와 지금우리를', '바로 사용할 수 있어요.'],
     imageSrc: '/brand/waiting/w%20(1).png',
-    imageFrameClassName: 'h-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] [@media(max-height:700px)]:h-[170px]',
-    imageClassName: 'h-[clamp(118px,22dvh,252px)] w-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] min-[390px]:w-[clamp(150px,27dvh,252px)] [@media(max-height:700px)]:h-[170px] [@media(max-height:700px)]:w-[170px]',
+    imageFrameClassName: 'h-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] [@media(max-height:760px)]:h-[162px] [@media(max-height:700px)]:h-[170px]',
+    imageClassName: 'h-[clamp(118px,22dvh,252px)] w-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] min-[390px]:w-[clamp(150px,27dvh,252px)] [@media(max-height:760px)]:h-[162px] [@media(max-height:760px)]:w-[162px] [@media(max-height:700px)]:h-[170px] [@media(max-height:700px)]:w-[170px]',
     panel: {
       kind: 'countdown',
       eyebrow: '정식 오픈까지',
@@ -45,8 +45,8 @@ const WAITING_SLIDES = [
     ],
     description: ['오늘우리는 하루에 한 번,', '나와 잘 맞을 수 있는 사람을 추천해주는 공간이에요.'],
     imageSrc: '/brand/waiting/w%20(2).png',
-    imageFrameClassName: 'h-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] [@media(max-height:700px)]:h-[170px]',
-    imageClassName: 'h-[clamp(114px,21dvh,246px)] w-[clamp(114px,21dvh,246px)] min-[390px]:h-[clamp(146px,26dvh,246px)] min-[390px]:w-[clamp(146px,26dvh,246px)] [@media(max-height:700px)]:h-[166px] [@media(max-height:700px)]:w-[166px]',
+    imageFrameClassName: 'h-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] [@media(max-height:760px)]:h-[162px] [@media(max-height:700px)]:h-[170px]',
+    imageClassName: 'h-[clamp(114px,21dvh,246px)] w-[clamp(114px,21dvh,246px)] min-[390px]:h-[clamp(146px,26dvh,246px)] min-[390px]:w-[clamp(146px,26dvh,246px)] [@media(max-height:760px)]:h-[158px] [@media(max-height:760px)]:w-[158px] [@media(max-height:700px)]:h-[166px] [@media(max-height:700px)]:w-[166px]',
     panel: {
       kind: 'steps',
       tone: 'pink',
@@ -69,8 +69,8 @@ const WAITING_SLIDES = [
     ],
     description: ['밥, 산책, 카페, 공부처럼', '지금 같이 하고 싶은 일을 가볍게 올릴 수 있어요.'],
     imageSrc: '/brand/waiting/w%20(3).png',
-    imageFrameClassName: 'h-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] [@media(max-height:700px)]:h-[170px]',
-    imageClassName: 'h-[clamp(114px,21dvh,246px)] w-[clamp(114px,21dvh,246px)] min-[390px]:h-[clamp(146px,26dvh,246px)] min-[390px]:w-[clamp(146px,26dvh,246px)] [@media(max-height:700px)]:h-[166px] [@media(max-height:700px)]:w-[166px]',
+    imageFrameClassName: 'h-[clamp(118px,22dvh,252px)] min-[390px]:h-[clamp(150px,27dvh,252px)] [@media(max-height:760px)]:h-[162px] [@media(max-height:700px)]:h-[170px]',
+    imageClassName: 'h-[clamp(114px,21dvh,246px)] w-[clamp(114px,21dvh,246px)] min-[390px]:h-[clamp(146px,26dvh,246px)] min-[390px]:w-[clamp(146px,26dvh,246px)] [@media(max-height:760px)]:h-[158px] [@media(max-height:760px)]:w-[158px] [@media(max-height:700px)]:h-[166px] [@media(max-height:700px)]:w-[166px]',
     panel: {
       kind: 'steps',
       tone: 'blue',
@@ -98,6 +98,7 @@ const WAITING_SLIDES = [
     panel: {
       kind: 'install',
       items: [
+        { platform: 'Galaxy', browser: '브라우저', steps: ['점 세개', '홈 화면에 추가'] },
         { platform: 'Galaxy', browser: 'Chrome', steps: ['점 세개', '홈 화면에 추가'] },
         { platform: 'iPhone', browser: 'Safari', steps: ['점 세개', '공유', '홈 화면에 추가'] },
       ],
@@ -305,16 +306,16 @@ export default function WaitingPage() {
               {LOOP_SLIDES.map((slide, index) => (
                 <article
                   key={`${slide.id}-${index}`}
-                  className="flex h-full w-full shrink-0 flex-col px-1 pb-1 pt-2 min-[390px]:pt-4"
+                  className="flex h-full w-full shrink-0 flex-col px-1 pb-1 pt-2 min-[390px]:pt-4 [@media(max-height:760px)]:pt-1"
                 >
-                  <div className={`shrink-0 ${slide.badge ? 'min-h-[clamp(118px,20dvh,164px)]' : 'min-h-[clamp(116px,18dvh,156px)] pt-3 min-[390px]:pt-5'}`}>
+                  <div className={`shrink-0 ${slide.badge ? 'min-h-[clamp(110px,18dvh,164px)]' : 'min-h-[clamp(108px,16dvh,150px)] pt-3 min-[390px]:pt-5 [@media(max-height:760px)]:pt-2'}`}>
                     {slide.badge ? (
                       <p className="mx-auto mb-3 inline-flex min-h-8 items-center rounded-full border border-[#E5D5FF] bg-[#F8F2FF] px-4 text-[13px] font-bold text-[#9A70F3] min-[390px]:mb-4 min-[390px]:min-h-9">
                         {slide.badge}
                       </p>
                     ) : null}
 
-                    <h1 className="break-keep text-[30px] font-bold leading-[1.22] text-[#2D2D2D] min-[390px]:text-[32px] min-[390px]:leading-[1.28]">
+                    <h1 className="break-keep text-[30px] font-bold leading-[1.22] text-[#2D2D2D] min-[390px]:text-[32px] min-[390px]:leading-[1.28] [@media(max-height:760px)]:text-[28px] [@media(max-height:760px)]:leading-[1.18]">
                       {slide.title.map((line, lineIndex) => (
                         <span key={`${slide.id}-line-${lineIndex}`} className="block">
                           {line.map((segment) => (
@@ -329,7 +330,7 @@ export default function WaitingPage() {
                       ))}
                     </h1>
 
-                    <p className="mx-auto mt-3 max-w-[300px] break-keep text-[14px] leading-6 text-[#626262] min-[390px]:mt-4 min-[390px]:text-[15px] min-[390px]:leading-7 [@media(max-height:650px)]:mt-2">
+                    <p className="mx-auto mt-3 max-w-[300px] break-keep text-[14px] leading-6 text-[#626262] min-[390px]:mt-4 min-[390px]:text-[15px] min-[390px]:leading-7 [@media(max-height:760px)]:mt-2 [@media(max-height:760px)]:text-[13px] [@media(max-height:760px)]:leading-5">
                       {slide.description.map((line) => (
                         <span key={line} className="block">
                           {line}
@@ -341,7 +342,7 @@ export default function WaitingPage() {
                   {slide.panel.kind === 'install' ? (
                     <InstallPreview imageSrc={slide.imageSrc} frameClassName={slide.imageFrameClassName} imageClassName={slide.imageClassName} />
                   ) : (
-                    <div className={`relative mt-3 flex shrink-0 items-end justify-center overflow-hidden bg-[#FDFCFD] [@media(max-height:650px)]:mt-4 ${slide.imageFrameClassName}`}>
+                    <div className={`relative mt-3 flex shrink-0 items-end justify-center overflow-hidden bg-[#FDFCFD] [@media(max-height:760px)]:mt-2 [@media(max-height:650px)]:mt-4 ${slide.imageFrameClassName}`}>
                       <span className="pointer-events-none absolute inset-x-0 top-0 z-10 h-10 bg-[linear-gradient(180deg,#FDFCFD_0%,rgba(253,252,253,0)_100%)]" />
                       <span className="pointer-events-none absolute inset-x-0 bottom-0 z-10 h-12 bg-[linear-gradient(0deg,#FDFCFD_0%,rgba(253,252,253,0)_100%)]" />
                       <span className="pointer-events-none absolute inset-y-0 left-0 z-10 w-12 bg-[linear-gradient(90deg,#FDFCFD_0%,rgba(253,252,253,0)_100%)]" />
@@ -351,9 +352,10 @@ export default function WaitingPage() {
                         alt=""
                         width={640}
                         height={760}
+                        quality={100}
                         priority={slide.id === 'open' && index === 0}
                         draggable={false}
-                        className={`${slide.imageClassName} object-contain object-bottom blur-[0.2px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_56%,#000_50%,rgba(0,0,0,0.72)_68%,transparent_100%)] [-webkit-mask-image:radial-gradient(ellipse_70%_70%_at_50%_56%,#000_50%,rgba(0,0,0,0.72)_68%,transparent_100%)]`}
+                        className={`${slide.imageClassName} object-contain object-bottom [mask-image:radial-gradient(ellipse_70%_70%_at_50%_56%,#000_50%,rgba(0,0,0,0.72)_68%,transparent_100%)] [-webkit-mask-image:radial-gradient(ellipse_70%_70%_at_50%_56%,#000_50%,rgba(0,0,0,0.72)_68%,transparent_100%)]`}
                       />
                     </div>
                   )}
@@ -411,18 +413,18 @@ function StepPanel({
   const styles = PANEL_STYLES[tone];
 
   return (
-    <div className={`mx-1 mb-1 mt-3 overflow-hidden rounded-[22px] px-4 py-2.5 text-left ring-1 ring-white/80 min-[390px]:px-5 min-[390px]:py-3 ${styles.background}`}>
+    <div className={`mx-1 mb-1 mt-3 overflow-hidden rounded-[22px] px-4 py-2.5 text-left ring-1 ring-white/80 min-[390px]:px-5 min-[390px]:py-3 [@media(max-height:760px)]:mt-2 [@media(max-height:760px)]:px-3.5 [@media(max-height:760px)]:py-1.5 ${styles.background}`}>
       {items.map((item, index) => (
         <div
           key={item.title}
-          className={`flex gap-3 py-2 min-[390px]:gap-4 min-[390px]:py-3 ${index > 0 ? `border-t ${styles.divider}` : ''}`}
+          className={`flex gap-3 py-2 min-[390px]:gap-4 min-[390px]:py-3 [@media(max-height:760px)]:gap-2.5 [@media(max-height:760px)]:py-1.5 ${index > 0 ? `border-t ${styles.divider}` : ''}`}
         >
-          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold min-[390px]:h-8 min-[390px]:w-8 min-[390px]:text-[13px] ${styles.number}`}>
+          <span className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-bold min-[390px]:h-8 min-[390px]:w-8 min-[390px]:text-[13px] [@media(max-height:760px)]:h-7 [@media(max-height:760px)]:w-7 [@media(max-height:760px)]:text-[12px] ${styles.number}`}>
             {String(index + 1).padStart(2, '0')}
           </span>
           <div className="min-w-0">
-            <p className="break-keep text-[14px] font-bold leading-5 text-[#2F2F2F] min-[390px]:text-[15px] min-[390px]:leading-6">{item.title}</p>
-            <p className="mt-0.5 break-keep text-[11px] leading-4 text-[#626262] min-[390px]:text-[12px] min-[390px]:leading-5">{item.description}</p>
+            <p className="break-keep text-[14px] font-bold leading-5 text-[#2F2F2F] min-[390px]:text-[15px] min-[390px]:leading-6 [@media(max-height:760px)]:text-[13px] [@media(max-height:760px)]:leading-5">{item.title}</p>
+            <p className="mt-0.5 break-keep text-[11px] leading-4 text-[#626262] min-[390px]:text-[12px] min-[390px]:leading-5 [@media(max-height:760px)]:text-[11px] [@media(max-height:760px)]:leading-4">{item.description}</p>
           </div>
         </div>
       ))}
@@ -449,6 +451,7 @@ function InstallPreview({
           alt=""
           width={180}
           height={180}
+          quality={100}
           draggable={false}
           className={`${imageClassName} rounded-[22px] object-contain`}
         />
