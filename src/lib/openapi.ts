@@ -23,6 +23,8 @@
       { name: "차단", description: "사용자 차단, 전화번호 차단, 차단 목록/해제" },
       { name: "신고", description: "사용자/피드/댓글/채팅방/메시지 신고" },
       { name: "장소 추천", description: "장소 목록 조회, 추천 생성/조회/상태 업데이트" },
+      { name: "1:1 문의", description: "사용자 1:1 문의 등록/조회/수정" },
+      { name: "관리자 - 1:1 문의", description: "관리자 문의 목록/상세 조회, 상태 변경" },
     ],
     paths: {
       "/api/auth/inje-check": {
@@ -1094,8 +1096,255 @@
           },
         },
       },
-    },
 
+      "/api/support-inquiries": {
+        post: {
+          tags: ["1:1 문의"],
+          summary: "문의 등록",
+          description: "인증된 사용자가 1:1 문의를 등록합니다.",
+          security: [{ cookieAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["category", "screen", "title", "content"],
+                  properties: {
+                    category: { type: "string" },
+                    screen: { type: "string" },
+                    title: { type: "string", maxLength: 60 },
+                    content: { type: "string", maxLength: 700 },
+                    email: { type: "string", maxLength: 80 },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "문의 등록 성공",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                      data: { $ref: "#/components/schemas/SupportInquiryDto" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": { $ref: "#/components/responses/BadRequest" },
+            "401": { $ref: "#/components/responses/Unauthorized" },
+          },
+        },
+        get: {
+          tags: ["1:1 문의"],
+          summary: "내 문의 목록 조회",
+          description: "인증된 사용자의 문의 목록을 반환합니다.",
+          security: [{ cookieAuth: [] }],
+          responses: {
+            "200": {
+              description: "조회 성공",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                      data: { type: "array", items: { $ref: "#/components/schemas/SupportInquiryDto" } },
+                    },
+                  },
+                },
+              },
+            },
+            "401": { $ref: "#/components/responses/Unauthorized" },
+          },
+        },
+      },
+
+      "/api/support-inquiries/{id}": {
+        get: {
+          tags: ["1:1 문의"],
+          summary: "내 문의 상세 조회",
+          security: [{ cookieAuth: [] }],
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+          responses: {
+            "200": {
+              description: "조회 성공",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                      data: { $ref: "#/components/schemas/SupportInquiryDto" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": { $ref: "#/components/responses/BadRequest" },
+            "401": { $ref: "#/components/responses/Unauthorized" },
+            "404": { $ref: "#/components/responses/NotFound" },
+          },
+        },
+        patch: {
+          tags: ["1:1 문의"],
+          summary: "내 문의 수정 (received 상태만 허용)",
+          security: [{ cookieAuth: [] }],
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    category: { type: "string" },
+                    screen: { type: "string" },
+                    title: { type: "string", maxLength: 60 },
+                    content: { type: "string", maxLength: 700 },
+                    email: { type: "string", maxLength: 80, nullable: true },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "수정 성공",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                      data: { $ref: "#/components/schemas/SupportInquiryDto" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": { $ref: "#/components/responses/BadRequest" },
+            "401": { $ref: "#/components/responses/Unauthorized" },
+            "404": { $ref: "#/components/responses/NotFound" },
+          },
+        },
+      },
+
+      "/api/admin/support-inquiries": {
+        get: {
+          tags: ["관리자 - 1:1 문의"],
+          summary: "문의 목록 조회 (관리자)",
+          security: [{ cookieAuth: [] }],
+          parameters: [
+            { name: "status", in: "query", schema: { type: "string", enum: ["received", "in_review", "answered"] } },
+            { name: "page", in: "query", schema: { type: "integer", default: 1 } },
+            { name: "limit", in: "query", schema: { type: "integer", default: 20 } },
+          ],
+          responses: {
+            "200": {
+              description: "조회 성공",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                      data: {
+                        type: "object",
+                        properties: {
+                          items: { type: "array", items: { $ref: "#/components/schemas/SupportInquiryWithUserDto" } },
+                          page: { type: "integer" },
+                          limit: { type: "integer" },
+                          total: { type: "integer" },
+                          totalPages: { type: "integer" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": { $ref: "#/components/responses/BadRequest" },
+            "401": { $ref: "#/components/responses/Unauthorized" },
+          },
+        },
+      },
+
+      "/api/admin/support-inquiries/{id}": {
+        get: {
+          tags: ["관리자 - 1:1 문의"],
+          summary: "문의 상세 조회 (관리자, 상태 변경 없음)",
+          security: [{ cookieAuth: [] }],
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+          responses: {
+            "200": {
+              description: "조회 성공",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                      data: { $ref: "#/components/schemas/SupportInquiryWithUserDto" },
+                    },
+                  },
+                },
+              },
+            },
+            "401": { $ref: "#/components/responses/Unauthorized" },
+            "404": { $ref: "#/components/responses/NotFound" },
+          },
+        },
+      },
+
+      "/api/admin/support-inquiries/{id}/status": {
+        patch: {
+          tags: ["관리자 - 1:1 문의"],
+          summary: "문의 상태 변경 (in_review, answered만 허용)",
+          security: [{ cookieAuth: [] }],
+          parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["status"],
+                  properties: {
+                    status: { type: "string", enum: ["in_review", "answered"] },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "상태 변경 성공",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", example: true },
+                      data: { $ref: "#/components/schemas/SupportInquiryDto" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": { $ref: "#/components/responses/BadRequest" },
+            "401": { $ref: "#/components/responses/Unauthorized" },
+            "404": { $ref: "#/components/responses/NotFound" },
+          },
+        },
+      },
+    },
+  
     components: {
       parameters: {
         ChatRoomId: {
@@ -1935,6 +2184,39 @@
             success: { type: "boolean", example: true },
             data: { type: "object", properties: { suggestion: { $ref: "#/components/schemas/PlaceSuggestion" } } },
           },
+        },
+        SupportInquiryDto: {
+          type: "object",
+          properties: {
+            id: { type: "integer" },
+            userId: { type: "integer", nullable: true },
+            category: { type: "string" },
+            screen: { type: "string" },
+            title: { type: "string" },
+            content: { type: "string" },
+            email: { type: "string", nullable: true },
+            status: { type: "string", enum: ["received", "in_review", "answered"] },
+            createdAt: { type: "string", format: "date-time" },
+            updatedAt: { type: "string", format: "date-time" },
+          },
+        },
+        SupportInquiryWithUserDto: {
+          allOf: [
+            { $ref: "#/components/schemas/SupportInquiryDto" },
+            {
+              type: "object",
+              properties: {
+                user: {
+                  nullable: true,
+                  type: "object",
+                  properties: {
+                    id: { type: "integer" },
+                    nickname: { type: "string" },
+                  },
+                },
+              },
+            },
+          ],
         },
       },
       responses: {
