@@ -1,6 +1,6 @@
 'use client';
 
-import type { ReactNode, UIEvent } from 'react';
+import type { PointerEvent, ReactNode, UIEvent } from 'react';
 import { FormEvent, startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { PageContainer } from '@/components/layout';
@@ -69,6 +69,7 @@ const STUDENT_YEAR_OPTIONS = Array.from({ length: 8 }, (_, index) => String(inde
 const WHEEL_ITEM_HEIGHT = 48;
 const WHEEL_VISIBLE_ITEMS = 5;
 const WHEEL_SETTLE_TIMEOUT_MS = 850;
+const WHEEL_MOUSE_DRAG_THRESHOLD = 30;
 const REGISTER_REQUIRED_CONSENT_STORAGE_KEY = 'injeuri:register-required-consent';
 const REQUIRED_CONSENT_KEYS: ConsentKey[] = ['terms', 'privacy', 'thirdParty', 'profileDisclosure', 'adult'];
 const AGREEMENT_KEYS: AgreementKey[] = ['terms', 'privacy', 'thirdParty', 'profileDisclosure'];
@@ -1824,6 +1825,7 @@ function WheelPickerField({
   const initialScrollIndexRef = useRef(0);
   const snapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const settleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mouseDragRef = useRef<{ pointerId: number; lastY: number } | null>(null);
   const getDisplayValue = (option: string) => formatValue?.(option) ?? `${option}${unit}`;
   const selectedLabel = value ? getDisplayValue(value) : placeholder;
 
@@ -1868,6 +1870,37 @@ function WheelPickerField({
     return nextIndex;
   };
 
+  const clearWheelTimers = () => {
+    if (snapTimeoutRef.current) {
+      clearTimeout(snapTimeoutRef.current);
+      snapTimeoutRef.current = null;
+    }
+
+    if (settleTimeoutRef.current) {
+      clearTimeout(settleTimeoutRef.current);
+      settleTimeoutRef.current = null;
+    }
+  };
+
+  const moveToIndex = (index: number, behavior: ScrollBehavior = 'smooth') => {
+    const scroller = scrollerRef.current;
+    if (!scroller) {
+      return;
+    }
+
+    const nextIndex = Math.min(options.length - 1, Math.max(0, index));
+    const nextValue = options[nextIndex];
+
+    scroller.scrollTo({
+      top: nextIndex * WHEEL_ITEM_HEIGHT,
+      behavior,
+    });
+
+    if (nextValue && nextValue !== value) {
+      onChange(nextValue);
+    }
+  };
+
   const handleOpen = () => {
     if (disabled) {
       return;
@@ -1885,28 +1918,20 @@ function WheelPickerField({
       scroller.scrollTop = nextIndex * WHEEL_ITEM_HEIGHT;
     }
 
-    if (snapTimeoutRef.current) {
-      clearTimeout(snapTimeoutRef.current);
-    }
-
-    if (settleTimeoutRef.current) {
-      clearTimeout(settleTimeoutRef.current);
-    }
+    clearWheelTimers();
 
     setIsOpen(false);
   };
 
   const handleScroll = (event: UIEvent<HTMLDivElement>) => {
+    if (mouseDragRef.current) {
+      return;
+    }
+
     const scroller = event.currentTarget;
     syncSelectedValue(scroller.scrollTop);
 
-    if (snapTimeoutRef.current) {
-      clearTimeout(snapTimeoutRef.current);
-    }
-
-    if (settleTimeoutRef.current) {
-      clearTimeout(settleTimeoutRef.current);
-    }
+    clearWheelTimers();
 
     snapTimeoutRef.current = setTimeout(() => {
       const nextIndex = syncSelectedValue(scroller.scrollTop);
@@ -1922,6 +1947,70 @@ function WheelPickerField({
         top: nextIndex * WHEEL_ITEM_HEIGHT,
         behavior: 'smooth',
       });
+      setIsOpen(false);
+    }, WHEEL_SETTLE_TIMEOUT_MS);
+  };
+
+  const handleWheelPointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== 'mouse') {
+      return;
+    }
+
+    event.preventDefault();
+    clearWheelTimers();
+    mouseDragRef.current = {
+      pointerId: event.pointerId,
+      lastY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handleWheelPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const dragState = mouseDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.preventDefault();
+    const distanceY = event.clientY - dragState.lastY;
+    if (Math.abs(distanceY) < WHEEL_MOUSE_DRAG_THRESHOLD) {
+      return;
+    }
+
+    const scroller = scrollerRef.current;
+    if (!scroller) {
+      return;
+    }
+
+    const currentIndex = Math.min(
+      options.length - 1,
+      Math.max(0, Math.round(scroller.scrollTop / WHEEL_ITEM_HEIGHT)),
+    );
+    const direction = distanceY > 0 ? -1 : 1;
+    moveToIndex(currentIndex + direction, 'auto');
+    mouseDragRef.current = {
+      pointerId: event.pointerId,
+      lastY: event.clientY,
+    };
+  };
+
+  const handleWheelPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    const dragState = mouseDragRef.current;
+    if (!dragState || dragState.pointerId !== event.pointerId) {
+      return;
+    }
+
+    mouseDragRef.current = null;
+    const scroller = scrollerRef.current;
+    if (scroller) {
+      const nextIndex = syncSelectedValue(scroller.scrollTop);
+      scroller.scrollTo({
+        top: nextIndex * WHEEL_ITEM_HEIGHT,
+        behavior: 'smooth',
+      });
+    }
+
+    settleTimeoutRef.current = setTimeout(() => {
       setIsOpen(false);
     }, WHEEL_SETTLE_TIMEOUT_MS);
   };
@@ -1957,7 +2046,11 @@ function WheelPickerField({
               <div
                 ref={scrollerRef}
                 onScroll={handleScroll}
-                className="scrollbar-none relative z-20 h-full snap-y snap-mandatory overflow-y-auto scroll-smooth"
+                onPointerDown={handleWheelPointerDown}
+                onPointerMove={handleWheelPointerMove}
+                onPointerUp={handleWheelPointerEnd}
+                onPointerCancel={handleWheelPointerEnd}
+                className="scrollbar-none relative z-20 h-full cursor-grab snap-y snap-mandatory overflow-y-auto scroll-smooth select-none active:cursor-grabbing"
                 style={{
                   paddingBottom: WHEEL_ITEM_HEIGHT * 2,
                   paddingTop: WHEEL_ITEM_HEIGHT * 2,
