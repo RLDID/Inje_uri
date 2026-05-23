@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { useToast } from '@/components/ui';
 import { KeywordSelector, ProfileSection } from '@/components/profile/KeywordSelector';
@@ -10,7 +11,7 @@ import {
   type KeywordSelectionPayload,
 } from '@/lib/types';
 import { getMeProfileRaw, updateMe } from '@/lib/api/profile';
-import { useSafeBack } from '@/lib/navigation';
+import { SECTION_ROOTS, useSafeBack } from '@/lib/navigation';
 import {
   buildKeywordSelection,
   getKeywordSelectionValues,
@@ -29,8 +30,12 @@ function buildKeywordSelections(profile: {
 }
 
 function IdealTypePageContent() {
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const { goBack } = useSafeBack();
+  const isWaitingEntry = searchParams.get('waiting') === '1';
+  const { goBack } = useSafeBack({
+    fallbackPath: isWaitingEntry ? `${SECTION_ROOTS.my}/profile?waiting=1` : `${SECTION_ROOTS.my}/profile`,
+  });
 
   const [profile, setProfile] = useState({
     desired_vibe: [] as string[],
@@ -125,14 +130,14 @@ function IdealTypePageContent() {
   };
 
   return (
-    <PageContainer>
+    <PageContainer withBottomNav={!isWaitingEntry}>
       <PageHeader
         title="이상형 키워드"
         showBack
         onBack={goBack}
       />
 
-      <PageContent className="app-section-stack pb-36">
+      <PageContent className={`app-section-stack ${isWaitingEntry ? 'pb-28' : 'pb-36'}`}>
         <ProfileSection title="이런 만남을 원해요" className="!border-0 !px-0 !shadow-none">
           {isLoading ? (
             <div className="py-10 text-center text-sm text-[var(--color-text-secondary)]">
@@ -151,7 +156,7 @@ function IdealTypePageContent() {
         </ProfileSection>
       </PageContent>
 
-      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
+      <div className={`fixed right-4 z-40 ${isWaitingEntry ? 'bottom-[calc(var(--spacing-safe-bottom)+28px)]' : 'bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)]'}`}>
         <button
           type="button"
           onClick={handleSave}

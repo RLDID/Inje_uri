@@ -373,7 +373,7 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
 
 export interface AccountRecoveryVerificationResult {
   loginId: string;
-  token: string;
+  token: string | null;
 }
 
 export async function logout(sessionId: number) {
@@ -382,11 +382,15 @@ export async function logout(sessionId: number) {
 }
 
 export async function verifyAccountRecoveryIdentity(input: {
+  mode?: 'id' | 'password';
   studentNumber: string;
   birth: string;
+  email?: string;
 }): Promise<AccountRecoveryVerificationResult> {
+  const mode = input.mode ?? 'id';
   const studentNumber = input.studentNumber.trim();
   const birth = input.birth.trim();
+  const email = input.email?.trim().toLowerCase() ?? '';
 
   if (!studentNumber) {
     throw new ApiError(ERROR.VALIDATION_ERROR, '학번을 입력해주세요.');
@@ -396,8 +400,20 @@ export async function verifyAccountRecoveryIdentity(input: {
     throw new ApiError(ERROR.VALIDATION_ERROR, '생년월일 6자리를 입력해주세요.');
   }
 
+  if (mode === 'password' && !email) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '가입할 때 작성한 이메일을 입력해주세요.');
+  }
+
+  if (mode === 'password' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '이메일 형식을 확인해주세요.');
+  }
+
   const user = await findUserForAccountRecovery(studentNumber);
   if (!user || !user.login_id || !user.birth_hash || user.birth_hash !== hashBirth(birth)) {
+    throw new ApiError(ERROR.INVALID_VERIFICATION, '입력한 정보와 일치하는 계정을 찾을 수 없습니다.');
+  }
+
+  if (mode === 'password' && user.email.toLowerCase() !== email) {
     throw new ApiError(ERROR.INVALID_VERIFICATION, '입력한 정보와 일치하는 계정을 찾을 수 없습니다.');
   }
 
@@ -411,7 +427,7 @@ export async function verifyAccountRecoveryIdentity(input: {
 
   return {
     loginId: user.login_id,
-    token: issueAccountRecoveryToken(user.id),
+    token: mode === 'password' ? issueAccountRecoveryToken(user.id) : null,
   };
 }
 

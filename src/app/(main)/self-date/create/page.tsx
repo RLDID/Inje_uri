@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { PageContainer, PageContent } from '@/components/layout';
 import { BottomSheet, CenteredModal, useToast } from '@/components/ui';
 import { createFeed, feedCategoriesToKeywordCodes } from '@/lib/api/feeds';
+import { trackNowWooriFeedCreated } from '@/lib/analytics';
 import {
   FESTIVAL_FEED_CATEGORY_SELECTED_CLASS,
   FESTIVAL_FEED_CATEGORY_UNSELECTED_CLASS,
@@ -416,6 +417,11 @@ function CreateStoryPageContent() {
         feedKeywordCodes: feedCategoriesToKeywordCodes(selectedCategories),
         images,
       });
+      trackNowWooriFeedCreated({
+        categoryCount: selectedCategories.length,
+        imageCount: images.length,
+        textLength: text.trim().length,
+      });
       showToast('피드를 올렸어요!', 'success');
       router.push('/self-date?filter=all');
     } catch (error) {
@@ -627,6 +633,7 @@ function CreateStoryPageContent() {
           </div>
 
           <textarea
+            data-clarity-mask
             value={text}
             onChange={(event) => setText(event.target.value)}
             placeholder="예: 중앙도서관 1층 테이블이 조용해서 같이 공부하기 좋아요. 끝나고 바로 앞 카페 가도 좋을 것 같아요."

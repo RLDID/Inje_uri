@@ -23,7 +23,6 @@ import { recordRecentProfileView } from '@/lib/utils/recentProfiles';
 type ProfileSource = 'recommendation' | 'interest' | 'self-date' | 'chat';
 type ModalAction = 'hide_recommendation' | 'reject' | 'block' | 'report' | null;
 const MATCH_VIEW_STATE_KEY = 'match:daily-recommendation';
-const INTEREST_HIDDEN_USER_IDS_KEY = 'interest:hidden-user-ids';
 
 interface MatchViewState {
   currentIndex: number;
@@ -217,26 +216,14 @@ function ProfileDetailPageContent() {
         isSelectionMade: false,
         hiddenUserIds: [],
       });
-      const hiddenUserIds = Array.from(new Set([...(currentViewState.hiddenUserIds ?? []), user.id]));
-      const isSelectedUser = currentViewState.selectedUserId === user.id;
       const nextViewState: MatchViewState = {
         ...currentViewState,
-        currentIndex: Math.max(0, currentViewState.currentIndex),
-        selectedUserId: isSelectedUser ? undefined : currentViewState.selectedUserId,
-        isSelectionMade: isSelectedUser ? false : currentViewState.isSelectionMade,
-        hiddenUserIds,
+        hiddenUserIds: [],
       };
 
       writeRouteViewState<MatchViewState>(MATCH_VIEW_STATE_KEY, nextViewState);
-      if (isFromInterest) {
-        const hiddenInterestUserIds = readRouteViewState<string[]>(INTEREST_HIDDEN_USER_IDS_KEY, []);
-        writeRouteViewState<string[]>(
-          INTEREST_HIDDEN_USER_IDS_KEY,
-          Array.from(new Set([...hiddenInterestUserIds, user.id])),
-        );
-      }
       setRecommendationViewState(nextViewState);
-      showToast('이 프로필을 추천에서 제외했어요.', 'success');
+      showToast('다음 추천부터 반영돼요.', 'success');
       setConfirmAction(null);
       router.replace(fallbackPath);
     } catch (error) {
@@ -318,8 +305,8 @@ function ProfileDetailPageContent() {
     switch (action) {
       case 'hide_recommendation':
         return {
-          title: '이 사람을 추천에서 제외할까요?',
-          description: '오늘우리 추천과 받은 하트 목록에서 이 프로필을 더 이상 보지 않아요.',
+          title: '다음 추천부터 제외할까요?',
+          description: '오늘우리의 오늘 추천 목록에는 그대로 남고, 다음 추천부터 반영돼요.',
           confirmText: '추천 안 하기',
           onConfirm: handleHideRecommendation,
           destructive: false,

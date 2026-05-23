@@ -42,6 +42,7 @@ export function ChatInput({ onSend, disabled = false, placeholder = '메시지�
     <form onSubmit={handleSubmit} className="flex items-center gap-2 border-t border-[var(--color-border)] bg-[var(--color-surface)] p-3">
       <div className="relative flex min-h-12 flex-1 items-center">
         <textarea
+          data-clarity-mask
           ref={textareaRef}
           name="message"
           value={message}

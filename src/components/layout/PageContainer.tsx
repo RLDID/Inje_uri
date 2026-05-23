@@ -1,14 +1,14 @@
-import type { ReactNode } from 'react';
+import type { HTMLAttributes, ReactNode } from 'react';
 
-interface PageContainerProps {
+interface PageContainerProps extends HTMLAttributes<HTMLDivElement> {
   children: ReactNode;
-  className?: string;
   withBottomNav?: boolean;
 }
 
-export function PageContainer({ children, className = '', withBottomNav = true }: PageContainerProps) {
+export function PageContainer({ children, className = '', withBottomNav = true, ...props }: PageContainerProps) {
   return (
     <div
+      {...props}
       className={`
         app-container
         ${withBottomNav ? 'page-with-nav' : ''}

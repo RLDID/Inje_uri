@@ -15,6 +15,11 @@ const PROTECTED_APP_PATH_PREFIXES = [
   '/chat',
   '/self-date',
   '/my',
+  '/p/a83k2',
+  '/p/h7n4d',
+  '/p/q91mz',
+  '/p/r5t8u',
+  '/p/m6y2p',
 ] as const;
 
 export function isProtectedAppPath(pathname: string): boolean {

@@ -142,7 +142,7 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
             {isExpired ? (
               <p className="text-sm text-[var(--color-text-tertiary)]">대화 시간이 만료되었어요</p>
             ) : chat.lastMessage ? (
-              <p className={`truncate text-sm leading-6 ${chat.unreadCount > 0 ? 'font-semibold text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
+              <p data-clarity-mask className={`truncate text-sm leading-6 ${chat.unreadCount > 0 ? 'font-semibold text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
                 {chat.lastMessage.content}
               </p>
             ) : (

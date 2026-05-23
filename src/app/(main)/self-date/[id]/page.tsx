@@ -23,6 +23,7 @@ import {
   getUserAcademicLabel,
 } from '@/lib/utils';
 import { getFeedRemainingTime, getStoryCategories } from '@/lib/utils/feed';
+import { trackNowWooriHeartSent } from '@/lib/analytics';
 import type { Story } from '@/lib/types';
 
 type OverlayState = 'none' | 'menu' | 'report' | 'interest';
@@ -154,6 +155,10 @@ function SelfDateDetailPageContent() {
     const message = interestMessage.trim();
     try {
       await createFeedComment(story.id, message || '하트만 보냈어요.');
+      trackNowWooriHeartSent({
+        source: 'feed_detail',
+        hasMessage: message.length > 0,
+      });
       const nextLikedFeedIds = new Set(likedFeedIds);
       nextLikedFeedIds.add(story.id);
       setLikedFeedIds(nextLikedFeedIds);
@@ -490,7 +495,7 @@ function SelfDateDetailPageContent() {
           )}
 
           <div className="rounded-[10px] bg-[var(--color-surface)] p-4 shadow-[0_4px_12px_rgba(34,34,34,0.055)]">
-            <p className="whitespace-pre-wrap text-base leading-relaxed text-[var(--color-text-primary)]">
+            <p data-clarity-mask className="whitespace-pre-wrap text-base leading-relaxed text-[var(--color-text-primary)]">
               {story.content.text}
             </p>
 
@@ -691,6 +696,7 @@ function SelfDateDetailPageContent() {
             짧은 인사를 함께 보내도 좋고, 비워두면 하트만 전달돼요.
           </p>
           <textarea
+            data-clarity-mask
             value={interestMessage}
             onChange={(event) => setInterestMessage(event.target.value.slice(0, 50))}
             placeholder="예: 분위기가 편안해서 반가웠어요 :)"

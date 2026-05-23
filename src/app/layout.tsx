@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
+import { Suspense } from 'react';
+import { GoogleAnalytics } from '@/components/analytics/GoogleAnalytics';
+import { MicrosoftClarity } from '@/components/analytics/MicrosoftClarity';
 import { ToastProvider } from '@/components/ui';
-import { StartPageAnimation } from '@/components/brand/StartPageAnimation';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -46,8 +48,11 @@ export default function RootLayout({
     <html lang="ko" suppressHydrationWarning>
       <body suppressHydrationWarning>
         <ToastProvider>
+          <Suspense fallback={null}>
+            <GoogleAnalytics />
+            <MicrosoftClarity />
+          </Suspense>
           {children}
-          <StartPageAnimation />
         </ToastProvider>
       </body>
     </html>

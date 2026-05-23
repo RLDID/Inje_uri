@@ -74,7 +74,7 @@ export function StoryViewer({ story, onClose }: StoryViewerProps) {
           <Image src={content.images[0]} alt="스토리 이미지" fill className="object-contain" />
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-[var(--color-chip-background)] p-8">
-            <p className="text-center text-2xl font-medium leading-relaxed text-[var(--color-text-primary)]">{content.text}</p>
+            <p data-clarity-mask className="text-center text-2xl font-medium leading-relaxed text-[var(--color-text-primary)]">{content.text}</p>
           </div>
         )}
       </div>
@@ -82,12 +82,12 @@ export function StoryViewer({ story, onClose }: StoryViewerProps) {
       <div className="absolute bottom-0 left-0 right-0 z-10 bg-gradient-to-t from-black/70 to-transparent p-4">
         <div className="mx-auto flex max-w-[430px] flex-col gap-4">
           {content.text && content.images[0] && (
-            <p className="text-center text-white">{content.text}</p>
+            <p data-clarity-mask className="text-center text-white">{content.text}</p>
           )}
 
           {content.question && (
             <div className="rounded-3xl bg-white/20 p-4 backdrop-blur-sm">
-              <p className="mb-3 text-center text-white">{content.question}</p>
+              <p data-clarity-mask className="mb-3 text-center text-white">{content.question}</p>
               <Button
                 variant="primary"
                 fullWidth

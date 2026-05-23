@@ -1,18 +1,26 @@
 'use client';
 
 import { Suspense, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { ProfilePreview } from '@/components/profile/ProfilePreview';
 import { Button, useToast } from '@/components/ui';
 import { getMe } from '@/lib/api/profile';
-import { useSafeBack } from '@/lib/navigation';
+import { SECTION_ROOTS, useSafeBack } from '@/lib/navigation';
 import type { User } from '@/lib/types';
 
 function MyProfilePageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
-  const { goBack } = useSafeBack({ fallbackPath: '/my' });
+  const isWaitingEntry = searchParams.get('waiting') === '1';
+  const profileEditHref = isWaitingEntry
+    ? `${SECTION_ROOTS.my}/profile/edit?waiting=1`
+    : `${SECTION_ROOTS.my}/profile/edit`;
+  const idealTypeHref = isWaitingEntry
+    ? `${SECTION_ROOTS.my}/ideal-type?waiting=1`
+    : `${SECTION_ROOTS.my}/ideal-type`;
+  const { goBack } = useSafeBack({ fallbackPath: isWaitingEntry ? '/p/w8t2k' : SECTION_ROOTS.my });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
   useEffect(() => {
@@ -39,7 +47,7 @@ function MyProfilePageContent() {
   }, [showToast]);
 
   return (
-    <PageContainer>
+    <PageContainer withBottomNav={!isWaitingEntry}>
       <PageHeader
         title="내 프로필"
         showBack
@@ -47,7 +55,7 @@ function MyProfilePageContent() {
         showBorder={false}
       />
 
-      <PageContent className="pb-36" noPadding>
+      <PageContent className={isWaitingEntry ? 'pb-28' : 'pb-36'} noPadding>
         {currentUser ? (
           <ProfilePreview user={currentUser} showEdit />
         ) : (
@@ -57,16 +65,16 @@ function MyProfilePageContent() {
         )}
 
         <div className="px-[var(--page-padding-x)] pt-[var(--space-section)]">
-          <Button variant="secondary" fullWidth size="lg" onClick={() => router.push('/my/ideal-type')}>
+          <Button variant="secondary" fullWidth size="lg" onClick={() => router.push(idealTypeHref)}>
             이상형 키워드 수정
           </Button>
         </div>
       </PageContent>
 
-      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
+      <div className={`fixed right-4 z-40 ${isWaitingEntry ? 'bottom-[calc(var(--spacing-safe-bottom)+28px)]' : 'bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)]'}`}>
         <button
           type="button"
-          onClick={() => router.push('/my/profile/edit')}
+          onClick={() => router.push(profileEditHref)}
           className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
           aria-label="프로필 수정"
         >

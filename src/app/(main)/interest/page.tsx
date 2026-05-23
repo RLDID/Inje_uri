@@ -7,6 +7,7 @@ import { InterestCard } from '@/components/interest';
 import { PageContainer, PageContent, PageHeader, PageSection } from '@/components/layout';
 import { useToast } from '@/components/ui';
 import { acceptInterest, declineInterest, getReceivedInterests } from '@/lib/api/interests';
+import { trackReceivedHeartAccepted } from '@/lib/analytics';
 import { getMe } from '@/lib/api/profile';
 import { usePolling } from '@/lib/hooks/usePolling';
 import {
@@ -210,6 +211,9 @@ function InterestPageContent() {
 
     try {
       const result = await acceptInterest(interestId);
+      trackReceivedHeartAccepted({
+        matched: Boolean(result.chat_room_id),
+      });
       setReceivedInterests((prevInterests) => prevInterests.filter((interest) => interest.id !== interestId));
       await refreshReceivedInterests();
       showToast('채팅방이 열렸어요.', 'success');
