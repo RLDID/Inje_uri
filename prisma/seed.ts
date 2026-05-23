@@ -301,6 +301,8 @@ const placeCategorySeeds = [
   { code: "activity",   name: "Activity" },
   { code: "campus",     name: "Campus" },
   { code: "egg",        name: "Egg"},
+  { code: "gate",        name: "Gate"},
+  
 ];
 
 const placeSeeds :{
@@ -322,7 +324,9 @@ const placeSeeds :{
       { name: "D동",   description: "인제대학교 D동",    tags: ["d동", "디동"], image_url: "/place/place_E.jpg" },
       { name: "E동",   description: "인제대학교 E동",    tags: ["e동", "이동"], image_url: "/place/place_E.jpg" },
       { name: "F동",   description: "인제대학교 F동",    tags: ["f동", "에프동"], image_url: "/place/place_F5.jpg" },
+      { name: "H동",   description: "인제대학교 H동",    tags: ["h동", "에이치동"], image_url: "/place/place_H.jpg" },
       { name: "G동",   description: "인제대학교 G동",    tags: ["g동", "지동"], image_url: "/place/place_G.jpg" },
+      { name: "J동",   description: "인제대학교 j동",    tags: ["j동", "제이동"], image_url: "/place/place_j.jpg" },
       { name: "도서관", description: "인제대학교 중앙도서관", tags: ["도서관", "도서", "공부"], image_url: "/place/palce_Lib1.jpg" },
       { name: "본관",  description: "인제대학교 본관",    tags: ["본관", "행정관"], image_url: "/place/place_본관1.jpg" },
     ]
@@ -337,7 +341,7 @@ const placeSeeds :{
   {
     categoryCode: "park",
     places: [
-      { name: "BC파크",     description: "인제대학교 BC공원",    tags: ["공원", "BC파크"], image_url: "/place/BCPark2.jpg" },
+      { name: "BC파크",      description: "인제대학교 BC공원",    tags: ["공원", "BC파크"], image_url: "/place/BCPark2.jpg" },
       { name: "늘빛파크",     description: "인제대학교 늘빛공원",    tags: ["공원", "늘빛공원"], image_url: "/place/backgom2.jpg" },
 
     ]
@@ -346,21 +350,29 @@ const placeSeeds :{
     categoryCode: "restaurant",
     places:[
       { name: "다인",       description: "인제대학교 다인",    tags: ["밥", "학식", "식당", "다인"], image_url: "/place/dine1.jpg" },
+      { name: "버거잉",       description: "인제대학교 버거잉",    tags: ["밥", "버거잉", "H동버거", "h동버거"], image_url: "/place/bugering.jpg" },
 
     ]
   },
   {
     categoryCode: "activity",
     places:[
-      { name: "운동장",     description: "인제대학교 운동장",    tags: ["운동", "축구", "달리기"], image_url: "/place/dine1.jpg" },
+      { name: "운동장",     description: "인제대학교 운동장",    tags: ["운동", "축구", "달리기"], image_url: "/place/Place_platGround2.jpg" },
     ]
   },
   {
     categoryCode: "egg",
     places:[
       { name: "백곰",       description: "인제대학교 마스코트",    tags: ["백곰이", "백곰", "마스코트"], image_url: "/place/egg.jpg" },
+      { name: "코딩하는 백곰이",       description: "인제대학교 마스코트",    tags: ["코딩", "백곰이", "백곰", "마스코트", "컴공"], image_url: "/place/coding.jpg" },
     ]
-  }
+  },
+  {
+    categoryCode: "gate",
+    places:[
+      { name: "중문",       description: "인제대학교 중문",    tags: ["중문", "문"], image_url: "/place/Place_middleGate.jpg" },
+    ]
+  },
 ];
 
 // ─────────────────────────────────────────────
