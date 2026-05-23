@@ -94,15 +94,15 @@ function ChatListPageContent() {
     immediate: false,
   });
 
-  const activeChats = chats.filter((chat) => chat.status === 'active');
+  const visibleChats = chats.filter((chat) => chat.status === 'active' || chat.status === 'blocked');
   const filteredChats = activeTab === 'all'
-    ? activeChats
-    : activeChats.filter((chat) => chat.unreadCount > 0);
+    ? visibleChats
+    : visibleChats.filter((chat) => chat.unreadCount > 0);
 
-  const totalUnread = activeChats.filter((chat) => chat.unreadCount > 0).length;
+  const totalUnread = visibleChats.filter((chat) => chat.unreadCount > 0).length;
 
   const tabs: { id: FilterTab; label: string; count?: number }[] = [
-    { id: 'all', label: '전체', count: activeChats.length },
+    { id: 'all', label: '전체', count: visibleChats.length },
     { id: 'unread', label: '읽지 않음', count: totalUnread },
   ];
 

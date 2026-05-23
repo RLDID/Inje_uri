@@ -90,13 +90,13 @@ export async function POST(request: NextRequest) { // HTTP POST 메서드로 사
       return fail("INVALID_BLOCKED_USER_ID", "차단 대상 사용자 ID가 유효하지 않습니다.");
     }
 
-    if (reason !== undefined && typeof reason !== "string") { // reason이 있는데 문자열이 아닌 경우
+    if (reason !== undefined && reason !== null && typeof reason !== "string") { // reason이 있는데 문자열이 아닌 경우
       return fail("INVALID_REASON", "차단 사유가 string이 아닙니다.");
     }
 
     const blockerUserId = user.id;
 
-    const data = await blockUser(blockerUserId, blockedUserId, (reason as string | undefined) ?? null);
+    const data = await blockUser(blockerUserId, blockedUserId, typeof reason === "string" ? reason : null);
 
     return ok(data); // 성공 응답
   } catch (error) {

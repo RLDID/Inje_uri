@@ -138,11 +138,13 @@
     return db.chatRoom.findFirst({
       where: {
         status: "active",
+        expires_at: { gt: new Date() },
         AND: [
           { participants: { some: { user_id: userIdA, left_at: null } } },
           { participants: { some: { user_id: userIdB, left_at: null } } },
         ],
       },
+      orderBy: { created_at: "desc" },
     });
   }
 
@@ -288,6 +290,47 @@ export async function createRoom(
       },
     });
     return result.count;
+  }
+
+  export async function restoreBlockedRoomsBetweenUsers(
+    userIdA: number,
+    userIdB: number,
+    tx?: PrismaTransactionClient,
+  ) {
+    const db = tx ?? prisma;
+    const now = new Date();
+    const baseWhere = {
+      status: "blocked" as const,
+      AND: [
+        { participants: { some: { user_id: userIdA, left_at: null } } },
+        { participants: { some: { user_id: userIdB, left_at: null } } },
+      ],
+    };
+
+    const [activeResult, expiredResult] = await Promise.all([
+      db.chatRoom.updateMany({
+        where: {
+          ...baseWhere,
+          expires_at: { gt: now },
+        },
+        data: {
+          status: "active",
+          blocked_by_user_id: null,
+        },
+      }),
+      db.chatRoom.updateMany({
+        where: {
+          ...baseWhere,
+          expires_at: { lte: now },
+        },
+        data: {
+          status: "expired",
+          blocked_by_user_id: null,
+        },
+      }),
+    ]);
+
+    return activeResult.count + expiredResult.count;
   }
 
   /**

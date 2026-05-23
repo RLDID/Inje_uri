@@ -112,6 +112,7 @@ export function MyStoriesView({
   const [isUpdatingEditImage, setIsUpdatingEditImage] = useState(false);
   const [reactionMenuTarget, setReactionMenuTarget] = useState<ReactionMenuTarget | null>(null);
   const [reactionActionTarget, setReactionActionTarget] = useState<ReactionActionTarget | null>(null);
+  const [reactionReportDescription, setReactionReportDescription] = useState('');
   const [deleteTargetStory, setDeleteTargetStory] = useState<Story | null>(null);
   const [isDeletingFeed, setIsDeletingFeed] = useState(false);
   const [myStories, setMyStories] = useState<Story[]>([]);
@@ -341,11 +342,17 @@ export function MyStoriesView({
 
     try {
       if (action === 'report') {
+        const description = reactionReportDescription.trim();
+        if (!description) {
+          showToast('신고 사유를 입력해주세요.', 'error');
+          return;
+        }
+
         await reportTarget({
           targetType: 'feed_comment',
           targetId: reaction.id,
           reasonType: 'inappropriate',
-          description: null,
+          description,
         });
       } else {
         await blockUser(reaction.fromUser.id);
@@ -371,6 +378,7 @@ export function MyStoriesView({
         'success',
       );
       setReactionActionTarget(null);
+      setReactionReportDescription('');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '요청을 처리하지 못했어요.', 'error');
     }
@@ -737,6 +745,7 @@ export function MyStoriesView({
               <button
                 type="button"
                 onClick={() => {
+                  setReactionReportDescription('');
                   setReactionActionTarget({
                     storyId: reactionMenuTarget.storyId,
                     reaction: reactionMenuTarget.reaction,
@@ -754,6 +763,7 @@ export function MyStoriesView({
               <button
                 type="button"
                 onClick={() => {
+                  setReactionReportDescription('');
                   setReactionActionTarget({
                     storyId: reactionMenuTarget.storyId,
                     reaction: reactionMenuTarget.reaction,
@@ -941,7 +951,10 @@ export function MyStoriesView({
 
       <CenteredModal
         isOpen={reactionActionTarget !== null}
-        onClose={() => setReactionActionTarget(null)}
+        onClose={() => {
+          setReactionActionTarget(null);
+          setReactionReportDescription('');
+        }}
         title={reactionActionTarget?.action === 'report' ? '신고하기' : '차단하기'}
       >
         {reactionActionTarget && (
@@ -957,10 +970,26 @@ export function MyStoriesView({
               </p>
             </div>
 
+            {reactionActionTarget.action === 'report' && (
+              <div className="mt-4">
+                <textarea
+                  value={reactionReportDescription}
+                  onChange={(event) => setReactionReportDescription(event.target.value.slice(0, 200))}
+                  placeholder="예: 불쾌한 댓글이에요, 부적절한 표현이 있어요"
+                  maxLength={200}
+                  className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
+                />
+                <p className="mt-1 text-right text-xs text-[var(--color-text-tertiary)]">{reactionReportDescription.length}/200</p>
+              </div>
+            )}
+
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setReactionActionTarget(null)}
+                onClick={() => {
+                  setReactionActionTarget(null);
+                  setReactionReportDescription('');
+                }}
                 className="rounded-2xl bg-[var(--color-surface-secondary)] py-3 font-medium text-[var(--color-text-primary)]"
               >
                 취소
@@ -970,9 +999,10 @@ export function MyStoriesView({
                 onClick={() => {
                   void handleConfirmReactionAction();
                 }}
+                disabled={reactionActionTarget.action === 'report' && !reactionReportDescription.trim()}
                 className={`rounded-2xl py-3 font-medium ${
                   reactionActionTarget.action === 'report'
-                    ? 'bg-[var(--color-error-bg)] text-[var(--color-error)]'
+                    ? 'bg-[var(--color-error-bg)] text-[var(--color-error)] disabled:opacity-45'
                     : 'bg-[var(--color-text-primary)] text-[var(--color-text-inverse)]'
                 }`}
               >

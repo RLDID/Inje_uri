@@ -1,9 +1,11 @@
 'use client';
 
-import { FormEvent, Suspense, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { FormEvent, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { Button, useToast } from '@/components/ui';
+import { createSupportInquiry, getSupportInquiries } from '@/lib/api/support';
 import { useSafeBack } from '@/lib/navigation';
+import type { SupportInquiryDto, SupportInquiryStatus } from '@/lib/types/support';
 
 type SupportTab = 'faq' | 'contact' | 'safety' | 'history';
 
@@ -15,7 +17,7 @@ interface InquiryDraft {
   email: string;
 }
 
-interface StoredInquiry extends InquiryDraft {
+interface LegacyStoredInquiry extends InquiryDraft {
   id: string;
   createdAt: string;
   status: 'received';
@@ -28,6 +30,7 @@ interface FaqItem {
 }
 
 const SUPPORT_INQUIRIES_STORAGE_KEY = 'injeuri:support-inquiries';
+const SUPPORT_INQUIRIES_MIGRATED_KEY = 'injeuri:support-inquiries:migrated';
 
 const tabs: Array<{ id: SupportTab; label: string }> = [
   { id: 'faq', label: 'FAQ' },
@@ -129,7 +132,7 @@ const initialDraft: InquiryDraft = {
   email: '',
 };
 
-function readStoredInquiries(): StoredInquiry[] {
+function readStoredInquiries(): LegacyStoredInquiry[] {
   if (typeof window === 'undefined') {
     return [];
   }
@@ -137,22 +140,40 @@ function readStoredInquiries(): StoredInquiry[] {
   try {
     const raw = window.localStorage.getItem(SUPPORT_INQUIRIES_STORAGE_KEY);
     const parsed = raw ? JSON.parse(raw) : [];
-    return Array.isArray(parsed) ? parsed.filter(isStoredInquiry) : [];
+    return Array.isArray(parsed) ? parsed.filter(isLegacyStoredInquiry) : [];
   } catch {
     return [];
   }
 }
 
-function writeStoredInquiries(items: StoredInquiry[]): void {
-  window.localStorage.setItem(SUPPORT_INQUIRIES_STORAGE_KEY, JSON.stringify(items));
+function readMigratedInquiryIds(): Set<string> {
+  if (typeof window === 'undefined') {
+    return new Set();
+  }
+
+  try {
+    const raw = window.localStorage.getItem(SUPPORT_INQUIRIES_MIGRATED_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : []);
+  } catch {
+    return new Set();
+  }
 }
 
-function isStoredInquiry(value: unknown): value is StoredInquiry {
+function writeMigratedInquiryIds(ids: Set<string>): void {
+  window.localStorage.setItem(SUPPORT_INQUIRIES_MIGRATED_KEY, JSON.stringify(Array.from(ids)));
+}
+
+function clearLegacyStoredInquiries(): void {
+  window.localStorage.removeItem(SUPPORT_INQUIRIES_STORAGE_KEY);
+}
+
+function isLegacyStoredInquiry(value: unknown): value is LegacyStoredInquiry {
   if (!value || typeof value !== 'object') {
     return false;
   }
 
-  const item = value as Partial<StoredInquiry>;
+  const item = value as Partial<LegacyStoredInquiry>;
   return (
     typeof item.id === 'string'
     && typeof item.category === 'string'
@@ -162,6 +183,47 @@ function isStoredInquiry(value: unknown): value is StoredInquiry {
     && typeof item.email === 'string'
     && typeof item.createdAt === 'string'
   );
+}
+
+function getInquiryStatusLabel(status: SupportInquiryStatus): string {
+  switch (status) {
+    case 'received':
+      return '접수';
+    case 'in_review':
+      return '검토중';
+    case 'answered':
+      return '답변완료';
+    default:
+      return status;
+  }
+}
+
+async function migrateLegacyStoredInquiries(): Promise<number> {
+  const legacyInquiries = readStoredInquiries();
+  if (legacyInquiries.length === 0) {
+    return 0;
+  }
+
+  const migratedIds = readMigratedInquiryIds();
+  const pendingInquiries = legacyInquiries.filter((inquiry) => !migratedIds.has(inquiry.id));
+
+  for (const inquiry of [...pendingInquiries].reverse()) {
+    await createSupportInquiry({
+      category: inquiry.category,
+      screen: inquiry.screen,
+      title: inquiry.title,
+      content: inquiry.content,
+      email: inquiry.email || undefined,
+    });
+    migratedIds.add(inquiry.id);
+    writeMigratedInquiryIds(migratedIds);
+  }
+
+  if (legacyInquiries.every((inquiry) => migratedIds.has(inquiry.id))) {
+    clearLegacyStoredInquiries();
+  }
+
+  return pendingInquiries.length;
 }
 
 function formatInquiryDate(value: string): string {
@@ -192,17 +254,33 @@ function SupportPageContent() {
   const [activeTab, setActiveTab] = useState<SupportTab>('faq');
   const [searchQuery, setSearchQuery] = useState('');
   const [draft, setDraft] = useState<InquiryDraft>(initialDraft);
-  const [inquiries, setInquiries] = useState<StoredInquiry[]>([]);
+  const [inquiries, setInquiries] = useState<SupportInquiryDto[]>([]);
+  const [isLoadingInquiries, setIsLoadingInquiries] = useState(false);
+  const [isSubmittingInquiry, setIsSubmittingInquiry] = useState(false);
+  const [inquiryLoadError, setInquiryLoadError] = useState('');
+
+  const loadInquiries = useCallback(async ({ migrateLegacy = false }: { migrateLegacy?: boolean } = {}) => {
+    setIsLoadingInquiries(true);
+    setInquiryLoadError('');
+
+    try {
+      const migratedCount = migrateLegacy ? await migrateLegacyStoredInquiries() : 0;
+      const nextInquiries = await getSupportInquiries();
+      setInquiries(nextInquiries);
+
+      if (migratedCount > 0) {
+        showToast(`임시 저장 문의 ${migratedCount}건을 운영팀 접수로 전환했어요.`, 'success');
+      }
+    } catch (error) {
+      setInquiryLoadError(error instanceof Error ? error.message : '문의 내역을 불러오지 못했어요.');
+    } finally {
+      setIsLoadingInquiries(false);
+    }
+  }, [showToast]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      setInquiries(readStoredInquiries());
-    }, 0);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, []);
+    void loadInquiries({ migrateLegacy: true });
+  }, [loadInquiries]);
 
   const filteredFaqItems = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -221,7 +299,7 @@ function SupportPageContent() {
     setDraft((prevDraft) => ({ ...prevDraft, [key]: value }));
   };
 
-  const handleSubmitInquiry = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmitInquiry = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const title = draft.title.trim();
@@ -233,22 +311,26 @@ function SupportPageContent() {
       return;
     }
 
-    const nextInquiry: StoredInquiry = {
-      ...draft,
-      title,
-      content,
-      email,
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      status: 'received',
-    };
-    const nextInquiries = [nextInquiry, ...inquiries].slice(0, 20);
+    setIsSubmittingInquiry(true);
 
-    writeStoredInquiries(nextInquiries);
-    setInquiries(nextInquiries);
-    setDraft(initialDraft);
-    setActiveTab('history');
-    showToast('문의가 저장되었어요.', 'success');
+    try {
+      const nextInquiry = await createSupportInquiry({
+        category: draft.category,
+        screen: draft.screen,
+        title,
+        content,
+        email: email || undefined,
+      });
+
+      setInquiries((prevInquiries) => [nextInquiry, ...prevInquiries]);
+      setDraft(initialDraft);
+      setActiveTab('history');
+      showToast('문의가 운영팀에 접수되었어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '문의를 접수하지 못했어요.', 'error');
+    } finally {
+      setIsSubmittingInquiry(false);
+    }
   };
 
   return (
@@ -340,7 +422,7 @@ function SupportPageContent() {
                 <div>
                   <h2 className="text-[17px] font-bold tracking-[-0.02em] text-[var(--color-text-primary)]">1:1 문의하기</h2>
                   <p className="mt-1 break-keep text-[13px] leading-5 text-[var(--color-text-secondary)]">
-                    문의 내역은 현재 기기에 임시 저장돼요. 서버 문의 API가 연결되면 운영팀 접수로 전환할 수 있어요.
+                    남겨주신 문의는 운영팀에 접수되고, 문의 내역에서 처리 상태를 확인할 수 있어요.
                   </p>
                 </div>
               </div>
@@ -408,8 +490,8 @@ function SupportPageContent() {
               </label>
             </div>
 
-            <Button type="submit" fullWidth size="lg">
-              문의 저장하기
+            <Button type="submit" fullWidth size="lg" loading={isSubmittingInquiry}>
+              문의 접수하기
             </Button>
           </form>
         )}
@@ -438,7 +520,28 @@ function SupportPageContent() {
 
         {activeTab === 'history' && (
           <section className="space-y-3">
-            {inquiries.length === 0 ? (
+            <div className="flex justify-end">
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={isLoadingInquiries}
+                onClick={() => void loadInquiries()}
+              >
+                새로고침
+              </Button>
+            </div>
+
+            {isLoadingInquiries ? (
+              <div className="flex min-h-[220px] items-center justify-center rounded-[22px] bg-white px-6 text-center text-[14px] font-semibold text-[var(--color-text-secondary)] shadow-[0_3px_10px_rgba(34,34,34,0.035)]">
+                문의 내역을 불러오는 중이에요
+              </div>
+            ) : inquiryLoadError ? (
+              <div className="flex min-h-[220px] flex-col items-center justify-center rounded-[22px] bg-white px-6 text-center shadow-[0_3px_10px_rgba(34,34,34,0.035)]">
+                <p className="text-[16px] font-bold text-[var(--color-text-primary)]">문의 내역을 불러오지 못했어요</p>
+                <p className="mt-2 break-keep text-[13px] leading-6 text-[var(--color-text-secondary)]">{inquiryLoadError}</p>
+              </div>
+            ) : inquiries.length === 0 ? (
               <div className="flex min-h-[280px] flex-col items-center justify-center rounded-[22px] bg-white px-6 text-center shadow-[0_3px_10px_rgba(34,34,34,0.035)]">
                 <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)]">
                   <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -464,7 +567,7 @@ function SupportPageContent() {
                       <h2 className="mt-1 truncate text-[16px] font-bold text-[var(--color-text-primary)]">{inquiry.title}</h2>
                     </div>
                     <span className="shrink-0 rounded-full bg-[var(--color-surface-secondary)] px-2.5 py-1 text-[11px] font-bold text-[var(--color-text-secondary)]">
-                      접수
+                      {getInquiryStatusLabel(inquiry.status)}
                     </span>
                   </div>
                   <p className="mt-2 line-clamp-2 break-keep text-[13px] leading-6 text-[var(--color-text-secondary)]">

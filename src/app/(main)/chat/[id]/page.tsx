@@ -9,6 +9,7 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { BottomSheet, Button, CenteredModal, useToast } from '@/components/ui';
 import {
   createChatExpiringSystemMessage,
+  CHAT_UNREAD_REFRESH_EVENT,
   getChatExpirySessionKey,
   getChatRemainingTime,
   normalizeChatMessages,
@@ -136,6 +137,7 @@ function getChatShellSignature(chat: Chat | null): string {
   return [
     chat.id,
     chat.status,
+    chat.blockedByMe === true ? 'blockedByMe' : '',
     chat.chatType,
     getDateTime(chat.createdAt),
     getDateTime(chat.expiresAt),
@@ -166,6 +168,7 @@ function ChatRoomPageContent() {
   const [showMenu, setShowMenu] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ChatAction>(null);
   const [leaveRoomOnSubmit, setLeaveRoomOnSubmit] = useState(false);
+  const [reportDescription, setReportDescription] = useState('');
   const [imgError, setImgError] = useState(false);
   const [roomRestriction, setRoomRestriction] = useState<ChatRoomRestriction>(null);
   const [hasReportedRoom, setHasReportedRoom] = useState(false);
@@ -206,8 +209,13 @@ function ChatRoomPageContent() {
     ));
 
     if (lastMessage && lastReadMessageIdRef.current !== lastMessage.id) {
-      lastReadMessageIdRef.current = lastMessage.id;
-      void markChatRoomRead(chatId, lastMessage.id);
+      const nextReadMessageId = lastMessage.id;
+      lastReadMessageIdRef.current = nextReadMessageId;
+      void markChatRoomRead(chatId, nextReadMessageId).catch(() => {
+        if (lastReadMessageIdRef.current === nextReadMessageId) {
+          lastReadMessageIdRef.current = null;
+        }
+      });
     }
 
     if (!didInitialScrollRef.current || shouldScrollAfterLoad) {
@@ -223,8 +231,9 @@ function ChatRoomPageContent() {
       const me = await getMe();
       const rooms = await getChatRooms(me);
       const room = rooms.find((item) => item.id === chatId) ?? null;
-      const roomMessages = room ? await getChatMessages(chatId) : [];
-      const normalizedMessages = room ? normalizeChatMessages(room, roomMessages) : roomMessages;
+      const shouldHideMessages = room?.blockedByMe === true;
+      const roomMessages = room && !shouldHideMessages ? await getChatMessages(chatId) : [];
+      const normalizedMessages = room && !shouldHideMessages ? normalizeChatMessages(room, roomMessages) : [];
 
       setCurrentUser((prevUser) => (isSameUserShell(prevUser, me) ? prevUser : me));
       setChat((prevChat) => (
@@ -245,6 +254,10 @@ function ChatRoomPageContent() {
   }, [applyLoadedMessages, chatId]);
 
   const refreshMessages = useCallback(async (options?: { forceScroll?: boolean }) => {
+    if (chat?.blockedByMe === true || roomRestriction === 'blocked') {
+      return;
+    }
+
     try {
       const roomMessages = await getChatMessages(chatId);
       const normalizedMessages = chat ? normalizeChatMessages(chat, roomMessages) : roomMessages;
@@ -255,7 +268,7 @@ function ChatRoomPageContent() {
     } catch {
       // Keep the current messages during background polling; the next tick can retry.
     }
-  }, [applyLoadedMessages, chat, chatId]);
+  }, [applyLoadedMessages, chat, chatId, roomRestriction]);
 
   usePolling(() => loadRoom({
     silent: didInitialScrollRef.current,
@@ -297,7 +310,13 @@ function ChatRoomPageContent() {
 
     const storedRestriction = readSessionValue(getChatRoomRestrictionKey(chat.id));
     const storedReported = readSessionValue(getChatRoomReportedKey(chat.id));
-    setRoomRestriction(storedRestriction === 'blocked' || storedRestriction === 'reported' ? storedRestriction : null);
+    setRoomRestriction(
+      chat.blockedByMe === true
+        ? 'blocked'
+        : storedRestriction === 'reported'
+          ? 'reported'
+          : null,
+    );
     setHasReportedRoom(storedReported === 'true' || storedRestriction === 'reported');
     }, 0);
 
@@ -385,8 +404,9 @@ function ChatRoomPageContent() {
   }
 
   const { isExpired, isExpiringSoon, timeLabel } = timeInfo;
-  const isBlockedRoom = roomRestriction === 'blocked' || chat.status === 'blocked';
-  const isRoomRestricted = roomRestriction === 'blocked' || roomRestriction === 'reported' || chat.status === 'blocked';
+  const isBlockedByMe = roomRestriction === 'blocked' || chat.blockedByMe === true;
+  const isBlockedRoom = isBlockedByMe || chat.status === 'blocked';
+  const isRoomRestricted = isBlockedByMe || roomRestriction === 'reported' || chat.status === 'blocked';
   const isChatDisabled = isExpired || isRoomRestricted;
 
   const openProfileDetail = () => {
@@ -439,12 +459,14 @@ function ChatRoomPageContent() {
   const closeConfirm = () => {
     setConfirmAction(null);
     setLeaveRoomOnSubmit(false);
+    setReportDescription('');
   };
 
   const confirmActionHandler = async () => {
     if (confirmAction === 'leave') {
       try {
         await leaveChatRoom(chat.id);
+        window.dispatchEvent(new Event(CHAT_UNREAD_REFRESH_EVENT));
         closeConfirm();
         router.push('/chat');
       } catch (error) {
@@ -461,6 +483,16 @@ function ChatRoomPageContent() {
         return;
       }
       showToast('상대방을 차단했어요.', 'success');
+      writeSessionValue(getChatRoomRestrictionKey(chat.id), 'blocked');
+      setRoomRestriction('blocked');
+      setMessages([]);
+      lastReadMessageIdRef.current = null;
+      setChat((prevChat) => (
+        prevChat
+          ? { ...prevChat, blockedByMe: true, unreadCount: 0 }
+          : prevChat
+      ));
+      window.dispatchEvent(new Event(CHAT_UNREAD_REFRESH_EVENT));
 
       if (leaveRoomOnSubmit) {
         try {
@@ -473,18 +505,23 @@ function ChatRoomPageContent() {
         return;
       }
 
-      writeSessionValue(getChatRoomRestrictionKey(chat.id), 'blocked');
-      setRoomRestriction('blocked');
       closeConfirm();
       return;
     }
 
     if (confirmAction === 'report') {
+      const description = reportDescription.trim();
+      if (!description) {
+        showToast('신고 사유를 입력해주세요.', 'error');
+        return;
+      }
+
       try {
         await reportTarget({
           targetType: 'chat_room',
           targetId: chat.id,
           reasonType: 'inappropriate',
+          description,
           alsoBlock: false,
         });
       } catch (error) {
@@ -531,14 +568,14 @@ function ChatRoomPageContent() {
       case 'block':
         return {
           title: '이 사용자를 차단할까요?',
-          description: '차단하면 이후 메시지를 주고받을 수 없어요. 필요하면 채팅방 나가기도 함께 선택할 수 있어요.',
+          description: '차단하면 이 채팅방에서 메시지를 볼 수 없고 보낼 수 없어요. 상대방에게 차단 사실은 표시되지 않아요.',
           confirmText: '차단하기',
           showLeaveCheckbox: true,
         };
       case 'report':
         return {
           title: '이 사용자를 신고할까요?',
-          description: '신고하면 대화 내역이 자동으로 함께 제출돼요. 필요하면 채팅방 나가기도 함께 선택할 수 있어요.',
+          description: '운영팀이 확인할 수 있게 신고 사유를 적어주세요. 대화 내역도 함께 제출돼요.',
           confirmText: '신고하기',
           showLeaveCheckbox: true,
         };
@@ -685,7 +722,7 @@ function ChatRoomPageContent() {
                   <circle cx="12" cy="12" r="9" />
                   <path d="M15 9 9 15M9 9l6 6" />
                 </svg>
-                차단된 사용자입니다
+                {isBlockedByMe ? '차단한 사용자입니다' : '대화가 제한되었어요'}
               </div>
             </div>
           )}
@@ -742,6 +779,19 @@ function ChatRoomPageContent() {
               </p>
             )}
 
+            {confirmAction === 'report' && (
+              <div className="mb-5">
+                <textarea
+                  value={reportDescription}
+                  onChange={(event) => setReportDescription(event.target.value.slice(0, 200))}
+                  placeholder="예: 불쾌한 메시지를 받았어요, 부적절한 대화였어요"
+                  maxLength={200}
+                  className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
+                />
+                <p className="mt-1 text-right text-xs text-[var(--color-text-tertiary)]">{reportDescription.length}/200</p>
+              </div>
+            )}
+
             {confirmConfig.showLeaveCheckbox && (
               <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-4 py-3">
                 <input
@@ -760,7 +810,13 @@ function ChatRoomPageContent() {
             )}
 
             <div className="flex flex-col gap-2">
-              <Button onClick={confirmActionHandler} variant={confirmAction === 'leave' ? 'primary' : 'danger'} size="md" fullWidth>
+              <Button
+                onClick={confirmActionHandler}
+                variant={confirmAction === 'leave' ? 'primary' : 'danger'}
+                size="md"
+                fullWidth
+                disabled={confirmAction === 'report' && !reportDescription.trim()}
+              >
                 {confirmConfig.confirmText}
               </Button>
               <Button onClick={closeConfirm} variant="secondary" size="md" fullWidth>

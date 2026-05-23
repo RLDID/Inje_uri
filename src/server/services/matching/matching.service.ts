@@ -5,6 +5,7 @@ import {
   findReversePendingInterest,
   confirmMatch,
 } from "@/server/repositories/interest/interest.repository";
+import { findActiveRoomBetweenUsers } from "@/server/repositories/chat/chatRoom.repo";
 import * as chatRoomService from "@/server/services/conversation/chatRoom.service";
 import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
 
@@ -57,6 +58,12 @@ export async function checkAndCreateMatch(
   try {
     const result = await prisma.$transaction(async (matchTx) => {
       await confirmMatch(myInterestId, reverseInterest.id, matchTx);
+
+      const existingRoom = await findActiveRoomBetweenUsers(myUserId, targetUserId, matchTx);
+      if (existingRoom) {
+        return { chatRoomId: existingRoom.id };
+      }
+
       const chatResult = await chatRoomService.createChatRoom({
         requestUserId: myUserId,
         targetUserId,

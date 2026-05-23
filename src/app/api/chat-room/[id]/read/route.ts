@@ -13,7 +13,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾지 못했습니다.");
 
     const body = await req.json();
-    const { upToMessageId } = body;
+    const upToMessageId = body.upToMessageId ?? body.lastReadMessageId;
 
     if (!upToMessageId || isNaN(Number(upToMessageId))) {
         return fail(ERROR.INVALID_CURSOR, "유효하지 않은 커서 값입니다.");

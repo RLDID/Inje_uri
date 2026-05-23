@@ -30,6 +30,7 @@ export interface User {
   desiredVibe: string[];
   dateStyle?: DateStyleType;
   dealBreakers: string[];
+  keywords?: UserProfileKeyword[];
 
   // Metadata
   isVerified?: boolean;
@@ -78,4 +79,10 @@ export interface RecommendationSettings {
   preferredAgeRange: { min: number; max: number };
   pendingChanges?: Partial<RecommendationSettings>;
   lastUpdated: Date;
+}
+
+export interface UserProfileKeyword {
+  category: string;
+  code: string;
+  label: string;
 }

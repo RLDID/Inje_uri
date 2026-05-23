@@ -22,6 +22,7 @@ function MyProfilePageContent() {
     : `${SECTION_ROOTS.my}/ideal-type`;
   const { goBack } = useSafeBack({ fallbackPath: isWaitingEntry ? '/p/w8t2k' : SECTION_ROOTS.my });
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showEditHint, setShowEditHint] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,6 +46,16 @@ function MyProfilePageContent() {
       cancelled = true;
     };
   }, [showToast]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      setShowEditHint(false);
+    }, 5000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, []);
 
   return (
     <PageContainer withBottomNav={!isWaitingEntry}>
@@ -75,13 +86,24 @@ function MyProfilePageContent() {
         <button
           type="button"
           onClick={() => router.push(profileEditHref)}
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
+          className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
           aria-label="프로필 수정"
+          aria-describedby="profile-edit-tooltip"
+          title="프로필 수정"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 20h9" />
             <path d="M16.5 3.5a2.12 2.12 0 1 1 3 3L7 19l-4 1 1-4Z" />
           </svg>
+          <span
+            id="profile-edit-tooltip"
+            role="tooltip"
+            className={`pointer-events-none absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-lg bg-[var(--color-text-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${
+              showEditHint ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            프로필 수정
+          </span>
         </button>
       </div>
     </PageContainer>

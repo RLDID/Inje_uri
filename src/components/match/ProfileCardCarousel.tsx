@@ -12,6 +12,7 @@ interface ProfileCardCarouselProps {
   isSelectionMade?: boolean;
   onSelect?: (userId: string) => void;
   currentUserInterests?: string[];
+  currentUserKeywords?: User['keywords'];
 }
 
 export function ProfileCardCarousel({
@@ -22,6 +23,7 @@ export function ProfileCardCarousel({
   isSelectionMade = false,
   onSelect,
   currentUserInterests = [],
+  currentUserKeywords = [],
 }: ProfileCardCarouselProps) {
   const touchStartXRef = useRef<number | null>(null);
   const touchStartYRef = useRef<number | null>(null);
@@ -122,6 +124,7 @@ export function ProfileCardCarousel({
         currentIndex={currentIndex}
         totalCount={users.length}
         currentUserInterests={currentUserInterests}
+        currentUserKeywords={currentUserKeywords}
       />
     </div>
   );

@@ -1,10 +1,10 @@
 import type { Chat, ChatType, Message } from '@/lib/types';
 
 export const CHAT_EXPIRY_WARNING_MINUTES = 60;
+export const CHAT_UNREAD_REFRESH_EVENT = 'injeuri:chat-unread-refresh';
 
 export const CHAT_EXPIRY_SESSION_KEYS = {
   inApp: 'chat-expiry:in-app',
-  browser: 'chat-expiry:browser',
   roomSystem: 'chat-expiry:room-system',
   bannerDismissed: 'chat-expiry:banner-dismissed',
 } as const;

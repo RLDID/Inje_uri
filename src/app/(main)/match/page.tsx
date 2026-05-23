@@ -714,6 +714,7 @@ function MatchPageContent() {
                   isSelectionMade={isSelectionLocked}
                   onSelect={handleSelect}
                   currentUserInterests={currentUser?.interests ?? []}
+                  currentUserKeywords={currentUser?.keywords ?? []}
                 />
               ) : (
                 <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[28px] border border-[#F4EDF2] bg-white px-6 py-10 text-center">

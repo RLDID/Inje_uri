@@ -8,6 +8,26 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
+function isLocalDatabaseUrl() {
+  const databaseUrl = process.env.DATABASE_URL;
+  if (!databaseUrl) return false;
+
+  try {
+    const host = new URL(databaseUrl).hostname.toLowerCase();
+    return host === "localhost" || host === "127.0.0.1" || host === "db";
+  } catch {
+    return false;
+  }
+}
+
+function shouldSeedTestData() {
+  const flag = process.env.SEED_TEST_DATA?.trim().toLowerCase();
+  if (flag === "true") return true;
+  if (flag === "false") return false;
+
+  return isLocalDatabaseUrl();
+}
+
 // ─────────────────────────────────────────────
 // 카테고리 / 키워드 seed 데이터
 // ─────────────────────────────────────────────
@@ -218,11 +238,6 @@ function assertTaxonomyContract() {
 // ─────────────────────────────────────────────
 // Cleanup 함수
 // ─────────────────────────────────────────────
-const MANAGED_PROFILE_CATEGORY_CODES = [
-  "lifestyle", "drinking", "smoking", "mbti", "personality",
-  "conversation", "interests", "desired_vibe", "date_style", "deal_breakers",
-];
-
 const OBSOLETE_KOREAN_CATEGORY_CODES = ["personality_kr", "hobby_kr", "love_style"];
 
 async function cleanupObsoleteKoreanCategories() {
@@ -568,13 +583,6 @@ const testSessionSeeds = [
 // ─────────────────────────────────────────────
 // Seed 함수
 // ─────────────────────────────────────────────
-function toKeywordCode(label: string) {
-  return label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
 async function seedCategories() {
   for (const categorySeed of categorySeeds) {
     const category = await prisma.category.upsert({
@@ -779,17 +787,23 @@ async function seedCampusPlaces() {
 // main
 // ─────────────────────────────────────────────
 async function main() {
+  const seedTestData = shouldSeedTestData();
+
   assertTaxonomyContract();
   await cleanupObsoleteKoreanCategories();
   await cleanupObsoleteProfileKeywords();
   await seedCategories();
   await seedFeedKeywords();
   await seedPlaceCategories();
-  await seedTestUsers();
-  await seedTestInterests();
-  await seedTestFeedAndComment();
-  await seedTestUserKeywords();
-  await seedTestAuthSessions();
+  if (seedTestData) {
+    await seedTestUsers();
+    await seedTestInterests();
+    await seedTestFeedAndComment();
+    await seedTestUserKeywords();
+    await seedTestAuthSessions();
+  } else {
+    console.log("[seed] 테스트 유저/세션 seed skipped. Set SEED_TEST_DATA=true to enable.");
+  }
   await seedCampusPlaces();
 
   console.log("Seed baseline data has been prepared.");

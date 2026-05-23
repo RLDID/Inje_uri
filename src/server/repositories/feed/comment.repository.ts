@@ -186,6 +186,8 @@ export class CommentRepository {
       where: {
         source_comment_id: commentId,
         source_type: "comment",
+        status: "active",
+        expires_at: { gt: new Date() },
       },
       select: { id: true },
     });

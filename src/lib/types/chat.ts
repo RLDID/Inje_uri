@@ -9,6 +9,7 @@ export interface Chat {
   lastMessage?: Message;
   unreadCount: number;
   status: ChatStatus;
+  blockedByMe?: boolean;
   chatType: ChatType; // 채팅 유형 추가
   createdAt: Date;
   expiresAt: Date;

@@ -121,12 +121,20 @@ function groupSelectionsByCategory(
 function getKSTDateString(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (kst.getUTCHours() < 9) {
+    kst.setUTCDate(kst.getUTCDate() - 1);
+  }
   return kst.toISOString().split('T')[0];
 }
 
 async function generateTodayRecommendationsAfterOnboarding(userId: number) {
   const { generateRecommendationsForUser } = await import('@/server/services/matching/recommendation.service');
-  await generateRecommendationsForUser(userId, getKSTDateString());
+  const result = await generateRecommendationsForUser(userId, getKSTDateString());
+  if (!result.generated) {
+    console.warn(
+      `[PATCH /api/users/me onboarding recommendations] skipped: userId=${userId}, reason=${result.reason}, candidateCount=${result.candidateCount}`,
+    );
+  }
 }
 
 async function normalizeKeywordSelections(rawValue: unknown) {

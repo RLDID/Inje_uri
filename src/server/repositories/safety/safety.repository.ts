@@ -228,10 +228,15 @@ export class SafetyRepository {
     });
   }
 
-  async findBlockById(blockId: number): Promise<{ id: number; blocker_user_id: number; unblocked_at: Date | null } | null> {
+  async findBlockById(blockId: number): Promise<{
+    id: number;
+    blocker_user_id: number;
+    blocked_user_id: number;
+    unblocked_at: Date | null;
+  } | null> {
     return this.db.block.findUnique({
       where: { id: blockId },
-      select: { id: true, blocker_user_id: true, unblocked_at: true },
+      select: { id: true, blocker_user_id: true, blocked_user_id: true, unblocked_at: true },
     });
   }
 
