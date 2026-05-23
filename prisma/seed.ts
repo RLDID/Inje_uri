@@ -318,8 +318,8 @@ const placeSeeds :{
   {
     categoryCode: "campus",
     places: [
-      { name: "A동",   description: "인제대학교 A동",    tags: ["a동", "에이동"], image_url: "/place/place_E.jpg"  },
-      { name: "B동",   description: "인제대학교 B동",    tags: ["b동", "비동"] , image_url: "/place/place_E.jpg"},
+      { name: "A동",   description: "인제대학교 A동",    tags: ["a동", "에이동"]},
+      { name: "B동",   description: "인제대학교 B동",    tags: ["b동", "비동"]},
       { name: "C동",   description: "인제대학교 C동",    tags: ["c동", "씨동"], image_url: "/place/place_C.jpg" },
       { name: "D동",   description: "인제대학교 D동",    tags: ["d동", "디동"], image_url: "/place/place_E.jpg" },
       { name: "E동",   description: "인제대학교 E동",    tags: ["e동", "이동"], image_url: "/place/place_E.jpg" },
