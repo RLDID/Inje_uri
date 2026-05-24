@@ -32,6 +32,49 @@ interface MatchViewState {
   hiddenUserIds?: string[];
 }
 
+function ProfileDetailSkeleton() {
+  return (
+    <PageContainer>
+      <PageHeader title="" showBack showBorder={false} />
+      <PageContent noPadding>
+        <div className="app-section-stack animate-pulse">
+          <section className="overflow-hidden rounded-[24px] bg-[var(--color-surface)] shadow-[0_4px_12px_rgba(34,34,34,0.055)]">
+            <div className="h-[360px] bg-[var(--color-surface-secondary)]" />
+            <div className="relative -mt-4 rounded-t-[24px] bg-[var(--color-surface)] px-5 pb-5 pt-5">
+              <div className="space-y-3 pr-20">
+                <div className="h-8 w-36 rounded-full bg-[var(--color-surface-secondary)]" />
+                <div className="h-4 w-48 rounded-full bg-[var(--color-surface-secondary)]" />
+              </div>
+
+              <div className="mt-5 rounded-[14px] border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] p-4">
+                <div className="h-4 w-full rounded-full bg-white/80" />
+                <div className="mt-2 h-4 w-3/4 rounded-full bg-white/80" />
+              </div>
+
+              <div className="mt-6 border-t border-[var(--color-border-light)] pt-5">
+                <div className="h-5 w-32 rounded-full bg-[var(--color-surface-secondary)]" />
+                <div className="mt-4 space-y-3">
+                  <div className="h-8 w-full rounded-full bg-[var(--color-surface-secondary)]" />
+                  <div className="h-8 w-4/5 rounded-full bg-[var(--color-surface-secondary)]" />
+                  <div className="h-8 w-2/3 rounded-full bg-[var(--color-surface-secondary)]" />
+                </div>
+              </div>
+
+              <div className="mt-6 border-t border-[var(--color-border-light)] pt-5">
+                <div className="h-5 w-36 rounded-full bg-[var(--color-surface-secondary)]" />
+                <div className="mt-4 space-y-3">
+                  <div className="h-8 w-full rounded-full bg-[var(--color-surface-secondary)]" />
+                  <div className="h-8 w-3/4 rounded-full bg-[var(--color-surface-secondary)]" />
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </PageContent>
+    </PageContainer>
+  );
+}
+
 function toPositiveNumberParam(value: string | number | null | undefined): number | null {
   if (!value) {
     return null;
@@ -134,16 +177,7 @@ function ProfileDetailPageContent() {
   }, [showToast, source, userId]);
 
   if (isLoading) {
-    return (
-      <PageContainer>
-        <PageHeader title="프로필" showBack onBack={goBack} />
-        <PageContent>
-          <div className="py-20 text-center">
-            <p className="text-[var(--color-text-secondary)]">프로필을 불러오는 중이에요</p>
-          </div>
-        </PageContent>
-      </PageContainer>
-    );
+    return <ProfileDetailSkeleton />;
   }
 
   if (!user) {
@@ -529,7 +563,7 @@ function ProfileDetailPageContent() {
 
 export default function ProfileDetailPage() {
   return (
-    <Suspense fallback={<PageContainer><div /></PageContainer>}>
+    <Suspense fallback={<ProfileDetailSkeleton />}>
       <ProfileDetailPageContent />
     </Suspense>
   );

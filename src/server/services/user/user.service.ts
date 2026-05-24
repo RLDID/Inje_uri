@@ -351,6 +351,7 @@ export async function getUserProfileDetail(currentUserId: number, targetUserId: 
       university: user.university,
       department: user.department,
       studentYear: user.student_year,
+      studentNumber: user.student_number,
       bio: user.bio,
       profileImages: user.userProfileImages.map((image: any) => ({
         id: image.id,
