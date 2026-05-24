@@ -31,6 +31,11 @@
     return Boolean(block && !block.unblocked_at);
   }
 
+  async function hasCurrentUserReportedRoom(roomId: number, userId: number): Promise<boolean> {
+    const report = await safetyRepo.findRestrictingChatRoomReportByUser(userId, roomId);
+    return Boolean(report);
+  }
+
   async function restoreLegacyBlockedRoomForViewer(room: RoomWithParticipants, userId: number): Promise<void> {
     if (room.status !== "blocked") return;
 
@@ -123,6 +128,10 @@ export async function sendMessage(roomId: number, userId: number, content: strin
 
   if (room.status === "expired" || room.expires_at < new Date()){
     return { error: ERROR.ROOM_EXPIRED } as const;
+  }
+
+  if (await hasCurrentUserReportedRoom(roomId, userId)) {
+    return { error: ERROR.FORBIDDEN } as const;
   }
 
   const message = await messageRepo.insertMessage({
