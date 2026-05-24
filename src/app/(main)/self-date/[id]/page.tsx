@@ -30,6 +30,40 @@ type OverlayState = 'none' | 'menu' | 'report' | 'interest';
 
 const PRIMARY_DETAIL_CATEGORIES = new Set(['festival', 'walk', 'cafe', 'food', 'study']);
 
+function FeedDetailSkeleton({ onBack = () => undefined }: { onBack?: () => void }) {
+  return (
+    <PageContainer>
+      <PageHeader title="" showBack onBack={onBack} />
+      <PageContent>
+        <section className="content-stack animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="h-14 w-14 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-4 w-24 rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-3 w-36 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+            <div className="h-10 w-10 rounded-full bg-[var(--color-brand-pink)]/60" />
+          </div>
+
+          <div className="aspect-[16/10] w-full rounded-[10px] bg-[var(--color-surface-secondary)]" />
+
+          <div className="rounded-[10px] bg-[var(--color-surface)] p-4 shadow-[0_4px_12px_rgba(34,34,34,0.055)]">
+            <div className="space-y-3">
+              <div className="h-4 w-full rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-4 w-5/6 rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-4 w-3/5 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+            <div className="mt-5 flex gap-2">
+              <div className="h-7 w-16 rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-7 w-20 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+          </div>
+        </section>
+      </PageContent>
+    </PageContainer>
+  );
+}
+
 function SelfDateDetailPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -39,6 +73,7 @@ function SelfDateDetailPageContent() {
   const storyId = params.id as string;
 
   const [story, setStory] = useState<Story | null>(null);
+  const [isLoadingStory, setIsLoadingStory] = useState(true);
   const [overlayState, setOverlayState] = useState<OverlayState>('none');
   const [interestMessage, setInterestMessage] = useState('');
   const [reportDescription, setReportDescription] = useState('');
@@ -60,6 +95,8 @@ function SelfDateDetailPageContent() {
     let cancelled = false;
 
     async function loadStory() {
+      setIsLoadingStory(true);
+
       try {
         const nextStory = await getFeed(storyId);
         if (cancelled) {
@@ -81,7 +118,12 @@ function SelfDateDetailPageContent() {
         ));
       } catch (error) {
         if (!cancelled) {
+          setStory(null);
           showToast(error instanceof Error ? error.message : '피드를 불러오지 못했어요.', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingStory(false);
         }
       }
     }
@@ -104,6 +146,10 @@ function SelfDateDetailPageContent() {
 
     return () => clearInterval(interval);
   }, [story]);
+
+  if (isLoadingStory) {
+    return <FeedDetailSkeleton onBack={goBack} />;
+  }
 
   if (!story) {
     return (
@@ -749,7 +795,7 @@ function SelfDateDetailPageContent() {
 
 export default function SelfDateDetailPage() {
   return (
-    <Suspense fallback={<PageContainer><div /></PageContainer>}>
+    <Suspense fallback={<FeedDetailSkeleton />}>
       <SelfDateDetailPageContent />
     </Suspense>
   );

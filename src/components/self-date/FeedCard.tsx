@@ -64,9 +64,6 @@ export function FeedCard({
   const avatarBorderClass = authorGender === 'female'
     ? 'border-[var(--color-pink-cta)]'
     : 'border-[var(--color-blue-secondary)]';
-  const genderBadgeClass = authorGender === 'female'
-    ? 'border-[var(--color-pink-cta)]/35 bg-[var(--color-brand-pink)] text-[var(--color-pink-cta)]'
-    : 'border-[var(--color-blue-secondary)]/45 bg-[var(--color-chip-background)] text-[var(--color-blue-secondary)]';
   const authorAcademicLabel = author ? getUserAcademicLabel(author) : '프로필 정보를 불러올 수 없어요';
   const hasSingleContentImage = content.images.length === 1;
   const hasMultipleContentImages = content.images.length > 1;
@@ -140,36 +137,29 @@ export function FeedCard({
         </button>
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-start justify-between gap-2">
-            <div className="min-w-0">
+          <div className="flex min-w-0 items-center gap-1.5">
             <button
               type="button"
               onClick={handleProfileClick}
               disabled={!author}
-              className="block max-w-full truncate text-left font-semibold text-[var(--color-text-primary)] transition-opacity hover:opacity-80"
+              className="block min-w-0 truncate text-left font-semibold text-[var(--color-text-primary)] transition-opacity hover:opacity-80"
             >
               {authorNickname}
             </button>
-            <span className="mt-0.5 block text-[11px] font-medium text-[var(--color-text-tertiary)]">
-              조회 {story.viewCount}
+            <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-tertiary)]" aria-hidden="true">
+              ·
             </span>
-            </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <span className={`inline-flex h-6 items-center rounded-full border px-2.5 text-[11px] font-semibold ${genderBadgeClass}`}>
-                {genderLabel}
-              </span>
+            <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-secondary)]">
+              {genderLabel}
+            </span>
             {author?.isGraduate && (
-              <span className="rounded-full bg-[var(--color-surface-secondary)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
+              <span className="shrink-0 rounded-full bg-[var(--color-surface-secondary)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
                 졸업생
               </span>
             )}
           </div>
 
-          </div>
-
-          <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">{authorAcademicLabel}</p>
-
-          <div className="mt-2 chip-wrap">
+          <div className="mt-1 chip-wrap">
             {sortedStoryCategories.map((category) => (
               <span
                 key={category}
@@ -184,6 +174,11 @@ export function FeedCard({
                 {getFeedCategoryLabel(category)}
               </span>
             ))}
+          </div>
+
+          <div className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11px] font-medium text-[var(--color-text-tertiary)]">
+            <span className="min-w-0 truncate">{authorAcademicLabel}</span>
+            <span className="shrink-0">조회 {story.viewCount}</span>
           </div>
         </div>
 

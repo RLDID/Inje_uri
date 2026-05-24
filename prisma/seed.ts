@@ -8,24 +8,9 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
-function isLocalDatabaseUrl() {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) return false;
-
-  try {
-    const host = new URL(databaseUrl).hostname.toLowerCase();
-    return host === "localhost" || host === "127.0.0.1" || host === "db";
-  } catch {
-    return false;
-  }
-}
-
 function shouldSeedTestData() {
   const flag = process.env.SEED_TEST_DATA?.trim().toLowerCase();
-  if (flag === "true") return true;
-  if (flag === "false") return false;
-
-  return isLocalDatabaseUrl();
+  return flag === "true";
 }
 
 // ─────────────────────────────────────────────
@@ -315,18 +300,83 @@ const placeCategorySeeds = [
   { code: "park",       name: "Park" },
   { code: "activity",   name: "Activity" },
   { code: "campus",     name: "Campus" },
+  { code: "egg",        name: "플러팅"},
+  { code: "coding",     name: "컴공"},
+  { code: "gate",        name: "Gate"},
+
 ];
 
-const campusPlaceSeeds = [
-  { name: "A동",   description: "인제대학교 A동",    tags: ["a동", "에이동"] },
-  { name: "B동",   description: "인제대학교 B동",    tags: ["b동", "비동"] },
-  { name: "C동",   description: "인제대학교 C동",    tags: ["c동", "씨동"] },
-  { name: "D동",   description: "인제대학교 D동",    tags: ["d동", "디동"] },
-  { name: "E동",   description: "인제대학교 E동",    tags: ["e동", "이동"] },
-  { name: "F동",   description: "인제대학교 F동",    tags: ["f동", "에프동"] },
-  { name: "G동",   description: "인제대학교 G동",    tags: ["g동", "지동"] },
-  { name: "도서관", description: "인제대학교 중앙도서관", tags: ["도서관", "도서", "공부"] },
-  { name: "본관",  description: "인제대학교 본관",    tags: ["본관", "행정관"] },
+const placeSeeds :{
+  categoryCode: string;
+    places: {
+      name: string;
+      address?: string;
+      description: string;
+      image_url?: string;
+      tags: string[];
+    }[];
+  }[] =[
+  {
+    categoryCode: "campus",
+    places: [
+      { name: "B동",   description: "인제대학교 B동",    tags: ["b동", "비동"]},
+      { name: "C동",   description: "인제대학교 C동",    tags: ["c동", "씨동"], image_url: "/place/place_C.jpg" },
+      { name: "E동",   description: "인제대학교 E동",    tags: ["e동", "이동"], image_url: "/place/place_E.jpg" },
+      { name: "F동",   description: "인제대학교 F동",    tags: ["f동", "에프동"], image_url: "/place/place_F5.jpg" },
+      { name: "H동",   description: "인제대학교 H동",    tags: ["h동", "에이치동"], image_url: "/place/Place_H1.jpg" },
+      { name: "G동",   description: "인제대학교 G동",    tags: ["g동", "지동"], image_url: "/place/place_G.jpg" },
+      { name: "J동",   description: "인제대학교 j동",    tags: ["j동", "제이동"], image_url: "/place/Place_J1.jpg" },
+      { name: "도서관", description: "인제대학교 중앙도서관", tags: ["도서관", "도서", "공부"], image_url: "/place/place_Lib1.jpg" },
+      { name: "본관",  description: "인제대학교 본관",    tags: ["본관", "행정관"], image_url: "/place/place_본관1.jpg" },
+    ]
+  },
+  {
+    categoryCode:"cafe",
+    places:[
+      { name: "Cafe_ing",  description: "인제대학교 다인지하카페",    tags: ["카페잉", "카페", "cafeing", "잉", "다인카페"], image_url: "/place/cafe_ing.jpg" },
+      { name: "늘빛라운지",  description: "인제대학교 다인늘빛라운지",    tags: ["라운지", "늘빛라운지"], image_url: "/place/neulbitLaunge.jpg" },
+    ]
+  },
+  {
+    categoryCode: "park",
+    places: [
+      { name: "BC파크",      description: "인제대학교 BC공원",    tags: ["공원", "BC파크"], image_url: "/place/BCpark2.jpg" },
+      { name: "늘빛파크",     description: "인제대학교 늘빛공원",    tags: ["공원", "늘빛공원"], image_url: "/place/backgom2.jpg" },
+
+    ]
+  },
+  {
+    categoryCode: "restaurant",
+    places:[
+      { name: "다인",       description: "인제대학교 다인",    tags: ["밥", "학식", "식당", "다인"], image_url: "/place/dine1.jpg" },
+      { name: "버거잉",       description: "인제대학교 버거잉",    tags: ["밥", "버거잉", "H동버거", "h동버거"], image_url: "/place/bugering.jpg" },
+
+    ]
+  },
+  {
+    categoryCode: "activity",
+    places:[
+      { name: "운동장",     description: "인제대학교 운동장",    tags: ["운동", "축구", "달리기"], image_url: "/place/Place_platGround2.jpg" },
+    ]
+  },
+  {
+    categoryCode: "egg",
+    places:[
+      { name: "백곰",       description: "인제대학교 마스코트",    tags: ["백곰이", "백곰", "마스코트"], image_url: "/place/egg.png" },
+    ]
+  },
+  {
+    categoryCode: "coding",
+    places:[
+      { name: "코딩하는 백곰이",       description: "인제대학교 마스코트",    tags: ["코딩", "백곰이", "백곰", "마스코트", "컴공"], image_url: "/place/coding.png" },
+    ]
+  },
+  {
+    categoryCode: "gate",
+    places:[
+      { name: "중문",       description: "인제대학교 중문",    tags: ["중문", "문"], image_url: "/place/Place_middleGate.jpg" },
+    ]
+  },
 ];
 
 // ─────────────────────────────────────────────
@@ -755,33 +805,51 @@ async function seedTestAuthSessions() {
   }
 }
 
-async function seedCampusPlaces() {
-  const category = await prisma.placeCategory.findUnique({ where: { code: "campus" } });
-  if (!category) return;
-
-  for (const seed of campusPlaceSeeds) {
-    const existing = await prisma.place.findFirst({
-      where: { category_id: category.id, name: seed.name },
+async function seedPlaces() {
+    await prisma.place.updateMany({
+      where: { name: { in: ["A동", "D동"] } },
+      data: { is_active: false },
     });
 
-    const place = existing ?? await prisma.place.create({
-      data: {
-        category_id: category.id,
-        name: seed.name,
-        address: `경남 김해시 인제로 197 인제대학교 ${seed.name}`,
-        description: seed.description,
-      },
-    });
-
-    for (const tag of seed.tags) {
-      await prisma.placeTag.upsert({
-        where: { place_id_tag: { place_id: place.id, tag } },
-        update: {},
-        create: { place_id: place.id, tag },
+    for (const group of placeSeeds) {
+      const category = await prisma.placeCategory.findUnique({
+        where: { code: group.categoryCode }
       });
+      if (!category) continue;
+
+      for (const seed of group.places) {
+        const existing = await prisma.place.findFirst({
+          where: { name: seed.name }
+        });
+
+        const placeData = {
+          category_id: category.id,
+          name: seed.name,
+          address: seed.address ?? `경남 김해시 인제로 197 ${seed.name}`,
+          description: seed.description,
+          image_url: seed.image_url ?? null,
+          is_active: true,
+        };
+
+        const place = existing
+          ? await prisma.place.update({
+              where: { id: existing.id },
+              data: placeData,
+            })
+          : await prisma.place.create({
+              data: placeData,
+            });
+
+        for (const tag of seed.tags) {
+          await prisma.placeTag.upsert({
+            where: { place_id_tag: { place_id: place.id, tag } },
+            update: {},
+            create: { place_id: place.id, tag },
+          });
+        }
+      }
     }
   }
-}
 
 // ─────────────────────────────────────────────
 // main
@@ -804,7 +872,7 @@ async function main() {
   } else {
     console.log("[seed] 테스트 유저/세션 seed skipped. Set SEED_TEST_DATA=true to enable.");
   }
-  await seedCampusPlaces();
+  await seedPlaces();
 
   console.log("Seed baseline data has been prepared.");
 }

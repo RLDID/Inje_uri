@@ -12,6 +12,44 @@ import type { Chat, User } from '@/lib/types';
 
 type FilterTab = 'all' | 'unread';
 
+function ChatListSkeleton() {
+  return (
+    <div className="px-5">
+      <div className="divide-y divide-[var(--color-border-light)]">
+        {[0, 1, 2, 3].map((item) => (
+          <div key={item} className="flex animate-pulse items-center gap-3 py-4">
+            <div className="h-12 w-12 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center justify-between gap-3">
+                <div className="h-4 w-24 rounded-full bg-[var(--color-surface-secondary)]" />
+                <div className="h-3 w-10 rounded-full bg-[var(--color-surface-secondary)]" />
+              </div>
+              <div className="h-3 w-4/5 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ChatListPageSkeleton() {
+  return (
+    <PageContainer>
+      <header className="sticky top-0 z-40 flex min-h-[76px] items-center bg-[var(--color-surface)]/95 px-5 py-3 backdrop-blur-xl">
+        <div className="h-7 w-16 animate-pulse rounded-full bg-[var(--color-surface-secondary)]" />
+      </header>
+
+      <PageContent className="space-y-3 pb-4 pt-1" noPadding>
+        <div className="px-5">
+          <div className="grid h-12 animate-pulse grid-cols-2 overflow-hidden rounded-full bg-[var(--color-surface-secondary)]" />
+        </div>
+        <ChatListSkeleton />
+      </PageContent>
+    </PageContainer>
+  );
+}
+
 function getTime(value: Date | string | undefined): number {
   if (!value) return 0;
   const date = value instanceof Date ? value : new Date(value);
@@ -161,7 +199,7 @@ function ChatListPageContent() {
         </div>
 
         {isLoading ? (
-          <div className="px-5 py-10 text-center text-sm text-[var(--color-text-tertiary)]">불러오는 중...</div>
+          <ChatListSkeleton />
         ) : filteredChats.length === 0 ? (
           <div className="px-5">
             <NoChats />
@@ -188,7 +226,7 @@ function ChatListPageContent() {
 
 export default function ChatListPage() {
   return (
-    <Suspense fallback={<PageContainer><div /></PageContainer>}>
+    <Suspense fallback={<ChatListPageSkeleton />}>
       <ChatListPageContent />
     </Suspense>
   );

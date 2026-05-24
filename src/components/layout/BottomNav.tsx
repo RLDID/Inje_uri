@@ -177,11 +177,11 @@ function BottomNavContent({ unreadChats = 0 }: BottomNavProps) {
   return (
     <>
       <nav
-      className="fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 rounded-t-[28px] border-t border-[#F3F4F6] bg-[var(--color-surface)] shadow-[0_-6px_18px_rgba(34,34,34,0.045)]"
+      className="bottom-nav-shell fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 border-t border-[#F3F4F6] bg-[var(--color-surface)] shadow-[0_-6px_18px_rgba(34,34,34,0.045)]"
       aria-label="메인 메뉴"
     >
       <div className="mx-auto max-w-[430px]">
-        <div className="grid h-[78px] grid-cols-4 pb-safe">
+        <div className="bottom-nav-grid grid grid-cols-4 pb-safe">
           {navItems.map((item) => {
             const isActive = activeSection === item.id;
             const badge = getBadge(item.id);
@@ -193,7 +193,7 @@ function BottomNavContent({ unreadChats = 0 }: BottomNavProps) {
                 replace
                 aria-current={isActive ? 'page' : undefined}
                 className={`
-                  relative flex flex-col items-center justify-center gap-1 py-2
+                  bottom-nav-item relative flex flex-col items-center justify-center
                   transition-colors duration-150
                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)] focus-visible:ring-inset
                   ${isActive
@@ -202,11 +202,11 @@ function BottomNavContent({ unreadChats = 0 }: BottomNavProps) {
                   }
                 `}
               >
-                <div className="relative flex h-8 w-8 items-center justify-center transition-colors">
+                <div className="bottom-nav-icon relative flex items-center justify-center transition-colors">
                   {item.icon(isActive)}
                   {badge > 0 && <CountBadge count={badge} />}
                 </div>
-                <span className={`whitespace-nowrap text-[11px] leading-tight ${isActive ? 'font-bold' : 'font-semibold'}`}>
+                <span className={`bottom-nav-label whitespace-nowrap ${isActive ? 'font-bold' : 'font-semibold'}`}>
                   {item.label}
                 </span>
               </Link>
@@ -224,20 +224,20 @@ export function BottomNav({ unreadChats = 0 }: BottomNavProps) {
     <Suspense fallback={(
       <>
         <nav
-        className="fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 rounded-t-[28px] border-t border-[#F3F4F6] bg-[var(--color-surface)] shadow-[0_-6px_18px_rgba(34,34,34,0.045)]"
+        className="bottom-nav-shell fixed bottom-0 left-1/2 z-[120] w-full max-w-[430px] -translate-x-1/2 border-t border-[#F3F4F6] bg-[var(--color-surface)] shadow-[0_-6px_18px_rgba(34,34,34,0.045)]"
         aria-label="메인 메뉴"
       >
         <div className="mx-auto max-w-[430px]">
-          <div className="grid h-[78px] grid-cols-4 pb-safe">
+          <div className="bottom-nav-grid grid grid-cols-4 pb-safe">
             {navItems.map((item) => (
               <div
                 key={item.id}
-                className="flex flex-col items-center justify-center gap-1 py-2 text-[var(--color-text-tertiary)]"
+                className="bottom-nav-item flex flex-col items-center justify-center text-[var(--color-text-tertiary)]"
               >
-                <div className="relative flex h-8 w-8 items-center justify-center">
+                <div className="bottom-nav-icon relative flex items-center justify-center">
                   {item.icon(false)}
                 </div>
-                <span className="whitespace-nowrap text-[11px] font-semibold leading-tight">
+                <span className="bottom-nav-label whitespace-nowrap font-semibold">
                   {item.label}
                 </span>
               </div>

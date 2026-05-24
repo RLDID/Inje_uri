@@ -42,6 +42,7 @@ type ReactionActionType = 'report' | 'block';
 const REACTION_CHAT_SESSION_KEY = 'self-date:reaction-chats';
 const MAX_EDIT_IMAGES = 4;
 const MAX_EDIT_KEYWORDS = 4;
+const EDIT_HINT_VISIBLE_MS = 2500;
 
 function getStoryCategoryList(story: Story): FeedCategory[] {
   if (story.categories && story.categories.length > 0) {
@@ -87,6 +88,32 @@ interface ReactionActionTarget {
   action: ReactionActionType;
 }
 
+function ActionHintBadge({
+  id,
+  isVisible,
+  label,
+  placement = 'above',
+}: {
+  id: string;
+  isVisible: boolean;
+  label: string;
+  placement?: 'above' | 'below';
+}) {
+  const placementClass = placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2';
+
+  return (
+    <span
+      id={id}
+      role="tooltip"
+      className={`pointer-events-none absolute right-0 z-[70] whitespace-nowrap rounded-lg bg-[var(--color-text-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${placementClass} ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function MyStoriesView({
   ownerSection,
   title,
@@ -99,6 +126,7 @@ export function MyStoriesView({
   const { showToast } = useToast();
   const { currentPath } = useCurrentRouteContext();
   const editImageInputRef = useRef<HTMLInputElement>(null);
+  const hasShownEditHintRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState<MyFeedTab>(() => (
     searchParams.get('tab') === 'liked' ? 'liked' : 'mine'
@@ -118,6 +146,8 @@ export function MyStoriesView({
   const [myStories, setMyStories] = useState<Story[]>([]);
   const [likedStories, setLikedStories] = useState<Story[]>([]);
   const [reactionChatIds, setReactionChatIds] = useState<string[]>(() => readReactionChatIds());
+  const [showEditHint, setShowEditHint] = useState(false);
+  const isEditHintTargetVisible = activeTab === 'mine' && myStories.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -160,6 +190,23 @@ export function MyStoriesView({
   useEffect(() => {
     writeReactionChatIds(reactionChatIds);
   }, [reactionChatIds]);
+
+  useEffect(() => {
+    if (!isEditHintTargetVisible || hasShownEditHintRef.current) {
+      return;
+    }
+
+    hasShownEditHintRef.current = true;
+    setShowEditHint(true);
+
+    const timeoutId = window.setTimeout(() => {
+      setShowEditHint(false);
+    }, EDIT_HINT_VISIBLE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isEditHintTargetVisible]);
 
   const handleOpenFeedDetail = (story: Story) => {
     router.push(
@@ -652,9 +699,14 @@ export function MyStoriesView({
         <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
           <button
             type="button"
-            onClick={handleOpenEditPage}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
-            aria-label={isEditMode ? '편집 완료' : '피드 수정 모드 열기'}
+            onClick={() => {
+              setShowEditHint(false);
+              handleOpenEditPage();
+            }}
+            className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
+            aria-label={isEditMode ? '편집 완료' : '피드 수정하기'}
+            aria-describedby="my-feed-edit-tooltip"
+            title="피드 수정하기"
           >
             {isEditMode ? (
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -666,6 +718,7 @@ export function MyStoriesView({
                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
               </svg>
             )}
+            <ActionHintBadge id="my-feed-edit-tooltip" isVisible={showEditHint} label="피드 수정하기" />
           </button>
         </div>
       )}

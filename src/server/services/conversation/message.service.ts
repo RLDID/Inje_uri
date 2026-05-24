@@ -10,10 +10,13 @@
   import * as participantRepo from "@/server/repositories/chat/participant.repo";
   import * as chatRoomRepo from "@/server/repositories/chat/chatRoom.repo";
   import * as messageReadRepo from "@/server/repositories/chat/messageRead.repo";
+  import * as placeRepo from "@/server/repositories/place/place.repo";
+  import * as placeSuggestionRepo from "@/server/repositories/place/placeSuggestion.repo";
   import { prisma } from "@/server/db/prisma";
   import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
 
   const safetyRepo = new SafetyRepository(prisma);
+  const PLACE_RECOMMENDATION_TRIGGER = "인제우리";
   type RoomWithParticipants = NonNullable<Awaited<ReturnType<typeof chatRoomRepo.findRoomById>>>;
 
   function getOtherParticipant(room: RoomWithParticipants, userId: number) {
@@ -37,6 +40,52 @@
     await chatRoomRepo.restoreBlockedRoomsBetweenUsers(userId, other.user_id);
     room.status = room.expires_at > new Date() ? "active" : "expired";
     room.blocked_by_user_id = null;
+  }
+
+  function shouldTriggerPlaceRecommendation(content: string): boolean {
+    return content.includes(PLACE_RECOMMENDATION_TRIGGER);
+  }
+
+  function shuffle<T>(items: T[]): T[] {
+    return [...items]
+      .map((item) => ({ item, sortKey: Math.random() }))
+      .sort((left, right) => left.sortKey - right.sortKey)
+      .map(({ item }) => item);
+  }
+
+  async function createTriggeredPlaceSuggestions(roomId: number, content: string) {
+    if (!shouldTriggerPlaceRecommendation(content)) {
+      return [];
+    }
+
+    const [existingSuggestions, places] = await Promise.all([
+      placeSuggestionRepo.findSuggestionsByRoomId(roomId),
+      placeRepo.findPlaces(),
+    ]);
+    const triggeredPlaceIds = new Set(
+      existingSuggestions
+        .filter((suggestion) => suggestion.triggered_keyword === PLACE_RECOMMENDATION_TRIGGER)
+        .map((suggestion) => suggestion.place_id),
+    );
+    const candidates = places.filter((place) => !triggeredPlaceIds.has(place.id));
+
+    if (candidates.length === 0) {
+      return [];
+    }
+
+    const orderedCandidates = shuffle(candidates);
+
+    const suggestions = [];
+    for (const place of orderedCandidates) {
+      const suggestion = await placeSuggestionRepo.createSuggestion({
+        chatRoomId: roomId,
+        placeId: place.id,
+        triggeredKeyword: PLACE_RECOMMENDATION_TRIGGER,
+      });
+      suggestions.push(suggestion);
+    }
+
+    return suggestions;
   }
 
   // ─────────────────────────────────────────────
@@ -82,7 +131,12 @@ export async function sendMessage(roomId: number, userId: number, content: strin
     content,
   });
 
-  return { message };
+  const placeSuggestions = await createTriggeredPlaceSuggestions(roomId, content).catch((error) => {
+    console.warn("[message.service] place suggestion trigger failed:", error);
+    return [];
+  });
+
+  return placeSuggestions.length > 0 ? { message, placeSuggestions } : { message };
 }
 
   // ─────────────────────────────────────────────

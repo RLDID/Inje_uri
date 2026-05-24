@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { PageContainer } from '@/components/layout';
 import { ChatBubble } from '@/components/chat/ChatBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { PlaceSuggestionPanel } from '@/components/chat/PlaceSuggestionPanel';
 import { BottomSheet, Button, CenteredModal, useToast } from '@/components/ui';
 import {
   createChatExpiringSystemMessage,
@@ -15,11 +16,13 @@ import {
   normalizeChatMessages,
 } from '@/lib/utils/chat';
 import {
+  getChatRoomPlaceSuggestions,
   getChatMessages,
   getChatRooms,
   leaveChatRoom,
   markChatRoomRead,
   sendChatMessage,
+  updateChatRoomPlaceSuggestionStatus,
 } from '@/lib/api/chat';
 import { getMe } from '@/lib/api/profile';
 import { blockUser, reportTarget } from '@/lib/api/safety';
@@ -27,13 +30,56 @@ import { trackChatOpened } from '@/lib/analytics';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { usePolling } from '@/lib/hooks/usePolling';
 import { buildProfileDetailHref, useCurrentRouteContext, useSafeBack } from '@/lib/navigation';
-import type { Chat, Message, User } from '@/lib/types';
+import type { Chat, ChatPlaceSuggestion, Message, PlaceSuggestionStatus, User } from '@/lib/types';
 
 type ChatAction = 'leave' | 'block' | 'report' | null;
 type ChatRoomRestriction = 'reported' | 'blocked' | null;
 
 const CHAT_ROOM_RESTRICTION_PREFIX = 'chat-room:restriction:';
 const CHAT_ROOM_REPORTED_PREFIX = 'chat-room:reported:';
+
+function ChatRoomSkeleton() {
+  return (
+    <PageContainer withBottomNav={true}>
+      <header className="fixed left-0 right-0 top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+        <div className="mx-auto flex min-h-[76px] max-w-[430px] animate-pulse items-center gap-2 px-3 py-3 sm:px-4">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-4 w-24 rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="h-3 w-16 rounded-full bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+        </div>
+      </header>
+
+      <div className="animate-pulse px-4 pt-[100px]">
+        <div className="mx-auto mb-8 h-[112px] w-[184px] rounded-[32px] bg-[var(--color-surface-secondary)]" />
+
+        <div className="space-y-4">
+          <div className="flex justify-start">
+            <div className="h-11 w-3/5 rounded-2xl bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="flex justify-end">
+            <div className="h-11 w-1/2 rounded-2xl bg-[var(--color-brand-pink)]/55" />
+          </div>
+          <div className="flex justify-start">
+            <div className="h-16 w-4/5 rounded-2xl bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="flex justify-end">
+            <div className="h-11 w-2/3 rounded-2xl bg-[var(--color-brand-pink)]/55" />
+          </div>
+        </div>
+      </div>
+
+      <div className="fixed bottom-[calc(78px+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
+        <div className="mx-auto max-w-[430px] animate-pulse px-4 py-3">
+          <div className="h-12 rounded-full bg-[var(--color-surface-secondary)]" />
+        </div>
+      </div>
+    </PageContainer>
+  );
+}
 
 function getChatRoomRestrictionKey(chatId: string): string {
   return `${CHAT_ROOM_RESTRICTION_PREFIX}${chatId}`;
@@ -154,6 +200,31 @@ function isSameUserShell(left: User | null, right: User): boolean {
   );
 }
 
+function getPlaceSuggestionSignature(suggestion: ChatPlaceSuggestion): string {
+  return [
+    suggestion.id,
+    suggestion.roomId,
+    suggestion.placeId,
+    suggestion.status,
+    suggestion.triggeredKeyword ?? '',
+    suggestion.suggestedAt.toISOString(),
+    suggestion.place.name,
+    suggestion.place.imageUrl ?? '',
+    suggestion.place.category.code,
+    suggestion.place.category.name,
+  ].join('::');
+}
+
+function areSamePlaceSuggestions(left: ChatPlaceSuggestion[], right: ChatPlaceSuggestion[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((suggestion, index) => (
+    getPlaceSuggestionSignature(suggestion) === getPlaceSuggestionSignature(right[index])
+  ));
+}
+
 function ChatRoomPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -165,6 +236,12 @@ function ChatRoomPageContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoadingRoom, setIsLoadingRoom] = useState(true);
+  const [placeSuggestions, setPlaceSuggestions] = useState<ChatPlaceSuggestion[]>([]);
+  const [isPlacePanelCollapsed, setIsPlacePanelCollapsed] = useState(false);
+  const [isPlaceGalleryOpen, setIsPlaceGalleryOpen] = useState(false);
+  const [hidePlaceSuggestions, setHidePlaceSuggestions] = useState(false);
+  const [updatingPlaceSuggestionId, setUpdatingPlaceSuggestionId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ChatAction>(null);
   const [leaveRoomOnSubmit, setLeaveRoomOnSubmit] = useState(false);
@@ -226,6 +303,9 @@ function ChatRoomPageContent() {
 
   const loadRoom = useCallback(async (options?: { silent?: boolean; forceScroll?: boolean }) => {
     const isSilent = Boolean(options?.silent);
+    if (!isSilent) {
+      setIsLoadingRoom(true);
+    }
 
     try {
       const me = await getMe();
@@ -250,6 +330,10 @@ function ChatRoomPageContent() {
         setChat(null);
         setMessages([]);
       }
+    } finally {
+      if (!isSilent) {
+        setIsLoadingRoom(false);
+      }
     }
   }, [applyLoadedMessages, chatId]);
 
@@ -270,19 +354,47 @@ function ChatRoomPageContent() {
     }
   }, [applyLoadedMessages, chat, chatId, roomRestriction]);
 
+  const loadPlaceSuggestions = useCallback(async (options?: { silent?: boolean }) => {
+    if (chat?.blockedByMe === true || roomRestriction === 'blocked') {
+      setPlaceSuggestions((prevSuggestions) => (prevSuggestions.length === 0 ? prevSuggestions : []));
+      return;
+    }
+
+    if (hidePlaceSuggestions) {
+      return;
+    }
+
+    try {
+      const suggestions = await getChatRoomPlaceSuggestions(chatId);
+      setPlaceSuggestions((prevSuggestions) => (
+        areSamePlaceSuggestions(prevSuggestions, suggestions) ? prevSuggestions : suggestions
+      ));
+    } catch {
+      if (!options?.silent) {
+        setPlaceSuggestions((prevSuggestions) => (prevSuggestions.length === 0 ? prevSuggestions : []));
+      }
+    }
+  }, [chat?.blockedByMe, chatId, hidePlaceSuggestions, roomRestriction]);
+
   usePolling(() => loadRoom({
     silent: didInitialScrollRef.current,
     forceScroll: !didInitialScrollRef.current,
   }), {
     intervalMs: 30000,
-    enabled: Boolean(chatId),
+    enabled: Boolean(chatId && !isPlaceGalleryOpen),
     immediate: true,
   });
 
   usePolling(() => refreshMessages(), {
     intervalMs: 3000,
-    enabled: Boolean(chat),
+    enabled: Boolean(chat && !isPlaceGalleryOpen),
     immediate: false,
+  });
+
+  usePolling(() => loadPlaceSuggestions({ silent: true }), {
+    intervalMs: 5000,
+    enabled: Boolean(chat && chat.blockedByMe !== true && roomRestriction !== 'blocked' && !hidePlaceSuggestions && !isPlaceGalleryOpen),
+    immediate: true,
   });
 
   useEffect(() => {
@@ -393,6 +505,10 @@ function ChatRoomPageContent() {
     router.push('/chat');
   }, [chat, roomRestriction, router, showToast, timeInfo.isExpired]);
 
+  if (isLoadingRoom) {
+    return <ChatRoomSkeleton />;
+  }
+
   if (!currentUser || !chat || !otherUser) {
     return (
       <PageContainer withBottomNav={false}>
@@ -408,6 +524,14 @@ function ChatRoomPageContent() {
   const isBlockedRoom = isBlockedByMe || chat.status === 'blocked';
   const isRoomRestricted = isBlockedByMe || roomRestriction === 'reported' || chat.status === 'blocked';
   const isChatDisabled = isExpired || isRoomRestricted;
+  const hasVisiblePlaceSuggestions = placeSuggestions.some((suggestion) => suggestion.status !== 'dismissed');
+  const chatContentPaddingClass = isChatDisabled
+    ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+24px)]'
+    : hasVisiblePlaceSuggestions && !isPlacePanelCollapsed
+      ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+240px)]'
+      : hasVisiblePlaceSuggestions
+        ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+64px)]'
+        : 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+0px)]';
 
   const openProfileDetail = () => {
     router.push(buildProfileDetailHref(otherUser.id, 'chat', {
@@ -427,8 +551,46 @@ function ChatRoomPageContent() {
       setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
       scrollToBottom();
       await refreshMessages({ forceScroll: true });
+      if (content.includes('인제우리')) {
+        setIsPlacePanelCollapsed(false);
+        await loadPlaceSuggestions({ silent: true });
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : '메시지를 보내지 못했습니다.', 'error');
+    }
+  };
+
+  const handlePlaceSuggestionStatus = async (suggestionId: string, status: PlaceSuggestionStatus) => {
+    setUpdatingPlaceSuggestionId(suggestionId);
+    const targetSuggestion = placeSuggestions.find((suggestion) => suggestion.id === suggestionId);
+
+    try {
+      const updatedSuggestion = await updateChatRoomPlaceSuggestionStatus(chatId, suggestionId, status);
+      setPlaceSuggestions((prevSuggestions) => (
+        prevSuggestions.map((suggestion) => (
+          suggestion.id === updatedSuggestion.id ? updatedSuggestion : suggestion
+        ))
+      ));
+      if (status === 'accepted') {
+        const resolvedSuggestion = targetSuggestion ?? updatedSuggestion;
+        const placeName = resolvedSuggestion?.place?.name;
+
+        if (placeName) {
+          const messageContent = `${placeName} 여기 어때요?`;
+          const newMessage = await sendChatMessage(chatId, messageContent);
+          setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
+        }
+
+        setIsPlacePanelCollapsed(true);
+        setHidePlaceSuggestions(true);
+        setPlaceSuggestions([]);
+        scrollToBottom();
+      }
+      showToast(status === 'accepted' ? '추천 장소로 표시했어요.' : '장소 추천을 숨겼어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '장소 추천을 처리하지 못했어요.', 'error');
+    } finally {
+      setUpdatingPlaceSuggestionId(null);
     }
   };
 
@@ -656,7 +818,7 @@ function ChatRoomPageContent() {
         </div>
       </header>
 
-      <div className={`${isChatDisabled ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+24px)]' : 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+0px)]'} pt-[76px]`}>
+      <div className={`${chatContentPaddingClass} pt-[76px]`}>
         <div className="flex flex-col items-center py-6">
           <div className="relative h-[112px] w-[184px]">
             <div className="absolute left-4 top-0 h-20 w-20 overflow-hidden rounded-full border-[3px] border-white bg-[var(--color-surface-secondary)] shadow-[0_4px_12px_rgba(34,34,34,0.12)]">
@@ -734,10 +896,20 @@ function ChatRoomPageContent() {
         <div className="fixed bottom-[calc(78px+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
         <div className="pointer-events-none absolute left-0 right-0 top-full h-[calc(78px+var(--spacing-safe-bottom))] bg-[var(--color-surface)]" aria-hidden="true" />
         <div className="mx-auto max-w-[430px]">
+          <PlaceSuggestionPanel
+            suggestions={placeSuggestions}
+            collapsed={isPlacePanelCollapsed}
+            updatingSuggestionId={updatingPlaceSuggestionId}
+            onCollapsedChange={setIsPlacePanelCollapsed}
+            onGalleryOpenChange={setIsPlaceGalleryOpen}
+            onSelect={(suggestionId) => {
+              void handlePlaceSuggestionStatus(suggestionId, 'accepted');
+            }}
+          />
           <ChatInput
             onSend={handleSend}
             disabled={false}
-            placeholder={isExpired ? '대화 시간이 만료되었어요' : '메시지를 입력해보세요...'}
+            placeholder={isExpired ? '대화 시간이 만료되었어요' : "'인제우리'라고 보내보세요!"}
           />
         </div>
         </div>
@@ -832,7 +1004,7 @@ function ChatRoomPageContent() {
 
 export default function ChatRoomPage() {
   return (
-    <Suspense fallback={<PageContainer withBottomNav={false}><div /></PageContainer>}>
+    <Suspense fallback={<ChatRoomSkeleton />}>
       <ChatRoomPageContent />
     </Suspense>
   );
