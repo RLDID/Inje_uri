@@ -2,6 +2,8 @@
 
 import { useRef, useState, FormEvent } from 'react';
 
+const MAX_CHAT_MESSAGE_LENGTH = 1000;
+
 interface ChatInputProps {
   onSend: (message: string) => void | Promise<void>;
   disabled?: boolean;
@@ -65,6 +67,7 @@ export function ChatInput({ onSend, disabled = false, placeholder = '메시지�
           onCompositionEnd={(e) => syncMessage(e.currentTarget.value)}
           placeholder={placeholder}
           disabled={disabled}
+          maxLength={MAX_CHAT_MESSAGE_LENGTH}
           rows={1}
           className="
             max-h-32 min-h-12 w-full resize-none rounded-2xl border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] px-4 py-3
