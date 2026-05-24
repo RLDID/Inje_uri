@@ -54,7 +54,7 @@ type TodayRecommendationDto = {
       student_year: number;
       bio: string | null;
       primary_image_url: string | null;
-      keywords: Array<{ category: string; label: string }>;
+      keywords: Array<{ category: string; code: string; label: string }>;
     } | null;
   }>;
 };
@@ -94,6 +94,17 @@ type RecommendationSettingsDto = {
   updated_at: string | null;
 };
 
+type ProfileKeywordDto = {
+  category?: string;
+  categoryCode?: string;
+  code?: string;
+  keywordCode?: string;
+  keyword_code?: string;
+  label?: string;
+};
+
+type UserProfileKeyword = NonNullable<User['keywords']>[number];
+
 const CATEGORY_TO_USER_FIELD: Record<string, keyof Pick<
   User,
   'lifestyle' | 'drinking' | 'smoking' | 'mbti' | 'personality' | 'conversationStyle' | 'interests' | 'desiredVibe' | 'dateStyle' | 'dealBreakers'
@@ -120,6 +131,50 @@ function toDate(value?: string | Date | null): Date {
 
 function normalizeGender(value?: string): User['gender'] {
   return value === 'female' ? 'female' : 'male';
+}
+
+function normalizeProfileKeyword(keyword: ProfileKeywordDto): UserProfileKeyword | null {
+  const category = keyword.categoryCode ?? keyword.category ?? '';
+  const rawCode = keyword.code ?? keyword.keywordCode ?? keyword.keyword_code ?? keyword.label ?? '';
+
+  if (!category || !rawCode) {
+    return null;
+  }
+
+  const code = category === 'mbti' ? rawCode.toUpperCase() : rawCode;
+  return {
+    category,
+    code,
+    label: keyword.label ?? code,
+  };
+}
+
+function normalizeProfileKeywords(keywords: ProfileKeywordDto[]): UserProfileKeyword[] {
+  const seen = new Set<string>();
+  const normalizedKeywords: UserProfileKeyword[] = [];
+
+  for (const keyword of keywords) {
+    const normalizedKeyword = normalizeProfileKeyword(keyword);
+    if (!normalizedKeyword) continue;
+
+    const key = `${normalizedKeyword.category}:${normalizedKeyword.code}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    normalizedKeywords.push(normalizedKeyword);
+  }
+
+  return normalizedKeywords;
+}
+
+function getKeywordCodesByCategory(keywords: UserProfileKeyword[], category: string): string[] {
+  return keywords
+    .filter((keyword) => keyword.category === category)
+    .map((keyword) => keyword.code);
+}
+
+function getSingleKeywordCode(keywords: UserProfileKeyword[], category: string): string | undefined {
+  return getKeywordCodesByCategory(keywords, category)[0];
 }
 
 function normalizeImages(images: unknown): string[] {
@@ -150,15 +205,23 @@ function normalizeImageMetas(images: unknown): User['profileImageMetas'] {
 
 function applyKeywordSelections(user: User, keywordSelections: RawKeywordSelectionGroup[]): User {
   const nextUser: User = { ...user };
+  const allKeywords: UserProfileKeyword[] = [];
 
   for (const group of keywordSelections) {
     const categoryCode = group.categoryCode ?? group.categoryName ?? '';
+    const keywordItems = normalizeProfileKeywords(
+      (group.keywords ?? []).map((keyword) => ({
+        category: categoryCode,
+        code: keyword.code,
+        label: keyword.label,
+      })),
+    );
+    allKeywords.push(...keywordItems);
+
     const field = CATEGORY_TO_USER_FIELD[categoryCode];
     if (!field) continue;
 
-    const values = (group.keywords ?? [])
-      .map((keyword) => keyword.code ?? keyword.label)
-      .filter((value): value is string => Boolean(value));
+    const values = keywordItems.map((keyword) => keyword.code);
 
     if (MULTI_VALUE_FIELDS.has(field)) {
       (nextUser as unknown as Record<string, string[]>)[field] = values;
@@ -170,6 +233,7 @@ function applyKeywordSelections(user: User, keywordSelections: RawKeywordSelecti
     }
   }
 
+  nextUser.keywords = allKeywords;
   return nextUser;
 }
 
@@ -215,21 +279,29 @@ export function mapTodayRecommendation(dto: TodayRecommendationDto): DailyRecomm
     })
     .map((candidate) => {
       const profile = candidate.profile!;
-        return {
-          id: String(candidate.candidate_user_id),
-          nickname: profile.nickname,
-          age: profile.age ?? 0,
-          university: '인제대학교',
-          department: profile.department,
-          studentYear: profile.student_year,
-          gender: normalizeGender(profile.gender),
-          profileImages: profile.primary_image_url ? [profile.primary_image_url] : [PLACEHOLDER_PROFILE_IMAGE],
-          bio: profile.bio ?? undefined,
-          personality: [],
-          conversationStyle: undefined,
-        interests: profile.keywords.map((keyword) => keyword.label),
-        desiredVibe: [],
-        dealBreakers: [],
+      const profileKeywords = normalizeProfileKeywords(profile.keywords);
+
+      return {
+        id: String(candidate.candidate_user_id),
+        nickname: profile.nickname,
+        age: profile.age ?? 0,
+        university: '인제대학교',
+        department: profile.department,
+        studentYear: profile.student_year,
+        gender: normalizeGender(profile.gender),
+        profileImages: profile.primary_image_url ? [profile.primary_image_url] : [PLACEHOLDER_PROFILE_IMAGE],
+        bio: profile.bio ?? undefined,
+        lifestyle: getSingleKeywordCode(profileKeywords, 'lifestyle') as User['lifestyle'],
+        drinking: getSingleKeywordCode(profileKeywords, 'drinking') as User['drinking'],
+        smoking: getSingleKeywordCode(profileKeywords, 'smoking') as User['smoking'],
+        mbti: getSingleKeywordCode(profileKeywords, 'mbti') as User['mbti'],
+        personality: getKeywordCodesByCategory(profileKeywords, 'personality'),
+        conversationStyle: getSingleKeywordCode(profileKeywords, 'conversation') as User['conversationStyle'],
+        interests: getKeywordCodesByCategory(profileKeywords, 'interests'),
+        dateStyle: getSingleKeywordCode(profileKeywords, 'date_style') as User['dateStyle'],
+        desiredVibe: getKeywordCodesByCategory(profileKeywords, 'desired_vibe'),
+        dealBreakers: getKeywordCodesByCategory(profileKeywords, 'deal_breakers'),
+        keywords: profileKeywords,
         isVerified: true,
         isGraduate: false,
         lastActive: new Date(),
@@ -302,6 +374,7 @@ export function mapChatListItem(dto: ChatRoomListItemDto, currentUser: User | nu
       : undefined,
     unreadCount: dto.unreadCount,
     status: dto.status === 'closed' ? 'expired' : dto.status as Chat['status'],
+    blockedByMe: dto.blockedByMe,
     chatType: dto.expiresAt && new Date(dto.expiresAt).getTime() - new Date(dto.createdAt).getTime() > 3 * 60 * 60 * 1000 ? 'today' : 'now',
     createdAt: new Date(dto.createdAt),
     expiresAt: new Date(dto.expiresAt),

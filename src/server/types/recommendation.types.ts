@@ -8,7 +8,7 @@ export interface CandidateProfile {
   student_year: number;
   bio: string | null;
   primary_image_url: string | null;
-  keywords: { category: string; label: string }[];
+  keywords: { category: string; code: string; label: string }[];
 }
 
 export interface RecommendationCandidate {

@@ -32,7 +32,7 @@ interface MatchViewState {
   hiddenUserIds?: string[];
 }
 
-function toPositiveNumberParam(value: string | null): number | null {
+function toPositiveNumberParam(value: string | number | null | undefined): number | null {
   if (!value) {
     return null;
   }
@@ -92,6 +92,7 @@ function ProfileDetailPageContent() {
   const isFromChat = source === 'chat';
   const hasExistingChat = chatButtonStatus.type === 'existing_chat';
   const hasStickyActions = false;
+  const targetUserId = toPositiveNumberParam(user?.id) ?? toPositiveNumberParam(userId);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,28 +164,39 @@ function ProfileDetailPageContent() {
     setConfirmAction(action);
   };
 
-  const handleDestructiveAction = async () => {
+  const handleDestructiveAction = async (inputValue?: string) => {
     if (!confirmAction) {
       return;
     }
 
+    const actionTargetUserId = targetUserId;
+    const reportDescription = inputValue?.trim();
+
     try {
-      if (confirmAction === 'block') {
-        await blockUser(user.id);
-      }
+      if (confirmAction === 'block' || confirmAction === 'report') {
+        if (!actionTargetUserId) {
+          showToast('대상 사용자 정보를 확인할 수 없어 요청을 처리하지 못했어요.', 'error');
+          setConfirmAction(null);
+          return;
+        }
 
-      if (confirmAction === 'report') {
-        await reportTarget({
-          targetType: 'user',
-          targetId: user.id,
-          reasonType: 'inappropriate',
-          description: null,
-        });
-      }
+        if (confirmAction === 'block') {
+          await blockUser(actionTargetUserId);
+        }
 
-      if (isFromSelfDate && (confirmAction === 'report' || confirmAction === 'block')) {
-        const hiddenUserIds = readSelfDateHiddenUserIds();
-        writeSelfDateHiddenUserIds(Array.from(new Set([...hiddenUserIds, user.id])));
+        if (confirmAction === 'report') {
+          await reportTarget({
+            targetType: 'user',
+            targetId: actionTargetUserId,
+            reasonType: 'inappropriate',
+            description: reportDescription || null,
+          });
+        }
+
+        if (isFromSelfDate) {
+          const hiddenUserIds = readSelfDateHiddenUserIds();
+          writeSelfDateHiddenUserIds(Array.from(new Set([...hiddenUserIds, String(actionTargetUserId)])));
+        }
       }
 
       showToast(
@@ -310,6 +322,10 @@ function ProfileDetailPageContent() {
           confirmText: '추천 안 하기',
           onConfirm: handleHideRecommendation,
           destructive: false,
+          showInput: false,
+          inputRequired: false,
+          inputPlaceholder: '',
+          inputMaxLength: 200,
         };
       case 'reject':
         return {
@@ -318,6 +334,10 @@ function ProfileDetailPageContent() {
           confirmText: '하트 거절하기',
           onConfirm: handleReject,
           destructive: false,
+          showInput: false,
+          inputRequired: false,
+          inputPlaceholder: '',
+          inputMaxLength: 200,
         };
       case 'block':
         return {
@@ -326,14 +346,22 @@ function ProfileDetailPageContent() {
           confirmText: '차단하기',
           onConfirm: handleDestructiveAction,
           destructive: true,
+          showInput: false,
+          inputRequired: false,
+          inputPlaceholder: '',
+          inputMaxLength: 200,
         };
       case 'report':
         return {
           title: '이 사람을 신고할까요?',
-          description: '신고 내용은 운영팀에 전달돼요. 허위 신고는 제재될 수 있어요.',
+          description: '운영팀이 확인할 수 있게 신고 사유를 적어주세요. 허위 신고는 제재될 수 있어요.',
           confirmText: '신고하기',
           onConfirm: handleDestructiveAction,
           destructive: true,
+          showInput: true,
+          inputRequired: true,
+          inputPlaceholder: '예: 프로필 사진이 부적절해요, 허위 정보가 있어요',
+          inputMaxLength: 200,
         };
       default:
         return {
@@ -342,6 +370,10 @@ function ProfileDetailPageContent() {
           confirmText: '',
           onConfirm: () => undefined,
           destructive: false,
+          showInput: false,
+          inputRequired: false,
+          inputPlaceholder: '',
+          inputMaxLength: 200,
         };
     }
   };
@@ -485,6 +517,10 @@ function ProfileDetailPageContent() {
           confirmText={confirmConfig.confirmText}
           cancelText="취소"
           variant={confirmConfig.destructive ? 'destructive' : 'default'}
+          showInput={confirmConfig.showInput}
+          inputRequired={confirmConfig.inputRequired}
+          inputPlaceholder={confirmConfig.inputPlaceholder}
+          inputMaxLength={confirmConfig.inputMaxLength}
         />
       )}
     </PageContainer>

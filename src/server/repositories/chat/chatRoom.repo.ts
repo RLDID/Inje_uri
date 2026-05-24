@@ -40,7 +40,9 @@
   /**
    * 특정 유저가 참여 중인 채팅방 목록.
    *
-   * - left_at IS NULL인 참여자 행만 포함 (나간 방 제외)
+   * - 방 조회 조건은 "내가 아직 나가지 않은 방"으로 제한한다.
+   * - 표시용 참여자 정보는 나간 상대도 포함한다.
+   *   만료된 방에서 상대가 먼저 나가도 남은 사용자는 상대 프로필을 확인할 수 있어야 한다.
    * - 참여자 정보(닉네임, 대표 이미지)와 마지막 메시지 미리보기 포함
    * - 마지막 메시지 시각 기준 재정렬은 호출 측(service)에서 처리
    *   (Prisma가 관계 필드 기준 orderBy를 직접 지원 안 하므로)
@@ -59,7 +61,6 @@
       include: {
         // 채팅 목록에서 상대방 닉네임/이미지 표시에 필요
         participants: {
-          where: { left_at: null }, //상대방도 아직 안나간 사람만
           include: {
             user: {
               select: {
@@ -138,11 +139,13 @@
     return db.chatRoom.findFirst({
       where: {
         status: "active",
+        expires_at: { gt: new Date() },
         AND: [
           { participants: { some: { user_id: userIdA, left_at: null } } },
           { participants: { some: { user_id: userIdB, left_at: null } } },
         ],
       },
+      orderBy: { created_at: "desc" },
     });
   }
 
@@ -288,6 +291,47 @@ export async function createRoom(
       },
     });
     return result.count;
+  }
+
+  export async function restoreBlockedRoomsBetweenUsers(
+    userIdA: number,
+    userIdB: number,
+    tx?: PrismaTransactionClient,
+  ) {
+    const db = tx ?? prisma;
+    const now = new Date();
+    const baseWhere = {
+      status: "blocked" as const,
+      AND: [
+        { participants: { some: { user_id: userIdA, left_at: null } } },
+        { participants: { some: { user_id: userIdB, left_at: null } } },
+      ],
+    };
+
+    const [activeResult, expiredResult] = await Promise.all([
+      db.chatRoom.updateMany({
+        where: {
+          ...baseWhere,
+          expires_at: { gt: now },
+        },
+        data: {
+          status: "active",
+          blocked_by_user_id: null,
+        },
+      }),
+      db.chatRoom.updateMany({
+        where: {
+          ...baseWhere,
+          expires_at: { lte: now },
+        },
+        data: {
+          status: "expired",
+          blocked_by_user_id: null,
+        },
+      }),
+    ]);
+
+    return activeResult.count + expiredResult.count;
   }
 
   /**

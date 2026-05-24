@@ -12,7 +12,7 @@ export async function reportTarget(input: {
     targetType: input.targetType,
     targetId: Number(input.targetId),
     reasonType: input.reasonType,
-    description: input.description ?? null,
+    description: input.description ?? undefined,
     alsoBlock: Boolean(input.alsoBlock),
   });
 }
@@ -20,7 +20,7 @@ export async function reportTarget(input: {
 export async function blockUser(userId: string | number, reason?: string | null) {
   return apiPost<BlockUserResultDto>('/api/blocks', {
     blockedUserId: Number(userId),
-    reason: reason ?? null,
+    reason: reason ?? undefined,
   });
 }
 

@@ -18,7 +18,7 @@ import { createReport } from "@/server/services/content/safety.service";
  * @param targetType - 신고 대상 종류 (필수, "user" | "feed" | "feed_comment" | "chat_room" | "message")
  * @param targetId - 신고 대상 ID (필수, number)
  * @param reasonType - 신고 유형 (필수, string)
- * @param description - 상세 설명 (선택, string)
+ * @param description - 상세 설명 (필수, string)
  * @param alsoBlock - true이면 신고와 동시에 차단 (선택, boolean)
  *
  * @returns 200 - 성공
@@ -66,8 +66,13 @@ export async function POST(request: NextRequest) { // HTTP POST 메서드로 신
       return fail("INVALID_REASON_TYPE", "신고 유형은 빈 값이 아닌 문자열이어야 합니다.");
     }
 
-    if (description !== undefined && typeof description !== "string") { // description이 있는데 문자열이 아닌 경우
+    if (typeof description !== "string") { // description이 문자열이 아닌 경우
       return fail("INVALID_DESCRIPTION", "상세 설명은 문자열이어야 합니다.");
+    }
+
+    const trimmedDescription = description.trim();
+    if (!trimmedDescription) {
+      return fail("INVALID_DESCRIPTION", "신고 사유를 입력해주세요.");
     }
 
     const reporterUserId = user.id;
@@ -77,7 +82,7 @@ export async function POST(request: NextRequest) { // HTTP POST 메서드로 신
       targetType: validatedType,
       targetId,
       reasonType,
-      description: (description as string | undefined) ?? null,
+      description: trimmedDescription,
       alsoBlock: alsoBlock === true,
     });
 

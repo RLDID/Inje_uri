@@ -30,6 +30,12 @@ const DISMISS_COOLDOWN_DAYS = 7;
 const DECLINE_COOLDOWN_DAYS = 7;
 const RECENT_REC_EXCLUDE_DAYS = 3;
 
+export type GenerateRecommendationsForUserResult = {
+  generated: boolean;
+  candidateCount: number;
+  reason?: "USER_NOT_FOUND" | "USER_NOT_READY" | "NOT_ENOUGH_CANDIDATES";
+};
+
 /**
  * 이상형 매핑 테이블
  * 내 선택(desired_vibe / date_style) → 상대방이 가져야 할 특성(personality / interests)
@@ -70,13 +76,30 @@ export async function getTodayRecommendations(
 ): Promise<TodayRecommendationResponse> {
   const today = getKSTDateString();
 
-  const rec = await findTodayRecommendation(userId, today);
+  let rec = await findTodayRecommendation(userId, today);
 
   if (!rec) {
     throw new ApiError(ERROR.REC_NOT_GENERATED, "오늘의 추천이 아직 준비되지 않았습니다.");
   }
 
-  const candidates = await findCandidatesWithProfile(rec.id);
+  let candidates = await findCandidatesWithProfile(rec.id);
+  if (!isCompleteRecommendationCandidateSet(candidates)) {
+    console.warn(
+      `[recommendations] invalid recommendation set: recommendationId=${rec.id}, userId=${userId}, ranks=${candidates.map((c) => c.rank_order).join(",")}`,
+    );
+
+    const regenerated = rec.selected_candidate_user_id === null
+      ? await regenerateIncompleteRecommendation(userId, today, rec.id)
+      : null;
+
+    if (!regenerated) {
+      throw new ApiError(ERROR.REC_NOT_GENERATED, "오늘의 추천이 아직 준비되지 않았습니다.");
+    }
+
+    rec = regenerated.rec;
+    candidates = regenerated.candidates;
+  }
+
   const candidateUserIds = candidates.map((c) => c.candidate_user_id);
   const [keywordsMap, matchCountMap] = await Promise.all([
     fetchKeywordsForUsers(candidateUserIds),
@@ -238,7 +261,7 @@ export async function dismissCandidate(
 export async function generateRecommendationsForUser(
   userId: number,
   date: string,
-): Promise<void> {
+): Promise<GenerateRecommendationsForUserResult> {
   const user = await prisma.user.findUnique({
     where: { id: userId },
     select: {
@@ -246,11 +269,17 @@ export async function generateRecommendationsForUser(
       department: true,
       student_year: true,
       age: true,
+      onboarding_completed: true,
+      status: true,
+      deleted_at: true,
       recommendationSetting: true,
     },
   });
 
-  if (!user) return;
+  if (!user) return { generated: false, candidateCount: 0, reason: "USER_NOT_FOUND" };
+  if (user.status !== "active" || !user.onboarding_completed || user.deleted_at !== null) {
+    return { generated: false, candidateCount: 0, reason: "USER_NOT_READY" };
+  }
 
   const settings = user.recommendationSetting;
 
@@ -454,35 +483,78 @@ export async function generateRecommendationsForUser(
     if (candidates.length >= RECOMMEND_COUNT) break;
   }
 
-  if (candidates.length === 0) return;
+  if (candidates.length < RECOMMEND_COUNT) {
+    console.warn(
+      `[recommendations] not enough candidates: userId=${userId}, date=${date}, candidateCount=${candidates.length}`,
+    );
+    return {
+      generated: false,
+      candidateCount: candidates.length,
+      reason: "NOT_ENOUGH_CANDIDATES",
+    };
+  }
 
   await createDailyRecommendation(userId, date, candidates);
+  return { generated: true, candidateCount: candidates.length };
 }
 
 // ─────────────────────────────────────────────
 // 키워드 조회 헬퍼
 // ─────────────────────────────────────────────
+async function regenerateIncompleteRecommendation(
+  userId: number,
+  today: string,
+  recommendationId: number,
+) {
+  await prisma.dailyRecommendation.delete({ where: { id: recommendationId } });
+
+  const result = await generateRecommendationsForUser(userId, today);
+  if (!result.generated) return null;
+
+  const rec = await findTodayRecommendation(userId, today);
+  if (!rec) return null;
+
+  const candidates = await findCandidatesWithProfile(rec.id);
+  if (!isCompleteRecommendationCandidateSet(candidates)) return null;
+
+  return { rec, candidates };
+}
+
+function isCompleteRecommendationCandidateSet(candidates: { rank_order: number; candidate_user_id: number }[]): boolean {
+  if (candidates.length !== RECOMMEND_COUNT) return false;
+  if (new Set(candidates.map((candidate) => candidate.candidate_user_id)).size !== RECOMMEND_COUNT) return false;
+
+  const ranks = candidates.map((candidate) => candidate.rank_order).sort((left, right) => left - right);
+  return ranks.every((rank, index) => rank === index + 1);
+}
+
 async function fetchKeywordsForUsers(
   userIds: number[],
-): Promise<Map<number, { category: string; label: string }[]>> {
+): Promise<Map<number, { category: string; code: string; label: string }[]>> {
   if (userIds.length === 0) return new Map();
 
   const rows = await prisma.$queryRaw<{
     user_id: number;
-    category_name: string;
+    category_code: string;
+    keyword_code: string;
     label: string;
   }[]>`
-    SELECT uks.user_id, c.name AS category_name, k.label
+    SELECT uks.user_id, c.category_code, k.keyword_code, k.label
     FROM user_keyword_selections uks
     JOIN keyword k ON k.keyword_id = uks.keyword_id
     JOIN categories c ON c.category_id = k.category_id
     WHERE uks.user_id IN (${Prisma.join(userIds)})
+    ORDER BY uks.user_id, c.category_id, k.sort_order
   `;
 
-  const map = new Map<number, { category: string; label: string }[]>();
+  const map = new Map<number, { category: string; code: string; label: string }[]>();
   for (const row of rows) {
     if (!map.has(row.user_id)) map.set(row.user_id, []);
-    map.get(row.user_id)!.push({ category: row.category_name, label: row.label });
+    map.get(row.user_id)!.push({
+      category: row.category_code,
+      code: row.keyword_code,
+      label: row.label,
+    });
   }
   return map;
 }

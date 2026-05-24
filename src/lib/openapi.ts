@@ -1730,7 +1730,17 @@
                 student_year: { type: "integer", example: 3 },
                 bio: { type: "string", nullable: true, example: null },
                 primary_image_url: { type: "string", nullable: true, example: null },
-                keywords: { type: "array", items: { type: "string" } },
+                keywords: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      category: { type: "string", example: "interests" },
+                      code: { type: "string", example: "music" },
+                      label: { type: "string", example: "음악" },
+                    },
+                  },
+                },
               },
             },
           },

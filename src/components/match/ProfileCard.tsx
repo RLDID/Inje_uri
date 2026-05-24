@@ -10,6 +10,7 @@ import type { User } from '@/lib/types';
 import { getKeywordLabel, getUserAcademicLabel } from '@/lib/utils';
 
 const INTEREST_CHIP_GAP = 10;
+type ProfileKeyword = NonNullable<User['keywords']>[number];
 
 function appendProfileDetailParams(
   href: string,
@@ -29,6 +30,74 @@ function appendProfileDetailParams(
   return `${pathname}${queryString ? `?${queryString}` : ''}${hash ? `#${hash}` : ''}`;
 }
 
+function normalizeKeywordCode(category: string, code: string): string {
+  return category === 'mbti' ? code.toUpperCase() : code;
+}
+
+function toProfileKeyword(category: string, code?: string | null, label?: string | null): ProfileKeyword | null {
+  const trimmedCategory = category.trim();
+  const rawCode = code?.trim();
+
+  if (!trimmedCategory || !rawCode) {
+    return null;
+  }
+
+  const normalizedCode = normalizeKeywordCode(trimmedCategory, rawCode);
+  return {
+    category: trimmedCategory,
+    code: normalizedCode,
+    label: label?.trim() || getKeywordLabel(trimmedCategory, normalizedCode),
+  };
+}
+
+function normalizeProfileKeywords(keywords: User['keywords']): ProfileKeyword[] {
+  const seen = new Set<string>();
+  const normalizedKeywords: ProfileKeyword[] = [];
+
+  for (const keyword of keywords ?? []) {
+    const normalizedKeyword = toProfileKeyword(keyword.category, keyword.code, keyword.label);
+    if (!normalizedKeyword) continue;
+
+    const key = `${normalizedKeyword.category}:${normalizedKeyword.code}`;
+    if (seen.has(key)) continue;
+
+    seen.add(key);
+    normalizedKeywords.push(normalizedKeyword);
+  }
+
+  return normalizedKeywords;
+}
+
+function buildFallbackProfileKeywords(user: User): ProfileKeyword[] {
+  const keywords: ProfileKeyword[] = [];
+  const pushKeyword = (category: string, code?: string) => {
+    const keyword = toProfileKeyword(category, code);
+    if (keyword) keywords.push(keyword);
+  };
+
+  pushKeyword('lifestyle', user.lifestyle);
+  pushKeyword('drinking', user.drinking);
+  pushKeyword('smoking', user.smoking);
+  pushKeyword('mbti', user.mbti);
+  user.personality.forEach((code) => pushKeyword('personality', code));
+  pushKeyword('conversation', user.conversationStyle);
+  user.interests.forEach((code) => pushKeyword('interests', code));
+  user.desiredVibe.forEach((code) => pushKeyword('desired_vibe', code));
+  pushKeyword('date_style', user.dateStyle);
+  user.dealBreakers.forEach((code) => pushKeyword('deal_breakers', code));
+
+  return normalizeProfileKeywords(keywords);
+}
+
+function getProfileKeywordsForComparison(user: User): ProfileKeyword[] {
+  const normalizedKeywords = normalizeProfileKeywords(user.keywords);
+  return normalizedKeywords.length > 0 ? normalizedKeywords : buildFallbackProfileKeywords(user);
+}
+
+function keywordKey(keyword: ProfileKeyword): string {
+  return `${keyword.category}:${keyword.code}`;
+}
+
 interface ProfileCardProps {
   user: User;
   source?: 'recommendation' | 'interest' | 'self-date';
@@ -43,6 +112,7 @@ interface ProfileCardProps {
   currentIndex?: number;
   totalCount?: number;
   currentUserInterests?: string[];
+  currentUserKeywords?: User['keywords'];
 }
 
 export function ProfileCard({
@@ -56,6 +126,7 @@ export function ProfileCard({
   currentIndex = 0,
   totalCount = 1,
   currentUserInterests = [],
+  currentUserKeywords = [],
 }: ProfileCardProps) {
   const router = useRouter();
   const { currentPath, ownerSection } = useCurrentRouteContext();
@@ -74,8 +145,40 @@ export function ProfileCard({
   const measureMoreChipRef = useRef<HTMLSpanElement>(null);
   const displayedInterests = interestLabels.slice(0, visibleInterestCount);
   const hiddenInterestCount = Math.max(interestLabels.length - displayedInterests.length, 0);
-  const commonInterests = user.interests.filter((interest) => currentUserInterests.includes(interest));
-  const displayedCommonInterests = commonInterests.slice(0, 3);
+  const currentProfileKeywords = useMemo(() => {
+    const normalizedKeywords = normalizeProfileKeywords(currentUserKeywords);
+
+    if (normalizedKeywords.length > 0) {
+      return normalizedKeywords;
+    }
+
+    return normalizeProfileKeywords(
+      currentUserInterests
+        .map((interest) => toProfileKeyword('interests', interest))
+        .filter((keyword): keyword is ProfileKeyword => keyword !== null),
+    );
+  }, [currentUserInterests, currentUserKeywords]);
+  const commonKeywords = useMemo(() => {
+    const currentKeywordKeys = new Set(currentProfileKeywords.map(keywordKey));
+    const seen = new Set<string>();
+
+    return getProfileKeywordsForComparison(user).filter((keyword) => {
+      const key = keywordKey(keyword);
+      if (!currentKeywordKeys.has(key) || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+  }, [currentProfileKeywords, user]);
+  const displayedCommonKeywords = commonKeywords.slice(0, 3);
+  const commonKeywordTitle = commonKeywords.length > 0
+    ? `공통 키워드 ${commonKeywords.length}개`
+    : '다른 매력을 가진 상대예요';
+  const commonKeywordDescription = displayedCommonKeywords.length > 0
+    ? displayedCommonKeywords.map((keyword) => keyword.label).join(', ')
+    : '공통점보다 새로운 느낌에 가까운 추천이에요';
   const pageCount = Math.min(Math.max(totalCount, 1), 3);
   const activePageIndex = Math.min(currentIndex, pageCount - 1);
   const hasMultipleProfiles = pageCount > 1;
@@ -269,12 +372,10 @@ export function ProfileCard({
             </span>
             <div className="min-w-0">
               <p className="text-[14px] font-semibold text-[var(--color-text-primary)]">
-                공통 관심사 {(user as User & { keywordMatchCount?: number }).keywordMatchCount ?? commonInterests.length}개
+                {commonKeywordTitle}
               </p>
               <p className="mt-1 truncate text-[14px] font-medium text-[var(--color-text-secondary)]">
-                {displayedCommonInterests.length > 0
-                  ? displayedCommonInterests.map((interest) => getKeywordLabel('interests', interest)).join(', ')
-                  : '아직 겹치는 관심사가 없어요'}
+                {commonKeywordDescription}
               </p>
             </div>
           </div>

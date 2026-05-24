@@ -3,7 +3,7 @@ import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/lib/app-error";
 import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
 import type { ActiveBlockListRow } from "@/server/repositories/safety/safety.repository";
-import { blockActiveRoomsBetweenUsers } from "@/server/repositories/chat/chatRoom.repo";
+import { restoreBlockedRoomsBetweenUsers } from "@/server/repositories/chat/chatRoom.repo";
 import type {
   BlockListDto,
   BlockListItemDto,
@@ -63,7 +63,7 @@ export async function createReport(
         reason: `신고와 동시 차단 (${params.targetType} #${params.targetId})`,
       },
     );
-    await blockActiveRoomsBetweenUsers(reporterUserId, targetOwnerUserId);
+    await restoreBlockedRoomsBetweenUsers(reporterUserId, targetOwnerUserId);
     return result;
   }
 
@@ -99,12 +99,12 @@ export async function blockUser(
 
   if (existingBlock && existingBlock.unblocked_at) {
     const reblocked = await repo.reactivateBlock(existingBlock.id, reason);
-    await blockActiveRoomsBetweenUsers(blockerUserId, blockedUserId);
+    await restoreBlockedRoomsBetweenUsers(blockerUserId, blockedUserId);
     return { blockId: reblocked.id };
   }
 
   const block = await repo.createBlock(blockerUserId, blockedUserId, reason);
-  await blockActiveRoomsBetweenUsers(blockerUserId, blockedUserId);
+  await restoreBlockedRoomsBetweenUsers(blockerUserId, blockedUserId);
   return { blockId: block.id };
 }
 
@@ -132,6 +132,8 @@ export async function unblockUser(currentUserId: number, blockId: number): Promi
   }
 
   await repo.unblockById(blockId);
+
+  await restoreBlockedRoomsBetweenUsers(currentUserId, block.blocked_user_id);
 
   return { unblocked: true };
 }

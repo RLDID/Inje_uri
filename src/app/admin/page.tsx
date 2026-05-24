@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, ConfirmSheet, useToast } from '@/components/ui';
+import { Button, ConfirmSheet, ImageCarousel, useToast } from '@/components/ui';
 import type {
   AdminLoginResultDto,
   AdminLogoutResultDto,
@@ -93,6 +93,14 @@ const TARGET_LABELS: Record<string, string> = {
   message: '메시지',
 };
 
+const REPORT_REASON_LABELS: Record<string, string> = {
+  inappropriate: '부적절한 내용/행동',
+  profile_report: '프로필 신고',
+  feed_report: '피드 신고',
+  chat_report: '채팅 신고',
+  other: '기타',
+};
+
 const ACTION_LABELS: Record<AdminReportAction, string> = {
   ban_target_user: '유저 정지',
   hide_feed: '피드 숨김',
@@ -169,6 +177,30 @@ function getStatusLabel(status: AdminReportStatus): string {
 
 function getTargetLabel(type: string): string {
   return TARGET_LABELS[type] ?? type;
+}
+
+function getReasonLabel(reasonType: string): string {
+  return REPORT_REASON_LABELS[reasonType] ?? reasonType;
+}
+
+function getGenderLabel(gender: string): string {
+  if (gender === 'male') {
+    return '남성';
+  }
+
+  if (gender === 'female') {
+    return '여성';
+  }
+
+  return gender;
+}
+
+function getTargetDisplayName(item: AdminReportListItemDto): string {
+  if (item.target.ownerUser) {
+    return `${item.target.ownerUser.nickname} · ${getTargetLabel(item.target.type)} #${item.target.id}`;
+  }
+
+  return `${getTargetLabel(item.target.type)} #${item.target.id}`;
 }
 
 function getReportActions(item: AdminReportListItemDto): AdminReportAction[] {
@@ -343,18 +375,80 @@ function ReportItem({
 
         <div>
           <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">대상</p>
-          <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">
-            {getTargetLabel(item.target.type)} #{item.target.id}
+          {item.target.ownerUser ? (
+            <div className="mt-2 flex items-start gap-3">
+              <div className="w-24 shrink-0">
+                <ImageCarousel
+                  images={item.target.ownerUser.profileImages}
+                  aspectRatio="1/1"
+                  alt={`${item.target.ownerUser.nickname} 프로필 사진`}
+                  className="rounded-lg"
+                  showIndicators={item.target.ownerUser.profileImages.length > 1}
+                  showCountBadge={item.target.ownerUser.profileImages.length > 1}
+                />
+                <p className="mt-1 text-center text-[11px] text-[var(--color-text-tertiary)]">
+                  사진 {Math.max(item.target.ownerUser.profileImages.length, 1)}장
+                </p>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-[var(--color-text-primary)]">{item.target.ownerUser.nickname}</p>
+                <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
+                  {item.target.ownerUser.university} · {item.target.ownerUser.department}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
+                  {getGenderLabel(item.target.ownerUser.gender)}
+                  {' · '}
+                  {item.target.ownerUser.age ? `${item.target.ownerUser.age}세` : '나이 없음'}
+                  {' · '}
+                  {item.target.ownerUser.studentYear}학년
+                </p>
+                <p className="mt-1 break-all text-xs text-[var(--color-text-tertiary)]">
+                  ID {item.target.ownerUser.userId}{item.target.ownerUser.loginId ? ` · ${item.target.ownerUser.loginId}` : ''} · 상태 {item.target.ownerUser.status}
+                </p>
+                <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
+                  온보딩 {item.target.ownerUser.onboardingCompleted ? '완료' : '미완료'} · 가입 {formatDateTime(item.target.ownerUser.createdAt)}
+                </p>
+                <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
+                  {getTargetLabel(item.target.type)} #{item.target.id}
+                </p>
+                {item.target.ownerUser.bio && (
+                  <p className="mt-2 max-h-16 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-5 text-[var(--color-text-secondary)]">
+                    {item.target.ownerUser.bio}
+                  </p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 text-sm font-bold text-[var(--color-text-primary)]">
+                {getTargetLabel(item.target.type)} #{item.target.id}
+              </p>
+              <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">대상 사용자 정보를 찾을 수 없음</p>
+            </>
+          )}
+          <p className="mt-2 text-xs text-[var(--color-text-secondary)]">
+            사유: {getReasonLabel(item.reasonType)}
+            {REPORT_REASON_LABELS[item.reasonType] ? ` (${item.reasonType})` : ''}
           </p>
-          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">사유: {item.reasonType}</p>
           <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">검토: {formatDateTime(item.reviewedAt)}</p>
         </div>
 
         <div>
-          <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">상세</p>
+          <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">신고 상세</p>
           <p className="mt-1 min-h-10 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
             {item.description?.trim() || '상세 설명 없음'}
           </p>
+          {item.target.content && (
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">대상 내용</p>
+              <p className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-5 text-[var(--color-text-secondary)]">
+                {item.target.content.text?.trim() || '내용 본문 없음'}
+              </p>
+              <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
+                상태 {item.target.content.status ?? '-'} · 작성 {formatDateTime(item.target.content.createdAt)}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
@@ -961,7 +1055,7 @@ export default function AdminPage() {
         title={actionTarget ? `${ACTION_LABELS[actionTarget.action]} 조치를 적용할까요?` : '조치를 적용할까요?'}
         description={
           actionTarget
-            ? `${getTargetLabel(actionTarget.item.target.type)} #${actionTarget.item.target.id} 신고에 적용됩니다. ${ACTION_DESCRIPTIONS[actionTarget.action]}`
+            ? `${getTargetDisplayName(actionTarget.item)} 신고에 적용됩니다. ${ACTION_DESCRIPTIONS[actionTarget.action]}`
             : undefined
         }
         confirmText={actionTarget ? `${ACTION_LABELS[actionTarget.action]} 적용` : '적용'}

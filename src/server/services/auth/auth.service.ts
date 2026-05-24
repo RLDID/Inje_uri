@@ -195,6 +195,26 @@ async function getRandomDefaultProfileImageUrl(): Promise<string | null> {
   return null;
 }
 
+function getKSTServiceDateString(): string {
+  const now = new Date();
+  const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (kst.getUTCHours() < 9) {
+    kst.setUTCDate(kst.getUTCDate() - 1);
+  }
+  return kst.toISOString().split('T')[0];
+}
+
+async function generateTodayRecommendationsAfterRegister(userId: number) {
+  const { generateRecommendationsForUser } = await import('@/server/services/matching/recommendation.service');
+  const result = await generateRecommendationsForUser(userId, getKSTServiceDateString());
+
+  if (!result.generated) {
+    console.warn(
+      `[POST /api/auth/register recommendations] skipped: userId=${userId}, reason=${result.reason}, candidateCount=${result.candidateCount}`,
+    );
+  }
+}
+
 function parseUpstreamInjeBody(rawText: string): { status?: string; message?: string } | null {
   try {
     return JSON.parse(rawText) as { status?: string; message?: string };
@@ -358,6 +378,10 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
         }
       : {}),
   }, keywordSelectionRows);
+
+  await generateTodayRecommendationsAfterRegister(user.id).catch((error) => {
+    console.error('[POST /api/auth/register recommendations]', error);
+  });
 
   await clearPreSignupVerificationToken(preSignupToken);
   const { token, expiresAt } = await createUserSession(user.id);
