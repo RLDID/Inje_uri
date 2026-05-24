@@ -617,7 +617,19 @@
                   type: "object",
                   required: ["content"],
                   properties: { 
-                    content: { type: "string", example: "안녕하세요!", minLength: 1, maxLength: 1000 },                   
+                    content: {
+                      type: "string",
+                      example: "안녕하세요!",
+                      minLength: 1,
+                      maxLength: 1000,
+                      description: "text 메시지는 본문, image 메시지는 허용된 이미지 경로(/place/egg.png, /place/coding.png)",
+                    },
+                    type: { type: "string", enum: ["text", "image"], default: "text" },
+                    suppressPlaceTrigger: {
+                      type: "boolean",
+                      default: false,
+                      description: "장소 제안 버튼이 생성한 메시지처럼 장소명 자동 트리거를 건너뛰어야 할 때 사용합니다.",
+                    },
                   },
                 },
               },
@@ -636,6 +648,11 @@
                         type: "object",
                         properties: {
                           message: { $ref: "#/components/schemas/MessageFull" },
+                          placeSuggestions: {
+                            type: "array",
+                            items: { $ref: "#/components/schemas/PlaceSuggestion" },
+                            description: "이번 메시지로 장소추천이 열렸을 때 반환됩니다.",
+                          },
                         },
                       },
                     },

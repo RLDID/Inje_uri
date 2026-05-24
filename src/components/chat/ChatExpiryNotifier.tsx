@@ -92,7 +92,9 @@ function getUnreadChatNotificationCopy(chat: Chat, currentUserId?: string) {
   const otherParticipant = currentUserId ? getOtherParticipant(chat, currentUserId) : chat.participants[1];
   const partnerName = otherParticipant?.user.nickname ?? '상대방';
   const isMatchStarted = chat.lastMessage?.type === 'system';
-  const messagePreview = chat.lastMessage?.content?.trim();
+  const messagePreview = chat.lastMessage?.type === 'image'
+    ? '사진을 보냈어요'
+    : chat.lastMessage?.content?.trim();
 
   if (isMatchStarted) {
     return {

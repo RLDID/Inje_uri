@@ -38,7 +38,6 @@ export const PLACE_IMAGE_FALLBACKS: Record<string, string> = {
   '다인': '/place/dine1.jpg',
   '버거잉': '/place/bugering.jpg',
   '운동장': '/place/Place_platGround2.jpg',
-  '백곰': '/place/egg.png',
   '코딩하는 백곰이': '/place/coding.png',
   '중문': '/place/Place_middleGate.jpg',
 };
@@ -60,7 +59,6 @@ export const PLACE_IMAGE_GALLERIES: Record<string, string[]> = {
   '다인': ['/place/dine1.jpg', '/place/dine2.jpg', '/place/dine3.jpg'],
   '버거잉': ['/place/bugering.jpg'],
   '운동장': ['/place/Place_platGround2.jpg', '/place/Place_playGround1.jpg', '/place/Place_playGround_secretroot.jpg', '/place/playground.jpg', '/place/playground_02.jpg'],
-  '백곰': ['/place/egg.png'],
   '코딩하는 백곰이': ['/place/coding.png'],
   '중문': ['/place/Place_middleGate.jpg', '/place/middledoor.jpg'],
 };

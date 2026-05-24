@@ -12,20 +12,29 @@ const CATEGORY_LABELS: Record<string, string> = {
   park: '공원',
   restaurant: '밥',
   activity: '활동',
-  egg: '플러팅',
   coding: '컴공',
   gate: '입구',
 };
 
-const HIDDEN_PLACE_NAMES = new Set(['A동', 'D동']);
+const HIDDEN_PLACE_NAMES = new Set(['A동', 'D동', '백곰', '코딩하는 백곰이']);
+
+const QUICK_IMAGE_ACTIONS = [
+  { id: 'egg', label: 'egg', imageUrl: '/place/egg.png', alt: 'egg 이미지' },
+  { id: 'coding', label: 'coding', imageUrl: '/place/coding.png', alt: 'coding 이미지' },
+] as const;
+
+export type PlaceQuickImageAction = (typeof QUICK_IMAGE_ACTIONS)[number];
 
 interface PlaceSuggestionPanelProps {
   suggestions: ChatPlaceSuggestion[];
   collapsed: boolean;
   updatingSuggestionId: string | null;
+  sendingImageId?: string | null;
   onCollapsedChange: (collapsed: boolean) => void;
+  onDismiss?: () => void;
   onGalleryOpenChange?: (isOpen: boolean) => void;
   onSelect: (suggestionId: string) => void;
+  onSendImage?: (action: PlaceQuickImageAction) => void;
 }
 
 interface GalleryTarget {
@@ -37,6 +46,19 @@ interface GalleryTarget {
 
 function getCategoryLabel(code: string, fallback: string): string {
   return CATEGORY_LABELS[code] ?? fallback;
+}
+
+function isTriggeredPlaceSuggestion(suggestion: ChatPlaceSuggestion): boolean {
+  return suggestion.triggeredKeyword === suggestion.place.name;
+}
+
+function SendArrowIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 19V5" />
+      <path d="m5 12 7-7 7 7" />
+    </svg>
+  );
 }
 
 function PlaceImage({ src, alt, name }: { src: string | null; alt: string; name: string }) {
@@ -96,13 +118,16 @@ export function PlaceSuggestionPanel({
   suggestions,
   collapsed,
   updatingSuggestionId,
+  sendingImageId = null,
   onCollapsedChange,
+  onDismiss,
   onGalleryOpenChange,
   onSelect,
+  onSendImage,
 }: PlaceSuggestionPanelProps) {
   const visibleSuggestions = useMemo(
     () => suggestions.filter((suggestion) => (
-      suggestion.status !== 'dismissed' && !HIDDEN_PLACE_NAMES.has(suggestion.place.name)
+      suggestion.status === 'pending' && !HIDDEN_PLACE_NAMES.has(suggestion.place.name)
     )),
     [suggestions],
   );
@@ -129,6 +154,12 @@ export function PlaceSuggestionPanel({
       : visibleSuggestions.filter((suggestion) => suggestion.place.category.code === activeCategory);
 
     return [...filtered].sort((left, right) => {
+      const leftIsTriggered = isTriggeredPlaceSuggestion(left);
+      const rightIsTriggered = isTriggeredPlaceSuggestion(right);
+      if (leftIsTriggered !== rightIsTriggered) {
+        return leftIsTriggered ? -1 : 1;
+      }
+
       if (left.status === right.status) {
         return left.place.name.localeCompare(right.place.name, 'ko');
       }
@@ -224,6 +255,9 @@ export function PlaceSuggestionPanel({
     return null;
   }
 
+  const imageActions = activeCategory === 'all' && onSendImage ? QUICK_IMAGE_ACTIONS : [];
+  const totalCardCount = visibleSuggestions.length + (onSendImage ? QUICK_IMAGE_ACTIONS.length : 0);
+
   if (collapsed) {
     return (
       <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
@@ -233,7 +267,7 @@ export function PlaceSuggestionPanel({
           className="flex min-h-10 w-full items-center justify-between rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] px-3 text-left"
         >
           <span className="text-sm font-semibold text-[var(--color-text-primary)]">인제우리 추천 장소</span>
-          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{visibleSuggestions.length}곳 보기</span>
+          <span className="text-xs font-medium text-[var(--color-text-secondary)]">{totalCardCount}개 보기</span>
         </button>
       </div>
     );
@@ -241,18 +275,23 @@ export function PlaceSuggestionPanel({
 
   return (
     <section className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
           <p className="text-sm font-bold text-[var(--color-text-primary)]">인제우리 추천 장소</p>
-          <p className="mt-0.5 text-[11px] leading-4 text-[var(--color-text-secondary)]">사진을 눌러 자세히 보고, 버튼으로 제안해요</p>
+          <p className="mt-0.5 text-[11px] leading-4 text-[var(--color-text-secondary)]">사진을 눌러서 확인해보고, 장소를 제안해보세요</p>
         </div>
-        <button
-          type="button"
-          onClick={() => onCollapsedChange(true)}
-          className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-secondary)]"
-        >
-          접기
-        </button>
+        {onDismiss && (
+          <button
+            type="button"
+            onClick={onDismiss}
+            className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-secondary)]"
+            aria-label="추천 장소 닫기"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+        )}
       </div>
 
       <div className="mt-1.5 flex gap-1.5 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -303,9 +342,9 @@ export function PlaceSuggestionPanel({
                   <PlaceImage src={suggestion.place.imageUrl} alt={suggestion.place.name} name={suggestion.place.name} />
                 </button>
               </div>
-              <div className="px-2.5 py-2">
+              <div className="px-2.5 py-1.5">
                 <p className="truncate text-[13px] font-bold leading-4 text-[var(--color-text-primary)]">{suggestion.place.name}</p>
-                <div className="mt-1.5 flex items-center justify-between gap-1.5">
+                <div className="mt-0.5 flex items-center justify-between gap-1.5">
                   <p className="min-w-0 truncate text-[10px] font-medium text-[var(--color-text-tertiary)]">
                     {getCategoryLabel(suggestion.place.category.code, suggestion.place.category.name)}
                   </p>
@@ -313,14 +352,50 @@ export function PlaceSuggestionPanel({
                     type="button"
                     onClick={() => onSelect(suggestion.id)}
                     disabled={isAccepted || isUpdating}
-                    className={`shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold shadow-sm transition disabled:cursor-default ${
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white shadow-sm transition active:scale-[0.96] disabled:cursor-default ${
                       isAccepted
-                        ? 'border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] text-[var(--color-text-secondary)]'
-                        : 'border-[var(--color-pink-cta)] bg-[var(--color-brand-pink)] text-[var(--color-text-primary)] active:scale-[0.98] disabled:opacity-70'
+                        ? 'bg-[var(--color-border)] text-white/85'
+                        : 'bg-[var(--color-pink-cta)] disabled:opacity-70'
                     }`}
                     aria-label={`${suggestion.place.name} 여기 어때요 보내기`}
+                    aria-busy={isUpdating}
                   >
-                    {isUpdating ? '보내는 중' : isAccepted ? '고른 장소' : '여기 어때?'}
+                    <SendArrowIcon />
+                  </button>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+        {imageActions.map((action) => {
+          const isSending = sendingImageId === action.id;
+
+          return (
+            <article
+              key={action.id}
+              className="overflow-hidden rounded-xl border border-[var(--color-border-light)] bg-[var(--color-surface)]"
+            >
+              <div className="relative h-[76px] w-full overflow-hidden bg-[var(--color-surface-secondary)] min-[380px]:h-20">
+                <Image
+                  src={action.imageUrl}
+                  alt={action.alt}
+                  fill
+                  sizes="148px"
+                  className="object-contain p-1.5"
+                />
+              </div>
+              <div className="px-2.5 py-1.5">
+                <p className="truncate text-[13px] font-bold leading-4 text-[var(--color-text-primary)]">{action.label}</p>
+                <div className="mt-0.5 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => onSendImage?.(action)}
+                    disabled={Boolean(sendingImageId)}
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[var(--color-pink-cta)] text-white shadow-sm transition active:scale-[0.96] disabled:cursor-default disabled:opacity-70"
+                    aria-label={`${action.label} 이미지 보내기`}
+                    aria-busy={isSending}
+                  >
+                    <SendArrowIcon />
                   </button>
                 </div>
               </div>
@@ -328,6 +403,17 @@ export function PlaceSuggestionPanel({
           );
         })}
       </div>
+
+      <button
+        type="button"
+        onClick={() => onCollapsedChange(true)}
+        className="mx-auto mt-1 flex h-7 w-12 items-center justify-center rounded-full text-[var(--color-text-tertiary)] transition-colors hover:bg-[var(--color-surface-secondary)]"
+        aria-label="추천 장소 접기"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="m6 9 6 6 6-6" />
+        </svg>
+      </button>
 
       {galleryTarget && typeof document !== 'undefined' && createPortal(
         <div

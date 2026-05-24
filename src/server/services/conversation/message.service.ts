@@ -14,10 +14,12 @@
   import * as placeSuggestionRepo from "@/server/repositories/place/placeSuggestion.repo";
   import { prisma } from "@/server/db/prisma";
   import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
+  import { message_type } from "@/generated/prisma/client";
 
   const safetyRepo = new SafetyRepository(prisma);
   const PLACE_RECOMMENDATION_TRIGGER = "인제우리";
   type RoomWithParticipants = NonNullable<Awaited<ReturnType<typeof chatRoomRepo.findRoomById>>>;
+  type PlaceCandidate = Awaited<ReturnType<typeof placeRepo.findPlaces>>[number];
 
   function getOtherParticipant(room: RoomWithParticipants, userId: number) {
     return room.participants.find((participant) => participant.user_id !== userId) ?? null;
@@ -47,8 +49,28 @@
     room.blocked_by_user_id = null;
   }
 
-  function shouldTriggerPlaceRecommendation(content: string): boolean {
-    return content.includes(PLACE_RECOMMENDATION_TRIGGER);
+  function normalizeTriggerText(value: string): string {
+    return value.toLocaleLowerCase("ko-KR").replace(/\s+/g, "");
+  }
+
+  function findPlaceNameTrigger(content: string, places: PlaceCandidate[]): PlaceCandidate | null {
+    const normalizedContent = normalizeTriggerText(content);
+
+    return [...places]
+      .sort((left, right) => normalizeTriggerText(right.name).length - normalizeTriggerText(left.name).length)
+      .find((place) => {
+        const normalizedPlaceName = normalizeTriggerText(place.name);
+        return normalizedPlaceName.length >= 2 && normalizedContent.includes(normalizedPlaceName);
+      }) ?? null;
+  }
+
+  function resolvePlaceTrigger(content: string, places: PlaceCandidate[]) {
+    if (content.includes(PLACE_RECOMMENDATION_TRIGGER)) {
+      return { keyword: PLACE_RECOMMENDATION_TRIGGER, place: null };
+    }
+
+    const place = findPlaceNameTrigger(content, places);
+    return place ? { keyword: place.name, place } : null;
   }
 
   function shuffle<T>(items: T[]): T[] {
@@ -59,38 +81,53 @@
   }
 
   async function createTriggeredPlaceSuggestions(roomId: number, content: string) {
-    if (!shouldTriggerPlaceRecommendation(content)) {
-      return [];
-    }
-
     const [existingSuggestions, places] = await Promise.all([
       placeSuggestionRepo.findSuggestionsByRoomId(roomId),
       placeRepo.findPlaces(),
     ]);
-    const triggeredPlaceIds = new Set(
-      existingSuggestions
-        .filter((suggestion) => suggestion.triggered_keyword === PLACE_RECOMMENDATION_TRIGGER)
-        .map((suggestion) => suggestion.place_id),
-    );
-    const candidates = places.filter((place) => !triggeredPlaceIds.has(place.id));
 
-    if (candidates.length === 0) {
+    const trigger = resolvePlaceTrigger(content, places);
+    if (!trigger) {
       return [];
     }
 
-    const orderedCandidates = shuffle(candidates);
+    const triggeredExistingSuggestion = trigger.place
+      ? existingSuggestions.find((suggestion) => (
+        suggestion.place_id === trigger.place?.id && suggestion.status === "pending"
+      ))
+      : null;
 
-    const suggestions = [];
-    for (const place of orderedCandidates) {
-      const suggestion = await placeSuggestionRepo.createSuggestion({
-        chatRoomId: roomId,
-        placeId: place.id,
-        triggeredKeyword: PLACE_RECOMMENDATION_TRIGGER,
-      });
-      suggestions.push(suggestion);
+    if (
+      triggeredExistingSuggestion
+      && triggeredExistingSuggestion.triggered_keyword !== trigger.keyword
+    ) {
+      await placeSuggestionRepo.updateSuggestionTriggeredKeyword(triggeredExistingSuggestion.id, trigger.keyword);
     }
 
-    return suggestions;
+    const existingPlaceIds = new Set(existingSuggestions.map((suggestion) => suggestion.place_id));
+    const candidates = places.filter((place) => !existingPlaceIds.has(place.id));
+
+    if (candidates.length === 0) {
+      return placeSuggestionRepo.findSuggestionsByRoomId(roomId);
+    }
+
+    const shuffledCandidates = shuffle(candidates);
+    const orderedCandidates = trigger.place
+      ? [
+        ...shuffledCandidates.filter((place) => place.id === trigger.place?.id),
+        ...shuffledCandidates.filter((place) => place.id !== trigger.place?.id),
+      ]
+      : shuffledCandidates;
+
+    for (const place of orderedCandidates) {
+      await placeSuggestionRepo.createSuggestion({
+        chatRoomId: roomId,
+        placeId: place.id,
+        triggeredKeyword: place.id === trigger.place?.id ? trigger.keyword : PLACE_RECOMMENDATION_TRIGGER,
+      });
+    }
+
+    return placeSuggestionRepo.findSuggestionsByRoomId(roomId);
   }
 
   // ─────────────────────────────────────────────
@@ -108,7 +145,13 @@
   ROOM_EXPIRED)
    * 5. 메시지 INSERT
    */
-export async function sendMessage(roomId: number, userId: number, content: string) {
+export async function sendMessage(
+  roomId: number,
+  userId: number,
+  content: string,
+  type: message_type = "text",
+  options?: { suppressPlaceTrigger?: boolean },
+) {
   const participant = await participantRepo.findParticipant(roomId, userId);
   if (!participant) return { error: ERROR.FORBIDDEN } as const;
   if (participant.left_at !== null) return { error:ERROR.FORBIDDEN } as const;
@@ -138,12 +181,13 @@ export async function sendMessage(roomId: number, userId: number, content: strin
     chat_room_id: roomId,
     sender_user_id: userId,
     content,
+    type,
   });
 
-  const placeSuggestions = await createTriggeredPlaceSuggestions(roomId, content).catch((error) => {
+  const placeSuggestions = type === "text" && !options?.suppressPlaceTrigger ? await createTriggeredPlaceSuggestions(roomId, content).catch((error) => {
     console.warn("[message.service] place suggestion trigger failed:", error);
     return [];
-  });
+  }) : [];
 
   return placeSuggestions.length > 0 ? { message, placeSuggestions } : { message };
 }

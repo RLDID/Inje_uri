@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { PageContainer } from '@/components/layout';
 import { ChatBubble } from '@/components/chat/ChatBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
-import { PlaceSuggestionPanel } from '@/components/chat/PlaceSuggestionPanel';
+import { PlaceSuggestionPanel, type PlaceQuickImageAction } from '@/components/chat/PlaceSuggestionPanel';
 import { BottomSheet, Button, CenteredModal, useToast } from '@/components/ui';
 import {
   createChatExpiringSystemMessage,
@@ -22,6 +22,7 @@ import {
   blockChatRoom,
   leaveChatRoom,
   markChatRoomRead,
+  sendChatImageMessage,
   sendChatMessage,
   updateChatRoomPlaceSuggestionStatus,
 } from '@/lib/api/chat';
@@ -75,7 +76,7 @@ function ChatRoomSkeleton() {
         </div>
       </div>
 
-      <div className="fixed bottom-[calc(78px+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
+      <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
         <div className="mx-auto max-w-[430px] animate-pulse px-4 py-3">
           <div className="h-12 rounded-full bg-[var(--color-surface-secondary)]" />
         </div>
@@ -271,6 +272,7 @@ function ChatRoomPageContent() {
   const [isPlaceGalleryOpen, setIsPlaceGalleryOpen] = useState(false);
   const [hidePlaceSuggestions, setHidePlaceSuggestions] = useState(false);
   const [updatingPlaceSuggestionId, setUpdatingPlaceSuggestionId] = useState<string | null>(null);
+  const [sendingPlaceImageId, setSendingPlaceImageId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ChatAction>(null);
   const [leaveRoomOnSubmit, setLeaveRoomOnSubmit] = useState(false);
@@ -315,6 +317,7 @@ function ChatRoomPageContent() {
     setIsPlaceGalleryOpen(false);
     setHidePlaceSuggestions(false);
     setUpdatingPlaceSuggestionId(null);
+    setSendingPlaceImageId(null);
     setShowMenu(false);
     setConfirmAction(null);
     setLeaveRoomOnSubmit(false);
@@ -650,7 +653,8 @@ function ChatRoomPageContent() {
   const isBlockedRoom = isBlockedByMe || chat.status === 'blocked';
   const isRoomRestricted = isBlockedByMe || roomRestriction === 'reported' || chat.status === 'blocked';
   const isChatDisabled = isExpired || isRoomRestricted;
-  const hasVisiblePlaceSuggestions = placeSuggestions.some((suggestion) => suggestion.status !== 'dismissed');
+  const hasVisiblePlaceSuggestions = !hidePlaceSuggestions
+    && placeSuggestions.some((suggestion) => suggestion.status === 'pending');
   const chatContentPaddingClass = isChatDisabled
     ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+24px)]'
     : hasVisiblePlaceSuggestions && !isPlacePanelCollapsed
@@ -673,13 +677,14 @@ function ChatRoomPageContent() {
     }
 
     try {
-      const newMessage = await sendChatMessage(chatId, content);
+      const { message: newMessage, placeSuggestions: triggeredSuggestions } = await sendChatMessage(chatId, content);
       setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
       scrollToBottom();
       await refreshMessages({ forceScroll: true });
-      if (content.includes('인제우리')) {
+      if (triggeredSuggestions.length > 0) {
+        setPlaceSuggestions(triggeredSuggestions);
+        setHidePlaceSuggestions(false);
         setIsPlacePanelCollapsed(false);
-        await loadPlaceSuggestions({ silent: true });
       }
     } catch (error) {
       showToast(error instanceof Error ? error.message : '메시지를 보내지 못했습니다.', 'error');
@@ -703,7 +708,9 @@ function ChatRoomPageContent() {
 
         if (placeName) {
           const messageContent = `${placeName} 여기 어때요?`;
-          const newMessage = await sendChatMessage(chatId, messageContent);
+          const { message: newMessage } = await sendChatMessage(chatId, messageContent, {
+            suppressPlaceTrigger: true,
+          });
           setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
         }
 
@@ -717,6 +724,28 @@ function ChatRoomPageContent() {
       showToast(error instanceof Error ? error.message : '장소 추천을 처리하지 못했어요.', 'error');
     } finally {
       setUpdatingPlaceSuggestionId(null);
+    }
+  };
+
+  const handlePlaceImageSend = async (action: PlaceQuickImageAction) => {
+    if (isChatDisabled || sendingPlaceImageId) {
+      return;
+    }
+
+    setSendingPlaceImageId(action.id);
+
+    try {
+      const newMessage = await sendChatImageMessage(chatId, action.imageUrl);
+      setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
+      setIsPlacePanelCollapsed(true);
+      setHidePlaceSuggestions(true);
+      setPlaceSuggestions([]);
+      scrollToBottom();
+      await refreshMessages({ forceScroll: true });
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '이미지를 보내지 못했습니다.', 'error');
+    } finally {
+      setSendingPlaceImageId(null);
     }
   };
 
@@ -1027,17 +1056,26 @@ function ChatRoomPageContent() {
       </div>
 
       {!isChatDisabled && (
-        <div className="fixed bottom-[calc(78px+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
-        <div className="pointer-events-none absolute left-0 right-0 top-full h-[calc(78px+var(--spacing-safe-bottom))] bg-[var(--color-surface)]" aria-hidden="true" />
+        <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
+        <div className="pointer-events-none absolute left-0 right-0 top-full h-[calc(var(--nav-height)+var(--spacing-safe-bottom))] bg-[var(--color-surface)]" aria-hidden="true" />
         <div className="mx-auto max-w-[430px]">
           <PlaceSuggestionPanel
             suggestions={placeSuggestions}
             collapsed={isPlacePanelCollapsed}
             updatingSuggestionId={updatingPlaceSuggestionId}
+            sendingImageId={sendingPlaceImageId}
             onCollapsedChange={setIsPlacePanelCollapsed}
+            onDismiss={() => {
+              setHidePlaceSuggestions(true);
+              setIsPlacePanelCollapsed(false);
+              setPlaceSuggestions([]);
+            }}
             onGalleryOpenChange={setIsPlaceGalleryOpen}
             onSelect={(suggestionId) => {
               void handlePlaceSuggestionStatus(suggestionId, 'accepted');
+            }}
+            onSendImage={(action) => {
+              void handlePlaceImageSend(action);
             }}
           />
           <ChatInput

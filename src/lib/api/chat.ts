@@ -34,6 +34,20 @@ type PlaceSuggestionDto = {
   };
 };
 
+type SendChatMessageOptions = {
+  suppressPlaceTrigger?: boolean;
+};
+
+type SendChatMessageResponseDto = {
+  message: ChatMessageDto;
+  placeSuggestions?: PlaceSuggestionDto[];
+};
+
+export type SendChatMessageResult = {
+  message: Message;
+  placeSuggestions: ChatPlaceSuggestion[];
+};
+
 function normalizePlaceImageUrl(imageUrl: string | null): string | null {
   if (!imageUrl) return null;
 
@@ -103,8 +117,27 @@ export async function getChatMessages(roomId: string | number, cursor?: string |
   return [...data.messages].reverse().map((message) => mapChatMessage(message, String(roomId)));
 }
 
-export async function sendChatMessage(roomId: string | number, content: string): Promise<Message> {
-  const data = await apiPost<{ message: ChatMessageDto }>(`/api/chat-room/${roomId}/messages`, { content });
+export async function sendChatMessage(
+  roomId: string | number,
+  content: string,
+  options?: SendChatMessageOptions,
+): Promise<SendChatMessageResult> {
+  const data = await apiPost<SendChatMessageResponseDto>(`/api/chat-room/${roomId}/messages`, {
+    content,
+    ...(options?.suppressPlaceTrigger ? { suppressPlaceTrigger: true } : {}),
+  });
+
+  return {
+    message: mapChatMessage(data.message, String(roomId)),
+    placeSuggestions: (data.placeSuggestions ?? []).map(mapPlaceSuggestion),
+  };
+}
+
+export async function sendChatImageMessage(roomId: string | number, imageUrl: string): Promise<Message> {
+  const data = await apiPost<{ message: ChatMessageDto }>(`/api/chat-room/${roomId}/messages`, {
+    content: imageUrl,
+    type: 'image',
+  });
   return mapChatMessage(data.message, String(roomId));
 }
 

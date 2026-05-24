@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db/prisma";
 
-const HIDDEN_PLACE_NAMES = ["A동", "D동"];
+const HIDDEN_PLACE_NAMES = ["A동", "D동", "백곰", "코딩하는 백곰이"];
                 
 export async function findPlaces(filter?: { categoryCode?: string; tag?: string }) {
     return prisma.place.findMany({

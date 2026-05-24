@@ -23,6 +23,13 @@ interface ChatPreviewProps {
   onChanged?: () => void;
 }
 
+function getMessagePreview(chat: Chat): string {
+  const message = chat.lastMessage;
+  if (!message) return '';
+  if (message.type === 'image') return '사진을 보냈어요';
+  return message.content.trim();
+}
+
 function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onChanged }: ChatPreviewProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -44,8 +51,8 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
   const { hours, minutes, totalMinutes, isExpired } = getChatRemainingTime(chat);
   const isBlockedByMe = chat.blockedByMe === true;
   const isBlocked = chat.status === 'blocked' || isBlockedByMe;
-  const lastMessagePreview = chat.lastMessage?.content.trim() ?? '';
-  const expiredMessagePreview = lastMessagePreview || (chat.lastMessage?.type === 'image' ? '사진을 보냈어요' : '');
+  const lastMessagePreview = getMessagePreview(chat);
+  const expiredMessagePreview = lastMessagePreview;
   const remainingBadgeLabel = isBlocked ? (isBlockedByMe ? '차단' : '제한') : isExpired ? '0H' : `${Math.max(1, Math.ceil(totalMinutes / 60))}H`;
 
   const handleMenuClick = (e: React.MouseEvent) => {
@@ -235,7 +242,7 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
               </div>
             ) : chat.lastMessage ? (
               <p data-clarity-mask className={`truncate text-sm leading-6 ${chat.unreadCount > 0 ? 'font-semibold text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
-                {chat.lastMessage.content}
+                {lastMessagePreview}
               </p>
             ) : (
               <p className="text-sm text-[var(--color-text-tertiary)]">대화를 시작해 보세요</p>
