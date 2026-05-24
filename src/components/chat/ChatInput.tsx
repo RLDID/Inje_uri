@@ -3,7 +3,7 @@
 import { useRef, useState, FormEvent } from 'react';
 
 interface ChatInputProps {
-  onSend: (message: string) => void;
+  onSend: (message: string) => void | Promise<void>;
   disabled?: boolean;
   placeholder?: string;
 }
@@ -20,15 +20,27 @@ export function ChatInput({ onSend, disabled = false, placeholder = '메시지�
     syncMessage(textareaRef.current?.value ?? '');
   };
 
+  const keepTextareaFocused = () => {
+    const textarea = textareaRef.current;
+    if (!textarea || disabled) {
+      return;
+    }
+
+    textarea.focus({ preventScroll: true });
+  };
+
   const doSend = () => {
     const currentMessage = textareaRef.current?.value ?? message;
     const trimmed = currentMessage.trim();
 
     if (trimmed && !disabled) {
-      onSend(trimmed);
+      void Promise.resolve(onSend(trimmed)).finally(() => {
+        keepTextareaFocused();
+      });
       setMessage('');
       if (textareaRef.current) {
         textareaRef.current.value = '';
+        keepTextareaFocused();
       }
     }
   };
@@ -70,8 +82,15 @@ export function ChatInput({ onSend, disabled = false, placeholder = '메시지�
       </div>
 
       <button
-        type="submit"
+        type="button"
+        onPointerDown={(event) => {
+          if (!disabled) {
+            event.preventDefault();
+          }
+        }}
+        onClick={doSend}
         disabled={disabled}
+        aria-label="메시지 보내기"
         className="
           flex h-12 w-12 shrink-0 items-center justify-center rounded-full
           bg-[var(--color-action-primary)] text-white shadow-sm
