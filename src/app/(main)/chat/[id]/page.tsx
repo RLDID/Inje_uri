@@ -37,6 +37,8 @@ type ChatRoomRestriction = 'reported' | 'blocked' | null;
 
 const CHAT_ROOM_RESTRICTION_PREFIX = 'chat-room:restriction:';
 const CHAT_ROOM_REPORTED_PREFIX = 'chat-room:reported:';
+const MESSAGE_PAGE_SIZE = 30;
+const OLD_MESSAGE_SCROLL_THRESHOLD = 120;
 
 function ChatRoomSkeleton() {
   return (
@@ -145,6 +147,19 @@ function mergeMessagesById(currentMessages: Message[], nextMessages: Message[]):
   return sortMessages([...messageMap.values()]);
 }
 
+function getMessageNumericId(message: Message): number | null {
+  const numericId = Number(message.id);
+  return Number.isSafeInteger(numericId) && numericId > 0 ? numericId : null;
+}
+
+function getOldestServerMessageId(messages: Message[]): number | null {
+  const ids = messages
+    .map(getMessageNumericId)
+    .filter((id): id is number => id !== null);
+
+  return ids.length > 0 ? Math.min(...ids) : null;
+}
+
 function getLastReadableMessage(messages: Message[]): Message | undefined {
   return messages
     .filter((message) => message.type !== 'system')
@@ -237,6 +252,8 @@ function ChatRoomPageContent() {
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoadingRoom, setIsLoadingRoom] = useState(true);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
   const [placeSuggestions, setPlaceSuggestions] = useState<ChatPlaceSuggestion[]>([]);
   const [isPlacePanelCollapsed, setIsPlacePanelCollapsed] = useState(false);
   const [isPlaceGalleryOpen, setIsPlaceGalleryOpen] = useState(false);
@@ -261,6 +278,8 @@ function ChatRoomPageContent() {
   const didInitialScrollRef = useRef(false);
   const trackedChatOpenIdRef = useRef<string | null>(null);
   const lastReadMessageIdRef = useRef<string | null>(null);
+  const lastScrollYRef = useRef(0);
+  const isLoadingOlderMessagesRef = useRef(false);
 
   const otherParticipant = currentUser
     ? chat?.participants.find((participant) => participant.user.id !== currentUser.id)
@@ -273,6 +292,16 @@ function ChatRoomPageContent() {
       messagesEndRef.current?.scrollIntoView({ behavior });
     });
   }, []);
+
+  useEffect(() => {
+    didInitialScrollRef.current = false;
+    trackedChatOpenIdRef.current = null;
+    lastReadMessageIdRef.current = null;
+    lastScrollYRef.current = 0;
+    isLoadingOlderMessagesRef.current = false;
+    setIsLoadingOlderMessages(false);
+    setHasMoreOlderMessages(false);
+  }, [chatId]);
 
   const applyLoadedMessages = useCallback((
     nextMessages: Message[],
@@ -311,13 +340,16 @@ function ChatRoomPageContent() {
       const me = await getMe();
       const room = await getChatRoom(chatId, me);
       const shouldHideMessages = room?.blockedByMe === true;
-      const roomMessages = room && !shouldHideMessages ? await getChatMessages(chatId) : [];
+      const roomMessages = room && !shouldHideMessages ? await getChatMessages(chatId, undefined, MESSAGE_PAGE_SIZE) : [];
       const normalizedMessages = room && !shouldHideMessages ? normalizeChatMessages(room, roomMessages) : [];
 
       setCurrentUser((prevUser) => (isSameUserShell(prevUser, me) ? prevUser : me));
       setChat((prevChat) => (
         getChatShellSignature(prevChat) === getChatShellSignature(room) ? prevChat : room
       ));
+      if (!isSilent) {
+        setHasMoreOlderMessages(!shouldHideMessages && roomMessages.length === MESSAGE_PAGE_SIZE);
+      }
       applyLoadedMessages(normalizedMessages, {
         merge: isSilent,
         forceScroll: options?.forceScroll,
@@ -328,6 +360,7 @@ function ChatRoomPageContent() {
         setCurrentUser(null);
         setChat(null);
         setMessages([]);
+        setHasMoreOlderMessages(false);
       }
     } finally {
       if (!isSilent) {
@@ -342,7 +375,7 @@ function ChatRoomPageContent() {
     }
 
     try {
-      const roomMessages = await getChatMessages(chatId);
+      const roomMessages = await getChatMessages(chatId, undefined, MESSAGE_PAGE_SIZE);
       const normalizedMessages = chat ? normalizeChatMessages(chat, roomMessages) : roomMessages;
       applyLoadedMessages(normalizedMessages, {
         merge: true,
@@ -352,6 +385,54 @@ function ChatRoomPageContent() {
       // Keep the current messages during background polling; the next tick can retry.
     }
   }, [applyLoadedMessages, chat, chatId, roomRestriction]);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (
+      !chat ||
+      chat.blockedByMe === true ||
+      roomRestriction === 'blocked' ||
+      !hasMoreOlderMessages ||
+      isLoadingOlderMessagesRef.current
+    ) {
+      return;
+    }
+
+    const cursor = getOldestServerMessageId(messages);
+    if (cursor === null) {
+      setHasMoreOlderMessages(false);
+      return;
+    }
+
+    isLoadingOlderMessagesRef.current = true;
+    setIsLoadingOlderMessages(true);
+
+    const previousScrollHeight = document.documentElement.scrollHeight;
+    const previousScrollY = window.scrollY;
+
+    try {
+      const olderMessages = await getChatMessages(chatId, cursor, MESSAGE_PAGE_SIZE);
+      setHasMoreOlderMessages(olderMessages.length === MESSAGE_PAGE_SIZE);
+
+      if (olderMessages.length === 0) {
+        return;
+      }
+
+      setMessages((prevMessages) => mergeMessagesById(prevMessages, olderMessages));
+
+      window.requestAnimationFrame(() => {
+        const nextScrollHeight = document.documentElement.scrollHeight;
+        window.scrollTo({
+          top: previousScrollY + (nextScrollHeight - previousScrollHeight),
+          behavior: 'auto',
+        });
+      });
+    } catch {
+      // Keep the current page stable; the user can scroll to the top again to retry.
+    } finally {
+      isLoadingOlderMessagesRef.current = false;
+      setIsLoadingOlderMessages(false);
+    }
+  }, [chat, chatId, hasMoreOlderMessages, messages, roomRestriction]);
 
   const loadPlaceSuggestions = useCallback(async (options?: { silent?: boolean }) => {
     if (chat?.blockedByMe === true || roomRestriction === 'blocked') {
@@ -389,6 +470,30 @@ function ChatRoomPageContent() {
     enabled: Boolean(chat && !isPlaceGalleryOpen),
     immediate: false,
   });
+
+  useEffect(() => {
+    if (!chat || isLoadingRoom || isPlaceGalleryOpen) {
+      return;
+    }
+
+    lastScrollYRef.current = window.scrollY;
+
+    const handleScroll = () => {
+      const nextScrollY = window.scrollY;
+      const isScrollingUp = nextScrollY < lastScrollYRef.current - 8;
+      lastScrollYRef.current = nextScrollY;
+
+      if (isScrollingUp && nextScrollY <= OLD_MESSAGE_SCROLL_THRESHOLD) {
+        void loadOlderMessages();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+    };
+  }, [chat, isLoadingRoom, isPlaceGalleryOpen, loadOlderMessages]);
 
   usePolling(() => loadPlaceSuggestions({ silent: true }), {
     intervalMs: 5000,
@@ -647,6 +752,7 @@ function ChatRoomPageContent() {
       writeSessionValue(getChatRoomRestrictionKey(chat.id), 'blocked');
       setRoomRestriction('blocked');
       setMessages([]);
+      setHasMoreOlderMessages(false);
       lastReadMessageIdRef.current = null;
       setChat((prevChat) => (
         prevChat
@@ -871,6 +977,13 @@ function ChatRoomPageContent() {
         )}
 
         <div className="px-4 pt-4">
+          {isLoadingOlderMessages && (
+            <div className="mb-3 flex justify-center">
+              <div className="rounded-full bg-[var(--color-surface-secondary)] px-3 py-1.5 text-xs font-medium text-[var(--color-text-tertiary)]">
+                이전 메시지를 불러오는 중...
+              </div>
+            </div>
+          )}
           {messages
             .filter((message) => !isChatStartedSystemMessage(message))
             .map((message) => (

@@ -44,6 +44,8 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
   const { hours, minutes, totalMinutes, isExpired } = getChatRemainingTime(chat);
   const isBlockedByMe = chat.blockedByMe === true;
   const isBlocked = chat.status === 'blocked' || isBlockedByMe;
+  const lastMessagePreview = chat.lastMessage?.content.trim() ?? '';
+  const expiredMessagePreview = lastMessagePreview || (chat.lastMessage?.type === 'image' ? '사진을 보냈어요' : '');
   const remainingBadgeLabel = isBlocked ? (isBlockedByMe ? '차단' : '제한') : isExpired ? '0H' : `${Math.max(1, Math.ceil(totalMinutes / 60))}H`;
 
   const handleMenuClick = (e: React.MouseEvent) => {
@@ -223,7 +225,14 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
                 {isBlockedByMe ? '차단한 사용자입니다' : '대화가 제한되었어요'}
               </p>
             ) : isExpired ? (
-              <p className="text-sm text-[var(--color-text-tertiary)]">대화 시간이 만료되었어요</p>
+              <div className="flex min-w-0 items-center gap-1.5 text-sm leading-6">
+                <span className="shrink-0 rounded bg-[var(--color-surface-secondary)] px-1.5 py-0.5 text-[11px] font-semibold text-[var(--color-text-tertiary)]">
+                  만료됨
+                </span>
+                <span data-clarity-mask={expiredMessagePreview ? true : undefined} className="truncate text-[var(--color-text-secondary)]">
+                  {expiredMessagePreview || '대화 시간이 만료되었어요'}
+                </span>
+              </div>
             ) : chat.lastMessage ? (
               <p data-clarity-mask className={`truncate text-sm leading-6 ${chat.unreadCount > 0 ? 'font-semibold text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
                 {chat.lastMessage.content}
