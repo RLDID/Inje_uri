@@ -91,8 +91,9 @@ export async function getChatRooms(currentUser: User | null, tab: 'all' | 'unrea
   return data.rooms.map((room) => mapChatListItem(room, currentUser));
 }
 
-export async function getChatRoom(roomId: string | number) {
-  return apiGet(`/api/chat-room/${roomId}`);
+export async function getChatRoom(roomId: string | number, currentUser: User | null): Promise<Chat> {
+  const data = await apiGet<{ room: ChatRoomListItemDto }>(`/api/chat-room/${roomId}`);
+  return mapChatListItem(data.room, currentUser);
 }
 
 export async function getChatMessages(roomId: string | number, cursor?: string | number, limit = 30): Promise<Message[]> {

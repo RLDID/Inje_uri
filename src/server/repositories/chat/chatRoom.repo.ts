@@ -118,6 +118,18 @@
             },
           },
         },
+        messages: {
+          where: { deleted_at: null },
+          orderBy: { created_at: "desc" },
+          take: 1,
+          select: {
+            id: true,
+            content: true,
+            type: true,
+            created_at: true,
+            sender_user_id: true,
+          },
+        },
       },
     });
   }

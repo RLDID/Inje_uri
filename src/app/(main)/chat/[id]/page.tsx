@@ -17,8 +17,8 @@ import {
 } from '@/lib/utils/chat';
 import {
   getChatRoomPlaceSuggestions,
+  getChatRoom,
   getChatMessages,
-  getChatRooms,
   leaveChatRoom,
   markChatRoomRead,
   sendChatMessage,
@@ -309,8 +309,7 @@ function ChatRoomPageContent() {
 
     try {
       const me = await getMe();
-      const rooms = await getChatRooms(me);
-      const room = rooms.find((item) => item.id === chatId) ?? null;
+      const room = await getChatRoom(chatId, me);
       const shouldHideMessages = room?.blockedByMe === true;
       const roomMessages = room && !shouldHideMessages ? await getChatMessages(chatId) : [];
       const normalizedMessages = room && !shouldHideMessages ? normalizeChatMessages(room, roomMessages) : [];

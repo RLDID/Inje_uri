@@ -208,8 +208,10 @@ export async function getChatRooms(
     return result;
   }
 
+  type ChatRoomForListItem = Awaited<ReturnType<typeof chatRoomRepo.findRoomsByUserId>>[number];
+
   function toChatRoomListItemDto(
-    room: Awaited<ReturnType<typeof chatRoomRepo.findRoomsByUserId>>[number],
+    room: ChatRoomForListItem,
     currentUserId: number,
     unreadCount: number,
     blockedByMe: boolean,
@@ -253,17 +255,34 @@ export async function getChatRooms(
     const room = await chatRoomRepo.findRoomById(roomId);
     if (!room) return { error: ERROR.NOT_FOUND } as const;
 
-    let isParticipant = false;
+    let me: (typeof room.participants)[number] | null = null;
     for (const p of room.participants) {
       if (p.user_id === userId) {
-        isParticipant = true;
+        me = p;
         break;
       }
     }
-    if (!isParticipant) return { error: ERROR.FORBIDDEN } as
+    if (!me || me.left_at !== null) return { error: ERROR.FORBIDDEN } as
   const;
 
-    return { room };
+    const other = room.participants.find((participant) => participant.user_id !== userId);
+    if (other && room.status === "blocked") {
+      await chatRoomRepo.restoreBlockedRoomsBetweenUsers(userId, other.user_id);
+      room.status = room.expires_at > new Date() ? "active" : "expired";
+      room.blocked_by_user_id = null;
+    }
+
+    let blockedByMe = false;
+    if (other) {
+      const block = await safetyRepo.findExistingBlock(userId, other.user_id);
+      blockedByMe = Boolean(block && !block.unblocked_at);
+    }
+
+    const unreadCount = blockedByMe || room.status === "blocked"
+      ? 0
+      : await messageReadRepo.getUnreadCount(userId, room.id);
+
+    return { room: toChatRoomListItemDto(room, userId, unreadCount, blockedByMe) };
   }
   
 
