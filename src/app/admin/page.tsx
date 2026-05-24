@@ -52,6 +52,8 @@ interface AdminSupportInquiryListDto {
   totalPages: number;
 }
 
+const SHOW_RECOMMENDATION_RESET_BUTTON = false;
+
 const ADMIN_SECTIONS: Array<{ value: AdminSection; label: string }> = [
   { value: 'reports', label: '신고 관리' },
   { value: 'support', label: '문의 관리' },
@@ -846,16 +848,18 @@ export default function AdminPage() {
             <h1 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">운영 관리</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              variant="danger"
-              size="sm"
-              loading={isResettingRecommendations}
-              disabled={isLoadingReports || isLoadingInquiries}
-              onClick={() => setIsResetConfirmOpen(true)}
-            >
-              추천 초기화
-            </Button>
+            {SHOW_RECOMMENDATION_RESET_BUTTON && (
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                loading={isResettingRecommendations}
+                disabled={isLoadingReports || isLoadingInquiries}
+                onClick={() => setIsResetConfirmOpen(true)}
+              >
+                추천 초기화
+              </Button>
+            )}
             <Button
               type="button"
               variant="secondary"
@@ -1030,7 +1034,7 @@ export default function AdminPage() {
       </div>
 
       <ConfirmSheet
-        isOpen={isResetConfirmOpen}
+        isOpen={SHOW_RECOMMENDATION_RESET_BUTTON && isResetConfirmOpen}
         onClose={() => {
           if (!isResettingRecommendations) {
             setIsResetConfirmOpen(false);
