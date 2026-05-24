@@ -133,13 +133,15 @@
   export async function findActiveRoomBetweenUsers(
     userIdA: number,
     userIdB: number,
-    tx?: PrismaTransactionClient
+    tx?: PrismaTransactionClient,
+    sourceType?: chat_room_source_type,
   ) {
     const db = tx ?? prisma;
     return db.chatRoom.findFirst({
       where: {
         status: "active",
         expires_at: { gt: new Date() },
+        ...(sourceType ? { source_type: sourceType } : {}),
         AND: [
           { participants: { some: { user_id: userIdA, left_at: null } } },
           { participants: { some: { user_id: userIdB, left_at: null } } },
@@ -161,11 +163,13 @@
   export async function findLastLeftRoomBetweenUsers(
     userIdA: number,
     userIdB: number,
-    tx?: PrismaTransactionClient
+    tx?: PrismaTransactionClient,
+    sourceType?: chat_room_source_type,
   ) {
     const db = tx ?? prisma;
     return db.chatRoom.findFirst({
       where: {
+        ...(sourceType ? { source_type: sourceType } : {}),
         AND: [
           { participants: { some: { user_id: userIdA } } }, //A가 이방 참여
           { participants: { some: { user_id: userIdB } } }, //B가 이방 참여

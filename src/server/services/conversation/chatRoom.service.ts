@@ -55,14 +55,23 @@
     }
 
     // 2. active 중복 확인
-    const existing = await
-  chatRoomRepo.findActiveRoomBetweenUsers(requestUserId, targetUserId, input.tx);
+    const existing = await chatRoomRepo.findActiveRoomBetweenUsers(
+      requestUserId,
+      targetUserId,
+      input.tx,
+      sourceType,
+    );
     if (existing) {
       return { error: ERROR.DUPLICATE_ACTIVE_ROOM } as const;
     }
 
     // 2. 재매칭 7일 정책
-    const lastLeft = await chatRoomRepo.findLastLeftRoomBetweenUsers(requestUserId, targetUserId, input.tx);
+    const lastLeft = await chatRoomRepo.findLastLeftRoomBetweenUsers(
+      requestUserId,
+      targetUserId,
+      input.tx,
+      sourceType,
+    );
     if (lastLeft) {
       let latestLeftAt: Date | null = null;
 
