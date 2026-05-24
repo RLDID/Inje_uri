@@ -23,6 +23,7 @@ const FEED_REACTION_NOTIFICATION_KEYS = {
   baselineSet: 'feed-reaction:baseline-set',
   bannerDismissed: 'feed-reaction:banner-dismissed',
 } as const;
+const CHAT_ROOM_PATH_PREFIXES = ['/chat/', '/p/q91mz/'] as const;
 
 interface FeedReactionNotificationGroup {
   storyId: string;
@@ -71,6 +72,20 @@ function getFeedReactionBaselineKey(storyId: string): string {
 
 function getFeedReactionNotificationKey(item: FeedReactionNotificationItem): string {
   return `${FEED_REACTION_NOTIFICATION_KEYS.bannerDismissed}:${item.storyId}:${item.reaction.id}`;
+}
+
+function getCurrentChatRoomId(pathname: string | null | undefined): string | null {
+  if (!pathname) {
+    return null;
+  }
+
+  const prefix = CHAT_ROOM_PATH_PREFIXES.find((pathPrefix) => pathname.startsWith(pathPrefix));
+  if (!prefix) {
+    return null;
+  }
+
+  const chatId = pathname.slice(prefix.length).split('/')[0];
+  return chatId || null;
 }
 
 function getUnreadChatNotificationCopy(chat: Chat, currentUserId?: string) {
@@ -139,7 +154,8 @@ export function ChatExpiryNotifier() {
   const [dismissedUnreadBannerKey, setDismissedUnreadBannerKey] = useState<string | null>(null);
   const [dismissedFeedReactionBannerKey, setDismissedFeedReactionBannerKey] = useState<string | null>(null);
   const hasBootstrappedFeedReactionsRef = useRef(false);
-  const isChatRoom = pathname?.startsWith('/chat/') ?? false;
+  const currentChatId = getCurrentChatRoomId(pathname);
+  const isChatRoom = currentChatId !== null;
   const isMyPostsRoute = Boolean(
     pathname?.startsWith('/my/posts')
     || pathname?.startsWith('/p/m6y2p/posts')
@@ -228,7 +244,6 @@ export function ChatExpiryNotifier() {
     immediate: true,
   });
 
-  const currentChatId = pathname?.startsWith('/chat/') ? pathname.split('/')[2] ?? null : null;
   const unreadChats = useMemo(
     () => chats
       .filter((chat) => (
