@@ -9,6 +9,9 @@ const JOB_NAME = "daily_recommendations";
 function getKSTDateString(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (kst.getUTCHours() < 9) {
+    kst.setUTCDate(kst.getUTCDate() - 1);
+  }
   return kst.toISOString().split("T")[0];
 }
 
@@ -50,6 +53,7 @@ export async function runDailyRecommendationJobIfNeeded(): Promise<void> {
     });
 
     let success = 0;
+    let skipped = 0;
     let failed = 0;
 
     try {
@@ -69,8 +73,12 @@ export async function runDailyRecommendationJobIfNeeded(): Promise<void> {
 
       for (const user of targets) {
         try {
-          await generateRecommendationsForUser(user.id, today);
-          success++;
+          const result = await generateRecommendationsForUser(user.id, today);
+          if (result.generated) {
+            success++;
+          } else {
+            skipped++;
+          }
         } catch (e) {
           console.error("[dailyRecommendation.job] 유저 추천 생성 실패:", user.id, e);
           failed++;
@@ -83,7 +91,7 @@ export async function runDailyRecommendationJobIfNeeded(): Promise<void> {
         data: {
           ended_at: new Date(),
           status: "success",
-          summary: `total: ${targets.length}, success: ${success}, failed: ${failed}`,
+          summary: `total: ${targets.length}, success: ${success}, skipped: ${skipped}, failed: ${failed}`,
         },
       });
     } catch (err) {

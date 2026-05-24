@@ -6,19 +6,23 @@ import Image from 'next/image';
 import { PageContainer } from '@/components/layout';
 import { ChatBubble } from '@/components/chat/ChatBubble';
 import { ChatInput } from '@/components/chat/ChatInput';
+import { PlaceSuggestionPanel } from '@/components/chat/PlaceSuggestionPanel';
 import { BottomSheet, Button, CenteredModal, useToast } from '@/components/ui';
 import {
   createChatExpiringSystemMessage,
+  CHAT_UNREAD_REFRESH_EVENT,
   getChatExpirySessionKey,
   getChatRemainingTime,
   normalizeChatMessages,
 } from '@/lib/utils/chat';
 import {
+  getChatRoomPlaceSuggestions,
   getChatMessages,
   getChatRooms,
   leaveChatRoom,
   markChatRoomRead,
   sendChatMessage,
+  updateChatRoomPlaceSuggestionStatus,
 } from '@/lib/api/chat';
 import { getMe } from '@/lib/api/profile';
 import { blockUser, reportTarget } from '@/lib/api/safety';
@@ -26,13 +30,56 @@ import { trackChatOpened } from '@/lib/analytics';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { usePolling } from '@/lib/hooks/usePolling';
 import { buildProfileDetailHref, useCurrentRouteContext, useSafeBack } from '@/lib/navigation';
-import type { Chat, Message, User } from '@/lib/types';
+import type { Chat, ChatPlaceSuggestion, Message, PlaceSuggestionStatus, User } from '@/lib/types';
 
 type ChatAction = 'leave' | 'block' | 'report' | null;
 type ChatRoomRestriction = 'reported' | 'blocked' | null;
 
 const CHAT_ROOM_RESTRICTION_PREFIX = 'chat-room:restriction:';
 const CHAT_ROOM_REPORTED_PREFIX = 'chat-room:reported:';
+
+function ChatRoomSkeleton() {
+  return (
+    <PageContainer withBottomNav={true}>
+      <header className="fixed left-0 right-0 top-0 z-40 border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+        <div className="mx-auto flex min-h-[76px] max-w-[430px] animate-pulse items-center gap-2 px-3 py-3 sm:px-4">
+          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-4 w-24 rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="h-3 w-16 rounded-full bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+        </div>
+      </header>
+
+      <div className="animate-pulse px-4 pt-[100px]">
+        <div className="mx-auto mb-8 h-[112px] w-[184px] rounded-[32px] bg-[var(--color-surface-secondary)]" />
+
+        <div className="space-y-4">
+          <div className="flex justify-start">
+            <div className="h-11 w-3/5 rounded-2xl bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="flex justify-end">
+            <div className="h-11 w-1/2 rounded-2xl bg-[var(--color-brand-pink)]/55" />
+          </div>
+          <div className="flex justify-start">
+            <div className="h-16 w-4/5 rounded-2xl bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="flex justify-end">
+            <div className="h-11 w-2/3 rounded-2xl bg-[var(--color-brand-pink)]/55" />
+          </div>
+        </div>
+      </div>
+
+      <div className="fixed bottom-[calc(78px+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
+        <div className="mx-auto max-w-[430px] animate-pulse px-4 py-3">
+          <div className="h-12 rounded-full bg-[var(--color-surface-secondary)]" />
+        </div>
+      </div>
+    </PageContainer>
+  );
+}
 
 function getChatRoomRestrictionKey(chatId: string): string {
   return `${CHAT_ROOM_RESTRICTION_PREFIX}${chatId}`;
@@ -136,6 +183,7 @@ function getChatShellSignature(chat: Chat | null): string {
   return [
     chat.id,
     chat.status,
+    chat.blockedByMe === true ? 'blockedByMe' : '',
     chat.chatType,
     getDateTime(chat.createdAt),
     getDateTime(chat.expiresAt),
@@ -152,6 +200,31 @@ function isSameUserShell(left: User | null, right: User): boolean {
   );
 }
 
+function getPlaceSuggestionSignature(suggestion: ChatPlaceSuggestion): string {
+  return [
+    suggestion.id,
+    suggestion.roomId,
+    suggestion.placeId,
+    suggestion.status,
+    suggestion.triggeredKeyword ?? '',
+    suggestion.suggestedAt.toISOString(),
+    suggestion.place.name,
+    suggestion.place.imageUrl ?? '',
+    suggestion.place.category.code,
+    suggestion.place.category.name,
+  ].join('::');
+}
+
+function areSamePlaceSuggestions(left: ChatPlaceSuggestion[], right: ChatPlaceSuggestion[]): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((suggestion, index) => (
+    getPlaceSuggestionSignature(suggestion) === getPlaceSuggestionSignature(right[index])
+  ));
+}
+
 function ChatRoomPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -163,9 +236,16 @@ function ChatRoomPageContent() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [chat, setChat] = useState<Chat | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [isLoadingRoom, setIsLoadingRoom] = useState(true);
+  const [placeSuggestions, setPlaceSuggestions] = useState<ChatPlaceSuggestion[]>([]);
+  const [isPlacePanelCollapsed, setIsPlacePanelCollapsed] = useState(false);
+  const [isPlaceGalleryOpen, setIsPlaceGalleryOpen] = useState(false);
+  const [hidePlaceSuggestions, setHidePlaceSuggestions] = useState(false);
+  const [updatingPlaceSuggestionId, setUpdatingPlaceSuggestionId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ChatAction>(null);
   const [leaveRoomOnSubmit, setLeaveRoomOnSubmit] = useState(false);
+  const [reportDescription, setReportDescription] = useState('');
   const [imgError, setImgError] = useState(false);
   const [roomRestriction, setRoomRestriction] = useState<ChatRoomRestriction>(null);
   const [hasReportedRoom, setHasReportedRoom] = useState(false);
@@ -206,8 +286,13 @@ function ChatRoomPageContent() {
     ));
 
     if (lastMessage && lastReadMessageIdRef.current !== lastMessage.id) {
-      lastReadMessageIdRef.current = lastMessage.id;
-      void markChatRoomRead(chatId, lastMessage.id);
+      const nextReadMessageId = lastMessage.id;
+      lastReadMessageIdRef.current = nextReadMessageId;
+      void markChatRoomRead(chatId, nextReadMessageId).catch(() => {
+        if (lastReadMessageIdRef.current === nextReadMessageId) {
+          lastReadMessageIdRef.current = null;
+        }
+      });
     }
 
     if (!didInitialScrollRef.current || shouldScrollAfterLoad) {
@@ -218,13 +303,17 @@ function ChatRoomPageContent() {
 
   const loadRoom = useCallback(async (options?: { silent?: boolean; forceScroll?: boolean }) => {
     const isSilent = Boolean(options?.silent);
+    if (!isSilent) {
+      setIsLoadingRoom(true);
+    }
 
     try {
       const me = await getMe();
       const rooms = await getChatRooms(me);
       const room = rooms.find((item) => item.id === chatId) ?? null;
-      const roomMessages = room ? await getChatMessages(chatId) : [];
-      const normalizedMessages = room ? normalizeChatMessages(room, roomMessages) : roomMessages;
+      const shouldHideMessages = room?.blockedByMe === true;
+      const roomMessages = room && !shouldHideMessages ? await getChatMessages(chatId) : [];
+      const normalizedMessages = room && !shouldHideMessages ? normalizeChatMessages(room, roomMessages) : [];
 
       setCurrentUser((prevUser) => (isSameUserShell(prevUser, me) ? prevUser : me));
       setChat((prevChat) => (
@@ -241,10 +330,18 @@ function ChatRoomPageContent() {
         setChat(null);
         setMessages([]);
       }
+    } finally {
+      if (!isSilent) {
+        setIsLoadingRoom(false);
+      }
     }
   }, [applyLoadedMessages, chatId]);
 
   const refreshMessages = useCallback(async (options?: { forceScroll?: boolean }) => {
+    if (chat?.blockedByMe === true || roomRestriction === 'blocked') {
+      return;
+    }
+
     try {
       const roomMessages = await getChatMessages(chatId);
       const normalizedMessages = chat ? normalizeChatMessages(chat, roomMessages) : roomMessages;
@@ -255,21 +352,49 @@ function ChatRoomPageContent() {
     } catch {
       // Keep the current messages during background polling; the next tick can retry.
     }
-  }, [applyLoadedMessages, chat, chatId]);
+  }, [applyLoadedMessages, chat, chatId, roomRestriction]);
+
+  const loadPlaceSuggestions = useCallback(async (options?: { silent?: boolean }) => {
+    if (chat?.blockedByMe === true || roomRestriction === 'blocked') {
+      setPlaceSuggestions((prevSuggestions) => (prevSuggestions.length === 0 ? prevSuggestions : []));
+      return;
+    }
+
+    if (hidePlaceSuggestions) {
+      return;
+    }
+
+    try {
+      const suggestions = await getChatRoomPlaceSuggestions(chatId);
+      setPlaceSuggestions((prevSuggestions) => (
+        areSamePlaceSuggestions(prevSuggestions, suggestions) ? prevSuggestions : suggestions
+      ));
+    } catch {
+      if (!options?.silent) {
+        setPlaceSuggestions((prevSuggestions) => (prevSuggestions.length === 0 ? prevSuggestions : []));
+      }
+    }
+  }, [chat?.blockedByMe, chatId, hidePlaceSuggestions, roomRestriction]);
 
   usePolling(() => loadRoom({
     silent: didInitialScrollRef.current,
     forceScroll: !didInitialScrollRef.current,
   }), {
     intervalMs: 30000,
-    enabled: Boolean(chatId),
+    enabled: Boolean(chatId && !isPlaceGalleryOpen),
     immediate: true,
   });
 
   usePolling(() => refreshMessages(), {
     intervalMs: 3000,
-    enabled: Boolean(chat),
+    enabled: Boolean(chat && !isPlaceGalleryOpen),
     immediate: false,
+  });
+
+  usePolling(() => loadPlaceSuggestions({ silent: true }), {
+    intervalMs: 5000,
+    enabled: Boolean(chat && chat.blockedByMe !== true && roomRestriction !== 'blocked' && !hidePlaceSuggestions && !isPlaceGalleryOpen),
+    immediate: true,
   });
 
   useEffect(() => {
@@ -297,7 +422,13 @@ function ChatRoomPageContent() {
 
     const storedRestriction = readSessionValue(getChatRoomRestrictionKey(chat.id));
     const storedReported = readSessionValue(getChatRoomReportedKey(chat.id));
-    setRoomRestriction(storedRestriction === 'blocked' || storedRestriction === 'reported' ? storedRestriction : null);
+    setRoomRestriction(
+      chat.blockedByMe === true
+        ? 'blocked'
+        : storedRestriction === 'reported'
+          ? 'reported'
+          : null,
+    );
     setHasReportedRoom(storedReported === 'true' || storedRestriction === 'reported');
     }, 0);
 
@@ -374,6 +505,10 @@ function ChatRoomPageContent() {
     router.push('/chat');
   }, [chat, roomRestriction, router, showToast, timeInfo.isExpired]);
 
+  if (isLoadingRoom) {
+    return <ChatRoomSkeleton />;
+  }
+
   if (!currentUser || !chat || !otherUser) {
     return (
       <PageContainer withBottomNav={false}>
@@ -385,9 +520,18 @@ function ChatRoomPageContent() {
   }
 
   const { isExpired, isExpiringSoon, timeLabel } = timeInfo;
-  const isBlockedRoom = roomRestriction === 'blocked' || chat.status === 'blocked';
-  const isRoomRestricted = roomRestriction === 'blocked' || roomRestriction === 'reported' || chat.status === 'blocked';
+  const isBlockedByMe = roomRestriction === 'blocked' || chat.blockedByMe === true;
+  const isBlockedRoom = isBlockedByMe || chat.status === 'blocked';
+  const isRoomRestricted = isBlockedByMe || roomRestriction === 'reported' || chat.status === 'blocked';
   const isChatDisabled = isExpired || isRoomRestricted;
+  const hasVisiblePlaceSuggestions = placeSuggestions.some((suggestion) => suggestion.status !== 'dismissed');
+  const chatContentPaddingClass = isChatDisabled
+    ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+24px)]'
+    : hasVisiblePlaceSuggestions && !isPlacePanelCollapsed
+      ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+240px)]'
+      : hasVisiblePlaceSuggestions
+        ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+64px)]'
+        : 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+0px)]';
 
   const openProfileDetail = () => {
     router.push(buildProfileDetailHref(otherUser.id, 'chat', {
@@ -407,8 +551,46 @@ function ChatRoomPageContent() {
       setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
       scrollToBottom();
       await refreshMessages({ forceScroll: true });
+      if (content.includes('인제우리')) {
+        setIsPlacePanelCollapsed(false);
+        await loadPlaceSuggestions({ silent: true });
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : '메시지를 보내지 못했습니다.', 'error');
+    }
+  };
+
+  const handlePlaceSuggestionStatus = async (suggestionId: string, status: PlaceSuggestionStatus) => {
+    setUpdatingPlaceSuggestionId(suggestionId);
+    const targetSuggestion = placeSuggestions.find((suggestion) => suggestion.id === suggestionId);
+
+    try {
+      const updatedSuggestion = await updateChatRoomPlaceSuggestionStatus(chatId, suggestionId, status);
+      setPlaceSuggestions((prevSuggestions) => (
+        prevSuggestions.map((suggestion) => (
+          suggestion.id === updatedSuggestion.id ? updatedSuggestion : suggestion
+        ))
+      ));
+      if (status === 'accepted') {
+        const resolvedSuggestion = targetSuggestion ?? updatedSuggestion;
+        const placeName = resolvedSuggestion?.place?.name;
+
+        if (placeName) {
+          const messageContent = `${placeName} 여기 어때요?`;
+          const newMessage = await sendChatMessage(chatId, messageContent);
+          setMessages((prevMessages) => sortMessages([...prevMessages, newMessage]));
+        }
+
+        setIsPlacePanelCollapsed(true);
+        setHidePlaceSuggestions(true);
+        setPlaceSuggestions([]);
+        scrollToBottom();
+      }
+      showToast(status === 'accepted' ? '추천 장소로 표시했어요.' : '장소 추천을 숨겼어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '장소 추천을 처리하지 못했어요.', 'error');
+    } finally {
+      setUpdatingPlaceSuggestionId(null);
     }
   };
 
@@ -439,12 +621,14 @@ function ChatRoomPageContent() {
   const closeConfirm = () => {
     setConfirmAction(null);
     setLeaveRoomOnSubmit(false);
+    setReportDescription('');
   };
 
   const confirmActionHandler = async () => {
     if (confirmAction === 'leave') {
       try {
         await leaveChatRoom(chat.id);
+        window.dispatchEvent(new Event(CHAT_UNREAD_REFRESH_EVENT));
         closeConfirm();
         router.push('/chat');
       } catch (error) {
@@ -461,6 +645,16 @@ function ChatRoomPageContent() {
         return;
       }
       showToast('상대방을 차단했어요.', 'success');
+      writeSessionValue(getChatRoomRestrictionKey(chat.id), 'blocked');
+      setRoomRestriction('blocked');
+      setMessages([]);
+      lastReadMessageIdRef.current = null;
+      setChat((prevChat) => (
+        prevChat
+          ? { ...prevChat, blockedByMe: true, unreadCount: 0 }
+          : prevChat
+      ));
+      window.dispatchEvent(new Event(CHAT_UNREAD_REFRESH_EVENT));
 
       if (leaveRoomOnSubmit) {
         try {
@@ -473,18 +667,23 @@ function ChatRoomPageContent() {
         return;
       }
 
-      writeSessionValue(getChatRoomRestrictionKey(chat.id), 'blocked');
-      setRoomRestriction('blocked');
       closeConfirm();
       return;
     }
 
     if (confirmAction === 'report') {
+      const description = reportDescription.trim();
+      if (!description) {
+        showToast('신고 사유를 입력해주세요.', 'error');
+        return;
+      }
+
       try {
         await reportTarget({
           targetType: 'chat_room',
           targetId: chat.id,
           reasonType: 'inappropriate',
+          description,
           alsoBlock: false,
         });
       } catch (error) {
@@ -531,14 +730,14 @@ function ChatRoomPageContent() {
       case 'block':
         return {
           title: '이 사용자를 차단할까요?',
-          description: '차단하면 이후 메시지를 주고받을 수 없어요. 필요하면 채팅방 나가기도 함께 선택할 수 있어요.',
+          description: '차단하면 이 채팅방에서 메시지를 볼 수 없고 보낼 수 없어요. 상대방에게 차단 사실은 표시되지 않아요.',
           confirmText: '차단하기',
           showLeaveCheckbox: true,
         };
       case 'report':
         return {
           title: '이 사용자를 신고할까요?',
-          description: '신고하면 대화 내역이 자동으로 함께 제출돼요. 필요하면 채팅방 나가기도 함께 선택할 수 있어요.',
+          description: '운영팀이 확인할 수 있게 신고 사유를 적어주세요. 대화 내역도 함께 제출돼요.',
           confirmText: '신고하기',
           showLeaveCheckbox: true,
         };
@@ -619,7 +818,7 @@ function ChatRoomPageContent() {
         </div>
       </header>
 
-      <div className={`${isChatDisabled ? 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+24px)]' : 'pb-[calc(var(--nav-height)+var(--spacing-safe-bottom)+0px)]'} pt-[76px]`}>
+      <div className={`${chatContentPaddingClass} pt-[76px]`}>
         <div className="flex flex-col items-center py-6">
           <div className="relative h-[112px] w-[184px]">
             <div className="absolute left-4 top-0 h-20 w-20 overflow-hidden rounded-full border-[3px] border-white bg-[var(--color-surface-secondary)] shadow-[0_4px_12px_rgba(34,34,34,0.12)]">
@@ -685,7 +884,7 @@ function ChatRoomPageContent() {
                   <circle cx="12" cy="12" r="9" />
                   <path d="M15 9 9 15M9 9l6 6" />
                 </svg>
-                차단된 사용자입니다
+                {isBlockedByMe ? '차단한 사용자입니다' : '대화가 제한되었어요'}
               </div>
             </div>
           )}
@@ -697,10 +896,20 @@ function ChatRoomPageContent() {
         <div className="fixed bottom-[calc(78px+var(--spacing-safe-bottom)+0px)] left-0 right-0 z-[110] bg-[var(--color-surface)]">
         <div className="pointer-events-none absolute left-0 right-0 top-full h-[calc(78px+var(--spacing-safe-bottom))] bg-[var(--color-surface)]" aria-hidden="true" />
         <div className="mx-auto max-w-[430px]">
+          <PlaceSuggestionPanel
+            suggestions={placeSuggestions}
+            collapsed={isPlacePanelCollapsed}
+            updatingSuggestionId={updatingPlaceSuggestionId}
+            onCollapsedChange={setIsPlacePanelCollapsed}
+            onGalleryOpenChange={setIsPlaceGalleryOpen}
+            onSelect={(suggestionId) => {
+              void handlePlaceSuggestionStatus(suggestionId, 'accepted');
+            }}
+          />
           <ChatInput
             onSend={handleSend}
             disabled={false}
-            placeholder={isExpired ? '대화 시간이 만료되었어요' : '메시지를 입력해보세요...'}
+            placeholder={isExpired ? '대화 시간이 만료되었어요' : "'인제우리'라고 보내보세요!"}
           />
         </div>
         </div>
@@ -742,6 +951,19 @@ function ChatRoomPageContent() {
               </p>
             )}
 
+            {confirmAction === 'report' && (
+              <div className="mb-5">
+                <textarea
+                  value={reportDescription}
+                  onChange={(event) => setReportDescription(event.target.value.slice(0, 200))}
+                  placeholder="예: 불쾌한 메시지를 받았어요, 부적절한 대화였어요"
+                  maxLength={200}
+                  className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
+                />
+                <p className="mt-1 text-right text-xs text-[var(--color-text-tertiary)]">{reportDescription.length}/200</p>
+              </div>
+            )}
+
             {confirmConfig.showLeaveCheckbox && (
               <label className="mb-6 flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-4 py-3">
                 <input
@@ -760,7 +982,13 @@ function ChatRoomPageContent() {
             )}
 
             <div className="flex flex-col gap-2">
-              <Button onClick={confirmActionHandler} variant={confirmAction === 'leave' ? 'primary' : 'danger'} size="md" fullWidth>
+              <Button
+                onClick={confirmActionHandler}
+                variant={confirmAction === 'leave' ? 'primary' : 'danger'}
+                size="md"
+                fullWidth
+                disabled={confirmAction === 'report' && !reportDescription.trim()}
+              >
                 {confirmConfig.confirmText}
               </Button>
               <Button onClick={closeConfirm} variant="secondary" size="md" fullWidth>
@@ -776,7 +1004,7 @@ function ChatRoomPageContent() {
 
 export default function ChatRoomPage() {
   return (
-    <Suspense fallback={<PageContainer withBottomNav={false}><div /></PageContainer>}>
+    <Suspense fallback={<ChatRoomSkeleton />}>
       <ChatRoomPageContent />
     </Suspense>
   );

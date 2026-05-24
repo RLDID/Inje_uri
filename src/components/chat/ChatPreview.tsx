@@ -7,11 +7,14 @@ import { useRouter } from 'next/navigation';
 import type { Chat } from '@/lib/types';
 import { formatChatTime } from '@/lib/utils';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
-import { getChatRemainingTime, getOtherParticipant } from '@/lib/utils/chat';
+import { CHAT_UNREAD_REFRESH_EVENT, getChatRemainingTime, getOtherParticipant } from '@/lib/utils/chat';
 import { CenteredModal } from '@/components/ui/BottomSheet';
 import { useToast } from '@/components/ui';
 import { leaveChatRoom } from '@/lib/api/chat';
+import { blockUser, reportTarget } from '@/lib/api/safety';
 import { buildChatRoomHref, buildProfileDetailHref, useCurrentRouteContext } from '@/lib/navigation';
+
+type ChatPreviewAction = 'report' | 'block';
 
 interface ChatPreviewProps {
   chat: Chat;
@@ -27,6 +30,10 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
   const [imgError, setImgError] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showLeaveConfirm, setShowLeaveConfirm] = useState(false);
+  const [safetyAction, setSafetyAction] = useState<ChatPreviewAction | null>(null);
+  const [reportDescription, setReportDescription] = useState('');
+  const [leaveRoomOnSubmit, setLeaveRoomOnSubmit] = useState(false);
+  const [isSubmittingSafetyAction, setIsSubmittingSafetyAction] = useState(false);
 
   const otherParticipant = getOtherParticipant(chat, currentUserId);
   const user = otherParticipant?.user;
@@ -35,7 +42,9 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
 
   const imageSrc = imgError ? PLACEHOLDER_PROFILE_IMAGE : user.profileImages[0];
   const { hours, minutes, totalMinutes, isExpired } = getChatRemainingTime(chat);
-  const remainingBadgeLabel = isExpired ? '0H' : `${Math.max(1, Math.ceil(totalMinutes / 60))}H`;
+  const isBlockedByMe = chat.blockedByMe === true;
+  const isBlocked = chat.status === 'blocked' || isBlockedByMe;
+  const remainingBadgeLabel = isBlocked ? (isBlockedByMe ? '차단' : '제한') : isExpired ? '0H' : `${Math.max(1, Math.ceil(totalMinutes / 60))}H`;
 
   const handleMenuClick = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -57,9 +66,76 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
     setShowLeaveConfirm(true);
   };
 
-  const handleReport = () => {
+  const openSafetyAction = (action: ChatPreviewAction) => {
     setShowMenu(false);
-    showToast('신고/차단 기능은 준비 중입니다.', 'info');
+    setSafetyAction(action);
+    setReportDescription('');
+    setLeaveRoomOnSubmit(false);
+  };
+
+  const closeSafetyAction = () => {
+    if (isSubmittingSafetyAction) {
+      return;
+    }
+
+    setSafetyAction(null);
+    setReportDescription('');
+    setLeaveRoomOnSubmit(false);
+  };
+
+  const confirmSafetyAction = async () => {
+    if (!safetyAction) {
+      return;
+    }
+
+    const description = reportDescription.trim();
+    if (safetyAction === 'report' && !description) {
+      showToast('신고 사유를 입력해주세요.', 'error');
+      return;
+    }
+
+    setIsSubmittingSafetyAction(true);
+
+    try {
+      if (safetyAction === 'report') {
+        await reportTarget({
+          targetType: 'chat_room',
+          targetId: chat.id,
+          reasonType: 'inappropriate',
+          description,
+          alsoBlock: false,
+        });
+        showToast('신고가 접수되었고 대화 내역이 함께 제출되었어요.', 'success');
+      } else {
+        await blockUser(user.id, `채팅방에서 차단 (${chat.id})`);
+        showToast('상대방을 차단했어요.', 'success');
+      }
+
+      if (leaveRoomOnSubmit) {
+        try {
+          await leaveChatRoom(chat.id);
+        } catch {
+          // Reporting/blocking already succeeded; leaving is optional here.
+        }
+      }
+
+      setSafetyAction(null);
+      setReportDescription('');
+      setLeaveRoomOnSubmit(false);
+      onChanged?.();
+      window.dispatchEvent(new Event(CHAT_UNREAD_REFRESH_EVENT));
+    } catch (error) {
+      showToast(
+        error instanceof Error
+          ? error.message
+          : safetyAction === 'report'
+            ? '신고하지 못했습니다.'
+            : '차단하지 못했습니다.',
+        'error',
+      );
+    } finally {
+      setIsSubmittingSafetyAction(false);
+    }
   };
   
   const confirmLeave = async () => {
@@ -67,6 +143,7 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
       await leaveChatRoom(chat.id);
       setShowLeaveConfirm(false);
       onChanged?.();
+      window.dispatchEvent(new Event(CHAT_UNREAD_REFRESH_EVENT));
       showToast('채팅방을 나갔습니다.', 'success');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '채팅방을 나가지 못했습니다.', 'error');
@@ -84,7 +161,7 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
       >
         <div className="flex items-center gap-3.5 px-0 py-4 transition-colors hover:bg-[var(--color-surface-secondary)] active:bg-[var(--color-surface-secondary)]">
           <div className="relative shrink-0">
-            <div className={`h-14 w-14 overflow-hidden rounded-full bg-[var(--color-surface-secondary)] ring-1 ring-[var(--color-border-light)] ${isExpired ? 'opacity-55' : ''}`}>
+            <div className={`h-14 w-14 overflow-hidden rounded-full bg-[var(--color-surface-secondary)] ring-1 ring-[var(--color-border-light)] ${isExpired || isBlocked ? 'opacity-55' : ''}`}>
               <Image
                 src={imageSrc}
                 alt={user.nickname}
@@ -94,7 +171,7 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
                 onError={() => setImgError(true)}
               />
             </div>
-            {chat.unreadCount > 0 && !isExpired && (
+            {chat.unreadCount > 0 && !isExpired && !isBlocked && (
               <div className="absolute -top-0.5 -right-0.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-[var(--color-like-active)] px-1.5 text-xs font-bold text-white shadow-sm">
                 {chat.unreadCount}
               </div>
@@ -104,14 +181,16 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex items-center justify-between gap-2">
               <div className="flex min-w-0 items-center gap-1.5">
-                <span className={`truncate text-[15px] font-semibold ${isExpired ? 'text-[var(--color-text-tertiary)]' : 'text-[var(--color-text-primary)]'}`}>
+                <span className={`truncate text-[15px] font-semibold ${isExpired || isBlocked ? 'text-[var(--color-text-tertiary)]' : 'text-[var(--color-text-primary)]'}`}>
                   {user.nickname}
                 </span>
                 {/* 채팅 유형 배지 - 24H 파랑, 2H 빨강 */}
                 {showTypeBadge && (
                   <span className={`
                     rounded px-1.5 py-0.5 text-[10px] font-bold
-                    ${chat.chatType === 'today' 
+                    ${isBlocked
+                      ? 'bg-[var(--color-surface-secondary)] text-[var(--color-text-tertiary)]'
+                      : chat.chatType === 'today'
                       ? 'bg-[var(--color-chip-background)] text-[var(--color-text-primary)]'
                       : 'bg-[var(--color-brand-pink)] text-[var(--color-text-primary)]'
                     }
@@ -139,7 +218,11 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
               </div>
             </div>
 
-            {isExpired ? (
+            {isBlocked ? (
+              <p className="text-sm text-[var(--color-text-tertiary)]">
+                {isBlockedByMe ? '차단한 사용자입니다' : '대화가 제한되었어요'}
+              </p>
+            ) : isExpired ? (
               <p className="text-sm text-[var(--color-text-tertiary)]">대화 시간이 만료되었어요</p>
             ) : chat.lastMessage ? (
               <p data-clarity-mask className={`truncate text-sm leading-6 ${chat.unreadCount > 0 ? 'font-semibold text-[var(--color-text-primary)]' : 'text-[var(--color-text-secondary)]'}`}>
@@ -172,9 +255,76 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
           <button onClick={handleLeaveChat} className="w-full px-6 py-3.5 text-left text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-secondary)]">
             채팅방 나가기
           </button>
-          <button onClick={handleReport} className="w-full px-6 py-3.5 text-left text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]">
-            신고/차단
+          <button onClick={() => openSafetyAction('report')} className="w-full px-6 py-3.5 text-left text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]">
+            신고하기
           </button>
+          <button onClick={() => openSafetyAction('block')} className="w-full px-6 py-3.5 text-left text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]">
+            차단하기
+          </button>
+        </div>
+      </CenteredModal>
+
+      <CenteredModal isOpen={safetyAction !== null} onClose={closeSafetyAction}>
+        <div className="p-6">
+          <p className="text-center text-lg font-semibold tracking-[-0.02em] text-[var(--color-text-primary)]">
+            {safetyAction === 'report' ? '이 사용자를 신고할까요?' : '이 사용자를 차단할까요?'}
+          </p>
+          <p className="mt-2 text-center text-sm leading-6 text-[var(--color-text-secondary)]">
+            {safetyAction === 'report'
+              ? '운영팀이 확인할 수 있게 신고 사유를 적어주세요. 대화 내역도 함께 제출돼요.'
+              : '차단하면 이 채팅방에서 메시지를 볼 수 없고 보낼 수 없어요. 상대방에게 차단 사실은 표시되지 않아요.'}
+          </p>
+
+          {safetyAction === 'report' && (
+            <div className="mt-5">
+              <textarea
+                value={reportDescription}
+                onChange={(event) => setReportDescription(event.target.value.slice(0, 200))}
+                placeholder="예: 불쾌한 메시지를 받았어요, 부적절한 대화였어요"
+                maxLength={200}
+                className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
+              />
+              <p className="mt-1 text-right text-xs text-[var(--color-text-tertiary)]">{reportDescription.length}/200</p>
+            </div>
+          )}
+
+          <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-secondary)] px-4 py-3">
+            <input
+              type="checkbox"
+              checked={leaveRoomOnSubmit}
+              onChange={(event) => setLeaveRoomOnSubmit(event.target.checked)}
+              className="mt-0.5 h-4 w-4 rounded border-[var(--color-border)] text-[var(--color-pink-cta)] focus:ring-[var(--color-focus)]"
+            />
+            <div>
+              <p className="text-sm font-medium text-[var(--color-text-primary)]">채팅방도 함께 나가기</p>
+              <p className="mt-1 text-xs leading-5 text-[var(--color-text-secondary)]">
+                체크하면 처리 후 채팅방 목록에서 나가요.
+              </p>
+            </div>
+          </label>
+
+          <div className="mt-6 flex gap-3">
+            <button
+              type="button"
+              onClick={closeSafetyAction}
+              disabled={isSubmittingSafetyAction}
+              className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-3.5 font-semibold text-[var(--color-text-secondary)] disabled:opacity-60"
+            >
+              취소
+            </button>
+            <button
+              type="button"
+              onClick={confirmSafetyAction}
+              disabled={isSubmittingSafetyAction || (safetyAction === 'report' && !reportDescription.trim())}
+              className="flex-1 rounded-xl bg-[var(--color-error)] py-3.5 font-semibold text-white disabled:opacity-60"
+            >
+              {isSubmittingSafetyAction
+                ? '처리 중...'
+                : safetyAction === 'report'
+                  ? '신고하기'
+                  : '차단하기'}
+            </button>
+          </div>
         </div>
       </CenteredModal>
 
@@ -224,6 +374,7 @@ export const ChatPreview = memo(ChatPreviewComponent, (prevProps, nextProps) => 
   prevProps.onChanged === nextProps.onChanged &&
   prevProps.chat.id === nextProps.chat.id &&
   prevProps.chat.status === nextProps.chat.status &&
+  prevProps.chat.blockedByMe === nextProps.chat.blockedByMe &&
   prevProps.chat.chatType === nextProps.chat.chatType &&
   prevProps.chat.unreadCount === nextProps.chat.unreadCount &&
   getDateTime(prevProps.chat.expiresAt) === getDateTime(nextProps.chat.expiresAt) &&

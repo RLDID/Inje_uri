@@ -9,6 +9,9 @@ import { generateRecommendationsForUser } from "@/server/services/matching/recom
 function getKSTDateString(): string {
   const now = new Date();
   const kst = new Date(now.getTime() + 9 * 60 * 60 * 1000);
+  if (kst.getUTCHours() < 9) {
+    kst.setUTCDate(kst.getUTCDate() - 1);
+  }
   return kst.toISOString().split("T")[0];
 }
 
@@ -42,12 +45,17 @@ export async function POST(req: NextRequest) {
     const targets = users.filter((u) => !alreadyDoneIds.has(u.id));
 
     let success = 0;
+    let skipped = 0;
     let failed = 0;
 
     for (const user of targets) {
       try {
-        await generateRecommendationsForUser(user.id, today);
-        success++;
+        const result = await generateRecommendationsForUser(user.id, today);
+        if (result.generated) {
+          success++;
+        } else {
+          skipped++;
+        }
       } catch (e) {
         console.error("[POST /api/batch/recommendations] 유저 추천 생성 실패:", user.id, e);
         failed++;
@@ -58,6 +66,7 @@ export async function POST(req: NextRequest) {
       date: today,
       total: targets.length,
       success,
+      skipped,
       failed,
     });
   } catch (e) {

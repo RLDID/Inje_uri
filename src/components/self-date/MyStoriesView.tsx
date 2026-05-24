@@ -42,6 +42,7 @@ type ReactionActionType = 'report' | 'block';
 const REACTION_CHAT_SESSION_KEY = 'self-date:reaction-chats';
 const MAX_EDIT_IMAGES = 4;
 const MAX_EDIT_KEYWORDS = 4;
+const EDIT_HINT_VISIBLE_MS = 2500;
 
 function getStoryCategoryList(story: Story): FeedCategory[] {
   if (story.categories && story.categories.length > 0) {
@@ -87,6 +88,32 @@ interface ReactionActionTarget {
   action: ReactionActionType;
 }
 
+function ActionHintBadge({
+  id,
+  isVisible,
+  label,
+  placement = 'above',
+}: {
+  id: string;
+  isVisible: boolean;
+  label: string;
+  placement?: 'above' | 'below';
+}) {
+  const placementClass = placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2';
+
+  return (
+    <span
+      id={id}
+      role="tooltip"
+      className={`pointer-events-none absolute right-0 z-[70] whitespace-nowrap rounded-lg bg-[var(--color-text-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${placementClass} ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
 export function MyStoriesView({
   ownerSection,
   title,
@@ -99,6 +126,7 @@ export function MyStoriesView({
   const { showToast } = useToast();
   const { currentPath } = useCurrentRouteContext();
   const editImageInputRef = useRef<HTMLInputElement>(null);
+  const hasShownEditHintRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState<MyFeedTab>(() => (
     searchParams.get('tab') === 'liked' ? 'liked' : 'mine'
@@ -112,11 +140,14 @@ export function MyStoriesView({
   const [isUpdatingEditImage, setIsUpdatingEditImage] = useState(false);
   const [reactionMenuTarget, setReactionMenuTarget] = useState<ReactionMenuTarget | null>(null);
   const [reactionActionTarget, setReactionActionTarget] = useState<ReactionActionTarget | null>(null);
+  const [reactionReportDescription, setReactionReportDescription] = useState('');
   const [deleteTargetStory, setDeleteTargetStory] = useState<Story | null>(null);
   const [isDeletingFeed, setIsDeletingFeed] = useState(false);
   const [myStories, setMyStories] = useState<Story[]>([]);
   const [likedStories, setLikedStories] = useState<Story[]>([]);
   const [reactionChatIds, setReactionChatIds] = useState<string[]>(() => readReactionChatIds());
+  const [showEditHint, setShowEditHint] = useState(false);
+  const isEditHintTargetVisible = activeTab === 'mine' && myStories.length > 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +190,23 @@ export function MyStoriesView({
   useEffect(() => {
     writeReactionChatIds(reactionChatIds);
   }, [reactionChatIds]);
+
+  useEffect(() => {
+    if (!isEditHintTargetVisible || hasShownEditHintRef.current) {
+      return;
+    }
+
+    hasShownEditHintRef.current = true;
+    setShowEditHint(true);
+
+    const timeoutId = window.setTimeout(() => {
+      setShowEditHint(false);
+    }, EDIT_HINT_VISIBLE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [isEditHintTargetVisible]);
 
   const handleOpenFeedDetail = (story: Story) => {
     router.push(
@@ -341,11 +389,17 @@ export function MyStoriesView({
 
     try {
       if (action === 'report') {
+        const description = reactionReportDescription.trim();
+        if (!description) {
+          showToast('신고 사유를 입력해주세요.', 'error');
+          return;
+        }
+
         await reportTarget({
           targetType: 'feed_comment',
           targetId: reaction.id,
           reasonType: 'inappropriate',
-          description: null,
+          description,
         });
       } else {
         await blockUser(reaction.fromUser.id);
@@ -371,6 +425,7 @@ export function MyStoriesView({
         'success',
       );
       setReactionActionTarget(null);
+      setReactionReportDescription('');
     } catch (error) {
       showToast(error instanceof Error ? error.message : '요청을 처리하지 못했어요.', 'error');
     }
@@ -644,9 +699,14 @@ export function MyStoriesView({
         <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
           <button
             type="button"
-            onClick={handleOpenEditPage}
-            className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
-            aria-label={isEditMode ? '편집 완료' : '피드 수정 모드 열기'}
+            onClick={() => {
+              setShowEditHint(false);
+              handleOpenEditPage();
+            }}
+            className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
+            aria-label={isEditMode ? '편집 완료' : '피드 수정하기'}
+            aria-describedby="my-feed-edit-tooltip"
+            title="피드 수정하기"
           >
             {isEditMode ? (
               <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -658,6 +718,7 @@ export function MyStoriesView({
                 <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
               </svg>
             )}
+            <ActionHintBadge id="my-feed-edit-tooltip" isVisible={showEditHint} label="피드 수정하기" />
           </button>
         </div>
       )}
@@ -737,6 +798,7 @@ export function MyStoriesView({
               <button
                 type="button"
                 onClick={() => {
+                  setReactionReportDescription('');
                   setReactionActionTarget({
                     storyId: reactionMenuTarget.storyId,
                     reaction: reactionMenuTarget.reaction,
@@ -754,6 +816,7 @@ export function MyStoriesView({
               <button
                 type="button"
                 onClick={() => {
+                  setReactionReportDescription('');
                   setReactionActionTarget({
                     storyId: reactionMenuTarget.storyId,
                     reaction: reactionMenuTarget.reaction,
@@ -941,7 +1004,10 @@ export function MyStoriesView({
 
       <CenteredModal
         isOpen={reactionActionTarget !== null}
-        onClose={() => setReactionActionTarget(null)}
+        onClose={() => {
+          setReactionActionTarget(null);
+          setReactionReportDescription('');
+        }}
         title={reactionActionTarget?.action === 'report' ? '신고하기' : '차단하기'}
       >
         {reactionActionTarget && (
@@ -957,10 +1023,26 @@ export function MyStoriesView({
               </p>
             </div>
 
+            {reactionActionTarget.action === 'report' && (
+              <div className="mt-4">
+                <textarea
+                  value={reactionReportDescription}
+                  onChange={(event) => setReactionReportDescription(event.target.value.slice(0, 200))}
+                  placeholder="예: 불쾌한 댓글이에요, 부적절한 표현이 있어요"
+                  maxLength={200}
+                  className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
+                />
+                <p className="mt-1 text-right text-xs text-[var(--color-text-tertiary)]">{reactionReportDescription.length}/200</p>
+              </div>
+            )}
+
             <div className="mt-5 grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setReactionActionTarget(null)}
+                onClick={() => {
+                  setReactionActionTarget(null);
+                  setReactionReportDescription('');
+                }}
                 className="rounded-2xl bg-[var(--color-surface-secondary)] py-3 font-medium text-[var(--color-text-primary)]"
               >
                 취소
@@ -970,9 +1052,10 @@ export function MyStoriesView({
                 onClick={() => {
                   void handleConfirmReactionAction();
                 }}
+                disabled={reactionActionTarget.action === 'report' && !reactionReportDescription.trim()}
                 className={`rounded-2xl py-3 font-medium ${
                   reactionActionTarget.action === 'report'
-                    ? 'bg-[var(--color-error-bg)] text-[var(--color-error)]'
+                    ? 'bg-[var(--color-error-bg)] text-[var(--color-error)] disabled:opacity-45'
                     : 'bg-[var(--color-text-primary)] text-[var(--color-text-inverse)]'
                 }`}
               >

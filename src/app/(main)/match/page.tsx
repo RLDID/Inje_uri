@@ -24,6 +24,9 @@ const MATCH_READ_NOTIFICATION_IDS_KEY = 'match:read-notification-ids';
 const MATCH_DELETED_NOTIFICATION_IDS_KEY = 'match:deleted-notification-ids';
 const INTEREST_HIDDEN_USER_IDS_KEY = 'interest:hidden-user-ids';
 const INTEREST_CHAT_STARTED_USER_IDS_KEY = 'interest:chat-started-user-ids';
+const MATCH_HEADER_HINT_STEP_MS = 2500;
+
+type MatchHeaderHint = 'heart' | 'notification';
 
 const EMPTY_RECOMMENDATION: DailyRecommendation = {
   date: new Date().toISOString().slice(0, 10),
@@ -71,24 +74,54 @@ function formatNotificationTime(date: Date): string {
   return `${period} ${displayHours}:${minutes}`;
 }
 
+function ActionHintBadge({
+  id,
+  isVisible,
+  label,
+}: {
+  id: string;
+  isVisible: boolean;
+  label: string;
+}) {
+  return (
+    <span
+      id={id}
+      role="tooltip"
+      className={`pointer-events-none absolute right-0 top-full z-[70] mt-2 whitespace-nowrap rounded-lg bg-[var(--color-text-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function BellIcon({
   hasUnread,
   isOpen,
   onClick,
+  showHint,
 }: {
   hasUnread: boolean;
   isOpen: boolean;
   onClick: () => void;
+  showHint: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors active:bg-[var(--color-chip-background)] ${
-        isOpen ? 'bg-[var(--color-chip-background)]' : ''
+      className={`group relative flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors active:bg-[var(--color-chip-background)] ${
+        showHint
+          ? 'bg-[var(--color-like-active)]'
+          : isOpen
+          ? 'bg-[var(--color-chip-background)]'
+          : ''
       }`}
-      aria-label="알림"
+      aria-label="받은 알림"
+      aria-describedby="match-notification-tooltip"
       aria-expanded={isOpen}
+      title="받은 알림"
     >
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
         <path d="M18 8.8a6 6 0 0 0-12 0c0 7-3 7-3 8.5h18c0-1.5-3-1.5-3-8.5" />
@@ -97,6 +130,7 @@ function BellIcon({
       {hasUnread && (
         <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-[var(--color-pink-cta)] ring-2 ring-white" />
       )}
+      <ActionHintBadge id="match-notification-tooltip" isVisible={showHint} label="받은 알림" />
     </button>
   );
 }
@@ -119,20 +153,24 @@ async function loadMyFeedReactionItems(): Promise<FeedReactionNotificationItem[]
 function HeaderHeartIcon({
   hasReceivedHeart,
   onClick,
+  showHint,
 }: {
   hasReceivedHeart: boolean;
   onClick: () => void;
+  showHint: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative flex h-11 w-11 items-center justify-center rounded-full transition-all active:scale-95 ${
-        hasReceivedHeart
+      className={`group relative flex h-11 w-11 items-center justify-center rounded-full transition-all active:scale-95 ${
+        hasReceivedHeart || showHint
           ? 'bg-[var(--color-brand-pink)] text-[var(--color-pink-cta)] shadow-[0_3px_7px_rgba(243,167,192,0.18)]'
           : 'text-[var(--color-text-primary)] active:bg-[var(--color-chip-background)]'
       }`}
       aria-label="받은 하트"
+      aria-describedby="match-heart-tooltip"
+      title="받은 하트"
     >
       <svg width="25" height="25" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <path
@@ -156,6 +194,7 @@ function HeaderHeartIcon({
       {hasReceivedHeart && (
         <span className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-[var(--color-pink-cta)] ring-2 ring-white shadow-[0_1px_3px_rgba(243,167,192,0.22)]" />
       )}
+      <ActionHintBadge id="match-heart-tooltip" isVisible={showHint} label="받은 하트" />
     </button>
   );
 }
@@ -210,6 +249,21 @@ function MatchPageContent() {
   const [readNotificationIds, setReadNotificationIds] = useState<string[]>([]);
   const [deletedNotificationIds, setDeletedNotificationIds] = useState<string[]>([]);
   const [hiddenInterestUserIdsForHeader, setHiddenInterestUserIdsForHeader] = useState<string[]>([]);
+  const [activeHeaderHint, setActiveHeaderHint] = useState<MatchHeaderHint | null>('heart');
+
+  useEffect(() => {
+    const notificationHintTimeoutId = window.setTimeout(() => {
+      setActiveHeaderHint('notification');
+    }, MATCH_HEADER_HINT_STEP_MS);
+    const hideHintTimeoutId = window.setTimeout(() => {
+      setActiveHeaderHint(null);
+    }, MATCH_HEADER_HINT_STEP_MS * 2);
+
+    return () => {
+      window.clearTimeout(notificationHintTimeoutId);
+      window.clearTimeout(hideHintTimeoutId);
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -565,12 +619,20 @@ function MatchPageContent() {
         <div className="flex items-center gap-1">
           <HeaderHeartIcon
             hasReceivedHeart={hasReceivedHeart}
-            onClick={() => router.push('/interest')}
+            showHint={activeHeaderHint === 'heart'}
+            onClick={() => {
+              setActiveHeaderHint(null);
+              router.push('/interest');
+            }}
           />
           <BellIcon
             hasUnread={hasUnreadNotification}
             isOpen={isNotificationPanelOpen}
-            onClick={() => setIsNotificationPanelOpen((isOpen) => !isOpen)}
+            showHint={activeHeaderHint === 'notification'}
+            onClick={() => {
+              setActiveHeaderHint(null);
+              setIsNotificationPanelOpen((isOpen) => !isOpen);
+            }}
           />
         </div>
       </header>
@@ -714,6 +776,7 @@ function MatchPageContent() {
                   isSelectionMade={isSelectionLocked}
                   onSelect={handleSelect}
                   currentUserInterests={currentUser?.interests ?? []}
+                  currentUserKeywords={currentUser?.keywords ?? []}
                 />
               ) : (
                 <div className="flex min-h-[360px] flex-col items-center justify-center rounded-[28px] border border-[#F4EDF2] bg-white px-6 py-10 text-center">

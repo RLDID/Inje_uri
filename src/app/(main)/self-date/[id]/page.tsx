@@ -30,6 +30,40 @@ type OverlayState = 'none' | 'menu' | 'report' | 'interest';
 
 const PRIMARY_DETAIL_CATEGORIES = new Set(['festival', 'walk', 'cafe', 'food', 'study']);
 
+function FeedDetailSkeleton({ onBack = () => undefined }: { onBack?: () => void }) {
+  return (
+    <PageContainer>
+      <PageHeader title="" showBack onBack={onBack} />
+      <PageContent>
+        <section className="content-stack animate-pulse">
+          <div className="flex items-center gap-3">
+            <div className="h-14 w-14 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-4 w-24 rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-3 w-36 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+            <div className="h-10 w-10 rounded-full bg-[var(--color-brand-pink)]/60" />
+          </div>
+
+          <div className="aspect-[16/10] w-full rounded-[10px] bg-[var(--color-surface-secondary)]" />
+
+          <div className="rounded-[10px] bg-[var(--color-surface)] p-4 shadow-[0_4px_12px_rgba(34,34,34,0.055)]">
+            <div className="space-y-3">
+              <div className="h-4 w-full rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-4 w-5/6 rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-4 w-3/5 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+            <div className="mt-5 flex gap-2">
+              <div className="h-7 w-16 rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-7 w-20 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+          </div>
+        </section>
+      </PageContent>
+    </PageContainer>
+  );
+}
+
 function SelfDateDetailPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -39,8 +73,10 @@ function SelfDateDetailPageContent() {
   const storyId = params.id as string;
 
   const [story, setStory] = useState<Story | null>(null);
+  const [isLoadingStory, setIsLoadingStory] = useState(true);
   const [overlayState, setOverlayState] = useState<OverlayState>('none');
   const [interestMessage, setInterestMessage] = useState('');
+  const [reportDescription, setReportDescription] = useState('');
   const [imgError, setImgError] = useState(false);
   const [contentImgErrorIndexes, setContentImgErrorIndexes] = useState<Set<number>>(() => new Set());
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -59,6 +95,8 @@ function SelfDateDetailPageContent() {
     let cancelled = false;
 
     async function loadStory() {
+      setIsLoadingStory(true);
+
       try {
         const nextStory = await getFeed(storyId);
         if (cancelled) {
@@ -80,7 +118,12 @@ function SelfDateDetailPageContent() {
         ));
       } catch (error) {
         if (!cancelled) {
+          setStory(null);
           showToast(error instanceof Error ? error.message : '피드를 불러오지 못했어요.', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingStory(false);
         }
       }
     }
@@ -103,6 +146,10 @@ function SelfDateDetailPageContent() {
 
     return () => clearInterval(interval);
   }, [story]);
+
+  if (isLoadingStory) {
+    return <FeedDetailSkeleton onBack={goBack} />;
+  }
 
   if (!story) {
     return (
@@ -172,14 +219,21 @@ function SelfDateDetailPageContent() {
   };
 
   const handleReport = async () => {
+    const description = reportDescription.trim();
+    if (!description) {
+      showToast('신고 사유를 입력해주세요.', 'error');
+      return;
+    }
+
     try {
       await reportTarget({
         targetType: 'feed',
         targetId: story.id,
         reasonType: 'inappropriate',
-        description: null,
+        description,
       });
       setOverlayState('none');
+      setReportDescription('');
       showToast('신고가 접수되었어요.', 'success');
       router.replace(fallbackPath);
     } catch (error) {
@@ -551,7 +605,10 @@ function SelfDateDetailPageContent() {
               )}
               <button
                 type="button"
-                onClick={() => setOverlayState('report')}
+                onClick={() => {
+                  setReportDescription('');
+                  setOverlayState('report');
+                }}
                 className="w-full px-6 py-4 text-left text-[0px] text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]"
               >
                 <span className="text-base">피드 신고</span>
@@ -573,19 +630,33 @@ function SelfDateDetailPageContent() {
           <div className="relative w-full rounded-t-[24px] bg-[var(--color-surface)] px-6 pb-8 pt-5 shadow-xl">
             <h3 className="mb-2 text-center text-lg font-semibold tracking-[-0.02em]">이 피드를 신고할까요?</h3>
             <p className="mb-4 text-center text-sm leading-6 text-[var(--color-text-secondary)]">
-              불쾌하거나 부적절한 내용인지 검토할 수 있도록 운영팀에 전달할게요.
+              운영팀이 확인할 수 있게 신고 사유를 적어주세요.
             </p>
+            <div className="mb-5">
+              <textarea
+                value={reportDescription}
+                onChange={(event) => setReportDescription(event.target.value.slice(0, 200))}
+                placeholder="예: 불쾌한 표현이 있어요, 광고성 글이에요"
+                maxLength={200}
+                className="h-24 w-full resize-none rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-sm placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
+              />
+              <p className="mt-1 text-right text-xs text-[var(--color-text-tertiary)]">{reportDescription.length}/200</p>
+            </div>
             <div className="flex flex-col gap-2">
               <button
                 type="button"
                 onClick={handleReport}
-                className="min-h-12 rounded-xl bg-[var(--color-error)] px-4 py-3 text-sm font-semibold text-white"
+                disabled={!reportDescription.trim()}
+                className="min-h-12 rounded-xl bg-[var(--color-error)] px-4 py-3 text-sm font-semibold text-white disabled:opacity-45"
               >
                 신고하기
               </button>
               <button
                 type="button"
-                onClick={() => setOverlayState('none')}
+                onClick={() => {
+                  setReportDescription('');
+                  setOverlayState('none');
+                }}
                 className="min-h-12 rounded-xl bg-[var(--color-surface-secondary)] px-4 py-3 text-sm font-semibold text-[var(--color-text-secondary)]"
               >
                 취소
@@ -724,7 +795,7 @@ function SelfDateDetailPageContent() {
 
 export default function SelfDateDetailPage() {
   return (
-    <Suspense fallback={<PageContainer><div /></PageContainer>}>
+    <Suspense fallback={<FeedDetailSkeleton />}>
       <SelfDateDetailPageContent />
     </Suspense>
   );

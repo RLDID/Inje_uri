@@ -1,5 +1,7 @@
 import { prisma } from "@/server/db/prisma";
 
+const HIDDEN_PLACE_NAMES = ["A동", "D동"];
+
 export type CreateSuggestionInput = {
     chatRoomId: number;
     placeId: number;
@@ -19,7 +21,13 @@ export async function createSuggestion(input: CreateSuggestionInput) {
 
 export async function findSuggestionsByRoomId(roomId: number) {
     return prisma.chatRoomPlaceSuggestion.findMany({
-        where: { chat_room_id: roomId },
+        where: {
+            chat_room_id: roomId,
+            place: {
+                is_active: true,
+                name: { notIn: HIDDEN_PLACE_NAMES },
+            },
+        },
         include: { place: { include: { category: true, tags: true } } },
         orderBy: { suggested_at: "desc" },
     });
@@ -36,5 +44,6 @@ export async function updateSuggestionStatus(id: number, status: string) {
     return prisma.chatRoomPlaceSuggestion.update({
         where: { id },
         data: { status },
+        include: { place: { include: { category: true, tags: true } } },
     });
 }

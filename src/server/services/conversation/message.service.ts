@@ -10,7 +10,84 @@
   import * as participantRepo from "@/server/repositories/chat/participant.repo";
   import * as chatRoomRepo from "@/server/repositories/chat/chatRoom.repo";
   import * as messageReadRepo from "@/server/repositories/chat/messageRead.repo";
-  import { prisma, PrismaTransactionClient } from "@/server/db/prisma";
+  import * as placeRepo from "@/server/repositories/place/place.repo";
+  import * as placeSuggestionRepo from "@/server/repositories/place/placeSuggestion.repo";
+  import { prisma } from "@/server/db/prisma";
+  import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
+
+  const safetyRepo = new SafetyRepository(prisma);
+  const PLACE_RECOMMENDATION_TRIGGER = "인제우리";
+  type RoomWithParticipants = NonNullable<Awaited<ReturnType<typeof chatRoomRepo.findRoomById>>>;
+
+  function getOtherParticipant(room: RoomWithParticipants, userId: number) {
+    return room.participants.find((participant) => participant.user_id !== userId) ?? null;
+  }
+
+  async function hasCurrentUserBlockedRoomParticipant(room: RoomWithParticipants, userId: number): Promise<boolean> {
+    const other = getOtherParticipant(room, userId);
+    if (!other) return false;
+
+    const block = await safetyRepo.findExistingBlock(userId, other.user_id);
+    return Boolean(block && !block.unblocked_at);
+  }
+
+  async function restoreLegacyBlockedRoomForViewer(room: RoomWithParticipants, userId: number): Promise<void> {
+    if (room.status !== "blocked") return;
+
+    const other = getOtherParticipant(room, userId);
+    if (!other) return;
+
+    await chatRoomRepo.restoreBlockedRoomsBetweenUsers(userId, other.user_id);
+    room.status = room.expires_at > new Date() ? "active" : "expired";
+    room.blocked_by_user_id = null;
+  }
+
+  function shouldTriggerPlaceRecommendation(content: string): boolean {
+    return content.includes(PLACE_RECOMMENDATION_TRIGGER);
+  }
+
+  function shuffle<T>(items: T[]): T[] {
+    return [...items]
+      .map((item) => ({ item, sortKey: Math.random() }))
+      .sort((left, right) => left.sortKey - right.sortKey)
+      .map(({ item }) => item);
+  }
+
+  async function createTriggeredPlaceSuggestions(roomId: number, content: string) {
+    if (!shouldTriggerPlaceRecommendation(content)) {
+      return [];
+    }
+
+    const [existingSuggestions, places] = await Promise.all([
+      placeSuggestionRepo.findSuggestionsByRoomId(roomId),
+      placeRepo.findPlaces(),
+    ]);
+    const triggeredPlaceIds = new Set(
+      existingSuggestions
+        .filter((suggestion) => suggestion.triggered_keyword === PLACE_RECOMMENDATION_TRIGGER)
+        .map((suggestion) => suggestion.place_id),
+    );
+    const candidates = places.filter((place) => !triggeredPlaceIds.has(place.id));
+
+    if (candidates.length === 0) {
+      return [];
+    }
+
+    const orderedCandidates = shuffle(candidates);
+
+    const suggestions = [];
+    for (const place of orderedCandidates) {
+      const suggestion = await placeSuggestionRepo.createSuggestion({
+        chatRoomId: roomId,
+        placeId: place.id,
+        triggeredKeyword: PLACE_RECOMMENDATION_TRIGGER,
+      });
+      suggestions.push(suggestion);
+    }
+
+    return suggestions;
+  }
+
   // ─────────────────────────────────────────────
   // 메시지 전송
   // ─────────────────────────────────────────────
@@ -34,7 +111,13 @@ export async function sendMessage(roomId: number, userId: number, content: strin
   const room = await chatRoomRepo.findRoomById(roomId);
   if (!room) return { error: ERROR.NOT_FOUND } as const;
 
-  if (room.status === "blocked" || room.status === "closed") {
+  if (await hasCurrentUserBlockedRoomParticipant(room, userId)) {
+    return { error: ERROR.FORBIDDEN } as const;
+  }
+
+  await restoreLegacyBlockedRoomForViewer(room, userId);
+
+  if (room.status === "closed") {
     return { error: ERROR.ROOM_NOT_ACTIVE } as const;
   }
 
@@ -48,7 +131,12 @@ export async function sendMessage(roomId: number, userId: number, content: strin
     content,
   });
 
-  return { message };
+  const placeSuggestions = await createTriggeredPlaceSuggestions(roomId, content).catch((error) => {
+    console.warn("[message.service] place suggestion trigger failed:", error);
+    return [];
+  });
+
+  return placeSuggestions.length > 0 ? { message, placeSuggestions } : { message };
 }
 
   // ─────────────────────────────────────────────
@@ -66,6 +154,15 @@ export async function getMessages(roomId: number, userId: number, cursor?: numbe
   const participant = await
   participantRepo.findParticipant(roomId, userId);
   if (!participant) return { error: ERROR.FORBIDDEN } as const;
+
+  const room = await chatRoomRepo.findRoomById(roomId);
+  if (!room) return { error: ERROR.NOT_FOUND } as const;
+
+  if (await hasCurrentUserBlockedRoomParticipant(room, userId)) {
+    return { error: ERROR.FORBIDDEN } as const;
+  }
+
+  await restoreLegacyBlockedRoomForViewer(room, userId);
 
   const messages = await messageRepo.findMessagesByRoomId(roomId, cursor, limit);
 
@@ -101,6 +198,15 @@ export async function markAsRead(roomId: number, userId: number, upToMessageId: 
   const participant = await participantRepo.findParticipant(roomId, userId);
   if (!participant) return { error: ERROR.FORBIDDEN } as const;
 
+  const room = await chatRoomRepo.findRoomById(roomId);
+  if (!room) return { error: ERROR.NOT_FOUND } as const;
+
+  if (await hasCurrentUserBlockedRoomParticipant(room, userId)) {
+    return { error: ERROR.FORBIDDEN } as const;
+  }
+
+  await restoreLegacyBlockedRoomForViewer(room, userId);
+
   const message = await messageRepo.findMessageById(upToMessageId);
 
   if (!message || message.chat_room_id !== roomId) {
@@ -112,7 +218,7 @@ export async function markAsRead(roomId: number, userId: number, upToMessageId: 
   if (upToMessageId <= currentLastRead) {
     return { success: true }; // 이미 더 앞까지 읽음, 무시
   }
-  //await participantRepo.updateLastRead(roomId, userId, upToMessageId);
+  await participantRepo.updateLastRead(roomId, userId, upToMessageId);
   await messageReadRepo.markMessagesAsReadUpTo(userId, roomId, upToMessageId);
 
   return { success: true };

@@ -79,16 +79,12 @@ export async function acceptInterest(
   }
 
   const existing = await findPendingInterest(userId, fromUserId);
-  if (existing) {
-    throw new ApiError(ERROR.DUPLICATE_INTEREST, "이미 호감을 보낸 상대입니다.");
-  }
+  const responseInterest = existing ?? await insertInterest(userId, fromUserId);
 
-  const newInterest = await insertInterest(userId, fromUserId);
-
-  const matchResult = await checkAndCreateMatch(userId, fromUserId, newInterest.id);
+  const matchResult = await checkAndCreateMatch(userId, fromUserId, responseInterest.id);
 
   return {
-    interest_id: newInterest.id,
+    interest_id: responseInterest.id,
     matched: matchResult.matched,
     chat_room_id: matchResult.chat_room_id,
   };
@@ -140,11 +136,6 @@ export async function sendInterest(
     throw new ApiError(ERROR.BLOCKED_RELATIONSHIP, "차단 관계로 호감을 보낼 수 없습니다.");
   }
 
-  const existing = await findPendingInterest(userId, toUserId);
-  if (existing) {
-    throw new ApiError(ERROR.DUPLICATE_INTEREST, "이미 호감을 보낸 상대입니다.");
-  }
-
   const isDismissed = await findActiveDismiss(userId, toUserId);
   if (isDismissed) {
     throw new ApiError(ERROR.ALREADY_DISMISSED, "관심없음 처리한 상대에게는 호감을 보낼 수 없습니다.");
@@ -155,12 +146,13 @@ export async function sendInterest(
     throw new ApiError(ERROR.REVERSE_INTEREST_NOT_FOUND, "호감을 먼저 보낸 상대에게만 직접 호감을 보낼 수 있습니다.");
   }
 
-  const newInterest = await insertInterest(userId, toUserId);
+  const existing = await findPendingInterest(userId, toUserId);
+  const responseInterest = existing ?? await insertInterest(userId, toUserId);
 
-  const matchResult = await checkAndCreateMatch(userId, toUserId, newInterest.id);
+  const matchResult = await checkAndCreateMatch(userId, toUserId, responseInterest.id);
 
   return {
-    interest_id: newInterest.id,
+    interest_id: responseInterest.id,
     matched: matchResult.matched,
     chat_room_id: matchResult.chat_room_id,
   };

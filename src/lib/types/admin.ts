@@ -2,6 +2,24 @@ export type AdminReportStatus = 'pending' | 'reviewed' | 'actioned' | 'dismissed
 export type AdminReportStatusFilter = AdminReportStatus | 'all';
 export type AdminReportAction = 'ban_target_user' | 'hide_feed' | 'delete_comment' | 'close_chat_room' | 'delete_message';
 
+export interface AdminReportUserSummaryDto {
+  userId: number;
+  nickname: string;
+  loginId: string | null;
+  university: string;
+  department: string;
+  gender: string;
+  age: number | null;
+  studentYear: number;
+  bio: string | null;
+  onboardingCompleted: boolean;
+  status: string;
+  profileImages: string[];
+  primaryProfileImage: string | null;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
 export interface AdminLoginResultDto {
   authenticated: true;
 }
@@ -12,17 +30,16 @@ export interface AdminLogoutResultDto {
 
 export interface AdminReportListItemDto {
   reportId: number;
-  reporter: {
-    userId: number;
-    nickname: string;
-    loginId: string | null;
-    university: string;
-    department: string;
-    status: string;
-  };
+  reporter: AdminReportUserSummaryDto;
   target: {
     type: string;
     id: number;
+    ownerUser: AdminReportUserSummaryDto | null;
+    content: {
+      text: string | null;
+      status: string | null;
+      createdAt: string | null;
+    } | null;
   };
   reasonType: string;
   description: string | null;

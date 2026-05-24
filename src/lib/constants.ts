@@ -19,6 +19,52 @@ export const PLACEHOLDER_PROFILE_IMAGE = 'data:image/svg+xml,' + encodeURICompon
 </svg>
 `);
 
+export const PLACEHOLDER_PLACE_IMAGE = '/place/place_C.jpg';
+
+export const PLACE_IMAGE_FALLBACKS: Record<string, string> = {
+  'B동': '/place/place_B1.jpg',
+  'C동': '/place/place_C.jpg',
+  'E동': '/place/place_E.jpg',
+  'F동': '/place/place_F5.jpg',
+  'G동': '/place/place_G.jpg',
+  'H동': '/place/Place_H1.jpg',
+  'J동': '/place/Place_J1.jpg',
+  '도서관': '/place/place_Lib1.jpg',
+  '본관': '/place/place_본관1.jpg',
+  'Cafe_ing': '/place/cafe_ing.jpg',
+  '늘빛라운지': '/place/neulbitLaunge.jpg',
+  'BC파크': '/place/BCpark2.jpg',
+  '늘빛파크': '/place/backgom2.jpg',
+  '다인': '/place/dine1.jpg',
+  '버거잉': '/place/bugering.jpg',
+  '운동장': '/place/Place_platGround2.jpg',
+  '백곰': '/place/egg.png',
+  '코딩하는 백곰이': '/place/coding.png',
+  '중문': '/place/Place_middleGate.jpg',
+};
+
+export const PLACE_IMAGE_GALLERIES: Record<string, string[]> = {
+  'B동': ['/place/place_B1.jpg'],
+  'C동': ['/place/place_C.jpg', '/place/place_C1.jpg', '/place/place_C2.jpg', '/place/place_C3.jpg'],
+  'E동': ['/place/place_E.jpg', '/place/place_E1.jpg'],
+  'F동': ['/place/Place_F.jpg', '/place/place_F1.jpg', '/place/place_F2.jpg', '/place/place_F3.jpg', '/place/place_F4.jpg'],
+  'G동': ['/place/place_G.jpg'],
+  'H동': ['/place/Place_H1.jpg', '/place/Place_H2.jpg', '/place/Place_H_stairs.jpg', '/place/Place_HtoJ.jpg'],
+  'J동': ['/place/Place_J1.jpg', '/place/Place_J2.jpg'],
+  '도서관': ['/place/place_Lib1.jpg', '/place/place_Lib2.jpg'],
+  '본관': ['/place/place_본관1.jpg', '/place/place_본관2.jpg'],
+  'Cafe_ing': ['/place/cafe_ing.jpg', '/place/cafe_ing1.jpg'],
+  '늘빛라운지': ['/place/neulbitLaunge.jpg'],
+  'BC파크': ['/place/BCPark.jpg', '/place/BCPark1.jpg', '/place/BCpark2.jpg', '/place/BCPark3.jpg'],
+  '늘빛파크': ['/place/backgom1.jpg', '/place/backgom2.jpg', '/place/backgom3.jpg', '/place/backgpm4.jpg'],
+  '다인': ['/place/dine1.jpg', '/place/dine2.jpg', '/place/dine3.jpg'],
+  '버거잉': ['/place/bugering.jpg'],
+  '운동장': ['/place/Place_platGround2.jpg', '/place/Place_playGround1.jpg', '/place/Place_playGround_secretroot.jpg', '/place/playground.jpg', '/place/playground_02.jpg'],
+  '백곰': ['/place/egg.png'],
+  '코딩하는 백곰이': ['/place/coding.png'],
+  '중문': ['/place/Place_middleGate.jpg', '/place/middledoor.jpg'],
+};
+
 const FEMALE_AVATAR_IDS = [
   1, 5, 9, 10, 16, 20, 21, 23, 24, 25,
   26, 28, 29, 31, 32, 36, 38, 39, 40, 41,

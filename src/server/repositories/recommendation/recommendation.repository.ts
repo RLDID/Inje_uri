@@ -72,6 +72,9 @@ export async function findCandidatesWithProfile(
     LEFT JOIN user_profile_images upi
       ON upi.user_id = u.id AND upi.is_primary = true
     WHERE dri.daily_recommendation_id = ${dailyRecommendationId}
+      AND u.status = 'active'
+      AND u.onboarding_completed = true
+      AND u.deleted_at IS NULL
     ORDER BY dri.rank_order ASC
   `;
 }
@@ -190,6 +193,10 @@ export async function createDailyRecommendation(
   today: string,
   candidateIds: number[],
 ): Promise<number> {
+  if (candidateIds.length !== 3 || new Set(candidateIds).size !== 3) {
+    throw new Error("추천 후보는 정확히 3명의 고유 사용자여야 합니다.");
+  }
+
   return prisma.$transaction(async (tx) => {
     const recRows = await tx.$queryRaw<{ id: number }[]>`
       INSERT INTO daily_recommendations (user_id, recommendation_date, generated_at)

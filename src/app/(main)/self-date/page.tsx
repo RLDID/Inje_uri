@@ -32,6 +32,9 @@ import {
 import type { Story } from '@/lib/types';
 
 const SELF_DATE_VIEW_STATE_KEY = 'self-date:list';
+const MAIN_ACTION_HINT_STEP_MS = 2500;
+
+type MainActionHint = 'create' | 'myFeeds' | 'filter';
 
 interface SelfDateViewState {
   selectedFilter: FeedFilterCategoryId;
@@ -44,6 +47,32 @@ function isValidFilter(filter: string | null): filter is FeedFilterCategoryId {
   return !!filter && FEED_FILTER_CATEGORIES.some((category) => category.id === filter);
 }
 
+function ActionHintBadge({
+  id,
+  isVisible,
+  label,
+  placement = 'below',
+}: {
+  id: string;
+  isVisible: boolean;
+  label: string;
+  placement?: 'above' | 'below';
+}) {
+  const placementClass = placement === 'above' ? 'bottom-full mb-2' : 'top-full mt-2';
+
+  return (
+    <span
+      id={id}
+      role="tooltip"
+      className={`pointer-events-none absolute right-0 z-[70] whitespace-nowrap rounded-lg bg-[var(--color-text-primary)] px-3 py-1.5 text-xs font-semibold text-white shadow-lg transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 ${placementClass} ${
+        isVisible ? 'opacity-100' : 'opacity-0'
+      }`}
+    >
+      {label}
+    </span>
+  );
+}
+
 function getSavedViewState(): SelfDateViewState {
   return readRouteViewState<SelfDateViewState>(SELF_DATE_VIEW_STATE_KEY, {
     selectedFilter: 'all',
@@ -53,7 +82,7 @@ function getSavedViewState(): SelfDateViewState {
   });
 }
 
-function SlidersIcon({ onClick }: { onClick: () => void }) {
+function SlidersIcon({ onClick, showHint }: { onClick: () => void; showHint: boolean }) {
   const pointerActivatedRef = useRef(false);
 
   return (
@@ -79,8 +108,12 @@ function SlidersIcon({ onClick }: { onClick: () => void }) {
 
         onClick();
       }}
-      className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-chip-background)] active:bg-[var(--color-chip-background)]"
-      aria-label="내 글 보기"
+      className={`group relative flex h-11 w-11 cursor-pointer items-center justify-center rounded-full transition-colors hover:bg-[var(--color-chip-background)] active:bg-[var(--color-chip-background)] ${
+        showHint ? 'bg-[var(--color-like-active)] text-[var(--color-text-primary)]' : 'text-[var(--color-text-primary)]'
+      }`}
+      aria-label="카테고리 보기"
+      aria-describedby="self-date-filter-tooltip"
+      title="카테고리 보기"
     >
       <svg
         width="26"
@@ -100,16 +133,30 @@ function SlidersIcon({ onClick }: { onClick: () => void }) {
         <path d="M19 17h1" />
         <circle cx="16" cy="17" r="2" />
       </svg>
+      <ActionHintBadge id="self-date-filter-tooltip" isVisible={showHint} label="카테고리 보기" />
     </button>
   );
 }
 
-function MyFeedsIcon({ href }: { href: string }) {
+function MyFeedsIcon({
+  href,
+  showHint,
+  onClick,
+}: {
+  href: string;
+  showHint: boolean;
+  onClick?: () => void;
+}) {
   return (
     <Link
       href={href}
-      className="flex h-11 w-11 items-center justify-center rounded-full text-[var(--color-text-primary)] transition-colors active:bg-[var(--color-chip-background)]"
-      aria-label="My feeds"
+      onClick={onClick}
+      className={`group relative flex h-11 w-11 items-center justify-center rounded-full transition-colors hover:bg-[var(--color-chip-background)] active:bg-[var(--color-chip-background)] ${
+        showHint ? 'bg-[var(--color-like-active)] text-[var(--color-text-primary)]' : 'text-[var(--color-text-primary)]'
+      }`}
+      aria-label="내 피드 보기"
+      aria-describedby="self-date-my-feeds-tooltip"
+      title="내 피드 보기"
     >
       <svg
         width="26"
@@ -125,6 +172,7 @@ function MyFeedsIcon({ href }: { href: string }) {
         <circle cx="12" cy="8.5" r="3" />
         <path d="M5.5 19c1.1-3.2 3.5-5 6.5-5s5.4 1.8 6.5 5" />
       </svg>
+      <ActionHintBadge id="self-date-my-feeds-tooltip" isVisible={showHint} label="내 피드 보기" />
     </Link>
   );
 }
@@ -155,6 +203,25 @@ function SelfDatePageContent() {
   const [pullDistance, setPullDistance] = useState(0);
   const [isPullRefreshing, setIsPullRefreshing] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [activeActionHint, setActiveActionHint] = useState<MainActionHint | null>('create');
+
+  useEffect(() => {
+    const myFeedsHintTimeoutId = window.setTimeout(() => {
+      setActiveActionHint('myFeeds');
+    }, MAIN_ACTION_HINT_STEP_MS);
+    const filterHintTimeoutId = window.setTimeout(() => {
+      setActiveActionHint('filter');
+    }, MAIN_ACTION_HINT_STEP_MS * 2);
+    const hideHintTimeoutId = window.setTimeout(() => {
+      setActiveActionHint(null);
+    }, MAIN_ACTION_HINT_STEP_MS * 3);
+
+    return () => {
+      window.clearTimeout(myFeedsHintTimeoutId);
+      window.clearTimeout(filterHintTimeoutId);
+      window.clearTimeout(hideHintTimeoutId);
+    };
+  }, []);
 
   const persistViewState = useCallback(
     (nextScrollY = typeof window !== 'undefined' ? window.scrollY : 0) => {
@@ -480,8 +547,16 @@ function SelfDatePageContent() {
               sourcePath: currentPath,
               fallbackPath: currentPath,
             })}
+            showHint={activeActionHint === 'myFeeds'}
+            onClick={() => setActiveActionHint(null)}
           />
-          <SlidersIcon onClick={() => setIsFilterOpen((prevIsFilterOpen) => !prevIsFilterOpen)} />
+          <SlidersIcon
+            showHint={activeActionHint === 'filter'}
+            onClick={() => {
+              setActiveActionHint(null);
+              setIsFilterOpen((prevIsFilterOpen) => !prevIsFilterOpen);
+            }}
+          />
         </div>
         {/*
         title="지금 우리"
@@ -690,13 +765,22 @@ function SelfDatePageContent() {
       <div className="fixed bottom-[calc(var(--nav-height)+var(--spacing-safe-bottom)+28px)] right-4 z-40">
         <Link
           href="/self-date/create"
-          className="flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
-          aria-label="새 피드 작성"
+          onClick={() => setActiveActionHint(null)}
+          className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-[var(--color-like-active)] text-white shadow-[0_6px_14px_rgba(243,167,192,0.22)] transition-transform active:scale-95"
+          aria-label="내 피드 생성"
+          aria-describedby="self-date-create-tooltip"
+          title="내 피드 생성"
         >
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
           </svg>
+          <ActionHintBadge
+            id="self-date-create-tooltip"
+            isVisible={activeActionHint === 'create'}
+            label="내 피드 생성"
+            placement="above"
+          />
         </Link>
       </div>
 

@@ -8,6 +8,11 @@ const adapter = new PrismaPg({
 });
 const prisma = new PrismaClient({ adapter });
 
+function shouldSeedTestData() {
+  const flag = process.env.SEED_TEST_DATA?.trim().toLowerCase();
+  return flag === "true";
+}
+
 // ─────────────────────────────────────────────
 // 카테고리 / 키워드 seed 데이터
 // ─────────────────────────────────────────────
@@ -218,11 +223,6 @@ function assertTaxonomyContract() {
 // ─────────────────────────────────────────────
 // Cleanup 함수
 // ─────────────────────────────────────────────
-const MANAGED_PROFILE_CATEGORY_CODES = [
-  "lifestyle", "drinking", "smoking", "mbti", "personality",
-  "conversation", "interests", "desired_vibe", "date_style", "deal_breakers",
-];
-
 const OBSOLETE_KOREAN_CATEGORY_CODES = ["personality_kr", "hobby_kr", "love_style"];
 
 async function cleanupObsoleteKoreanCategories() {
@@ -300,9 +300,10 @@ const placeCategorySeeds = [
   { code: "park",       name: "Park" },
   { code: "activity",   name: "Activity" },
   { code: "campus",     name: "Campus" },
-  { code: "egg",        name: "Egg"},
+  { code: "egg",        name: "플러팅"},
+  { code: "coding",     name: "컴공"},
   { code: "gate",        name: "Gate"},
-  
+
 ];
 
 const placeSeeds :{
@@ -318,16 +319,14 @@ const placeSeeds :{
   {
     categoryCode: "campus",
     places: [
-      { name: "A동",   description: "인제대학교 A동",    tags: ["a동", "에이동"]},
       { name: "B동",   description: "인제대학교 B동",    tags: ["b동", "비동"]},
       { name: "C동",   description: "인제대학교 C동",    tags: ["c동", "씨동"], image_url: "/place/place_C.jpg" },
-      { name: "D동",   description: "인제대학교 D동",    tags: ["d동", "디동"], image_url: "/place/place_E.jpg" },
       { name: "E동",   description: "인제대학교 E동",    tags: ["e동", "이동"], image_url: "/place/place_E.jpg" },
       { name: "F동",   description: "인제대학교 F동",    tags: ["f동", "에프동"], image_url: "/place/place_F5.jpg" },
-      { name: "H동",   description: "인제대학교 H동",    tags: ["h동", "에이치동"], image_url: "/place/place_H.jpg" },
+      { name: "H동",   description: "인제대학교 H동",    tags: ["h동", "에이치동"], image_url: "/place/Place_H1.jpg" },
       { name: "G동",   description: "인제대학교 G동",    tags: ["g동", "지동"], image_url: "/place/place_G.jpg" },
-      { name: "J동",   description: "인제대학교 j동",    tags: ["j동", "제이동"], image_url: "/place/place_j.jpg" },
-      { name: "도서관", description: "인제대학교 중앙도서관", tags: ["도서관", "도서", "공부"], image_url: "/place/palce_Lib1.jpg" },
+      { name: "J동",   description: "인제대학교 j동",    tags: ["j동", "제이동"], image_url: "/place/Place_J1.jpg" },
+      { name: "도서관", description: "인제대학교 중앙도서관", tags: ["도서관", "도서", "공부"], image_url: "/place/place_Lib1.jpg" },
       { name: "본관",  description: "인제대학교 본관",    tags: ["본관", "행정관"], image_url: "/place/place_본관1.jpg" },
     ]
   },
@@ -341,7 +340,7 @@ const placeSeeds :{
   {
     categoryCode: "park",
     places: [
-      { name: "BC파크",      description: "인제대학교 BC공원",    tags: ["공원", "BC파크"], image_url: "/place/BCPark2.jpg" },
+      { name: "BC파크",      description: "인제대학교 BC공원",    tags: ["공원", "BC파크"], image_url: "/place/BCpark2.jpg" },
       { name: "늘빛파크",     description: "인제대학교 늘빛공원",    tags: ["공원", "늘빛공원"], image_url: "/place/backgom2.jpg" },
 
     ]
@@ -363,8 +362,13 @@ const placeSeeds :{
   {
     categoryCode: "egg",
     places:[
-      { name: "백곰",       description: "인제대학교 마스코트",    tags: ["백곰이", "백곰", "마스코트"], image_url: "/place/egg.jpg" },
-      { name: "코딩하는 백곰이",       description: "인제대학교 마스코트",    tags: ["코딩", "백곰이", "백곰", "마스코트", "컴공"], image_url: "/place/coding.jpg" },
+      { name: "백곰",       description: "인제대학교 마스코트",    tags: ["백곰이", "백곰", "마스코트"], image_url: "/place/egg.png" },
+    ]
+  },
+  {
+    categoryCode: "coding",
+    places:[
+      { name: "코딩하는 백곰이",       description: "인제대학교 마스코트",    tags: ["코딩", "백곰이", "백곰", "마스코트", "컴공"], image_url: "/place/coding.png" },
     ]
   },
   {
@@ -629,13 +633,6 @@ const testSessionSeeds = [
 // ─────────────────────────────────────────────
 // Seed 함수
 // ─────────────────────────────────────────────
-function toKeywordCode(label: string) {
-  return label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
 async function seedCategories() {
   for (const categorySeed of categorySeeds) {
     const category = await prisma.category.upsert({
@@ -809,6 +806,11 @@ async function seedTestAuthSessions() {
 }
 
 async function seedPlaces() {
+    await prisma.place.updateMany({
+      where: { name: { in: ["A동", "D동"] } },
+      data: { is_active: false },
+    });
+
     for (const group of placeSeeds) {
       const category = await prisma.placeCategory.findUnique({
         where: { code: group.categoryCode }
@@ -817,18 +819,26 @@ async function seedPlaces() {
 
       for (const seed of group.places) {
         const existing = await prisma.place.findFirst({
-          where: { category_id: category.id, name: seed.name }
+          where: { name: seed.name }
         });
 
-        const place = existing ?? await prisma.place.create({
-          data: {
-            category_id: category.id,
-            name: seed.name,
-            address: seed.address ?? `경남 김해시 인제로 197 ${seed.name}`,
-            description: seed.description,
-            image_url: seed.image_url ?? null,
-          }
-        });
+        const placeData = {
+          category_id: category.id,
+          name: seed.name,
+          address: seed.address ?? `경남 김해시 인제로 197 ${seed.name}`,
+          description: seed.description,
+          image_url: seed.image_url ?? null,
+          is_active: true,
+        };
+
+        const place = existing
+          ? await prisma.place.update({
+              where: { id: existing.id },
+              data: placeData,
+            })
+          : await prisma.place.create({
+              data: placeData,
+            });
 
         for (const tag of seed.tags) {
           await prisma.placeTag.upsert({
@@ -845,17 +855,23 @@ async function seedPlaces() {
 // main
 // ─────────────────────────────────────────────
 async function main() {
+  const seedTestData = shouldSeedTestData();
+
   assertTaxonomyContract();
   await cleanupObsoleteKoreanCategories();
   await cleanupObsoleteProfileKeywords();
   await seedCategories();
   await seedFeedKeywords();
   await seedPlaceCategories();
-  await seedTestUsers();
-  await seedTestInterests();
-  await seedTestFeedAndComment();
-  await seedTestUserKeywords();
-  await seedTestAuthSessions();
+  if (seedTestData) {
+    await seedTestUsers();
+    await seedTestInterests();
+    await seedTestFeedAndComment();
+    await seedTestUserKeywords();
+    await seedTestAuthSessions();
+  } else {
+    console.log("[seed] 테스트 유저/세션 seed skipped. Set SEED_TEST_DATA=true to enable.");
+  }
   await seedPlaces();
 
   console.log("Seed baseline data has been prepared.");

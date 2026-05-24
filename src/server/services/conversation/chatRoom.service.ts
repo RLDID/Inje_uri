@@ -142,22 +142,58 @@ export async function getChatRooms(
     tab: "all" | "unread",
   ): Promise<ChatRoomListItemDto[]> {
     const rooms = await chatRoomRepo.findRoomsByUserId(userId);
+    const now = new Date();
+    const blockedByMeByUserId = new Map<number, boolean>();
+    const restoredPairs = new Set<string>();
+    const visibleRooms: Array<{
+      room: (typeof rooms)[number];
+      blockedByMe: boolean;
+    }> = [];
 
-    rooms.sort((a, b) => {
-      const aTime = a.messages[0]?.created_at ?? a.created_at;
-      const bTime = b.messages[0]?.created_at ?? b.created_at;
+    for (const room of rooms) {
+      const other = room.participants.find((participant) => participant.user_id !== userId);
+      if (!other) {
+        visibleRooms.push({ room, blockedByMe: false });
+        continue;
+      }
+
+      const pairKey = [userId, other.user_id].sort((left, right) => left - right).join(":");
+
+      if (room.status === "blocked") {
+        if (!restoredPairs.has(pairKey)) {
+          await chatRoomRepo.restoreBlockedRoomsBetweenUsers(userId, other.user_id);
+          restoredPairs.add(pairKey);
+        }
+        room.status = room.expires_at > now ? "active" : "expired";
+        room.blocked_by_user_id = null;
+      }
+
+      let blockedByMe = blockedByMeByUserId.get(other.user_id);
+      if (blockedByMe === undefined) {
+        const block = await safetyRepo.findExistingBlock(userId, other.user_id);
+        blockedByMe = Boolean(block && !block.unblocked_at);
+        blockedByMeByUserId.set(other.user_id, blockedByMe);
+      }
+
+      visibleRooms.push({ room, blockedByMe });
+    }
+
+    visibleRooms.sort((a, b) => {
+      const aTime = a.room.messages[0]?.created_at ?? a.room.created_at;
+      const bTime = b.room.messages[0]?.created_at ?? b.room.created_at;
       return bTime.getTime() - aTime.getTime();
     });
 
     const unreadCounts = await Promise.all(
-      rooms.map((room) => messageReadRepo.getUnreadCount(userId, room.id))
+      visibleRooms.map(({ room }) => messageReadRepo.getUnreadCount(userId, room.id))
     );
 
     const result: ChatRoomListItemDto[] = [];
-    for (let i = 0; i < rooms.length; i++) {
-      const unreadCount = unreadCounts[i];
+    for (let i = 0; i < visibleRooms.length; i++) {
+      const entry = visibleRooms[i];
+      const unreadCount = entry.blockedByMe || entry.room.status === "blocked" ? 0 : unreadCounts[i];
       if (tab === "unread" && unreadCount === 0) continue;
-      result.push(toChatRoomListItemDto(rooms[i], userId, unreadCount));
+      result.push(toChatRoomListItemDto(entry.room, userId, unreadCount, entry.blockedByMe));
     }
 
     return result;
@@ -167,6 +203,7 @@ export async function getChatRooms(
     room: Awaited<ReturnType<typeof chatRoomRepo.findRoomsByUserId>>[number],
     currentUserId: number,
     unreadCount: number,
+    blockedByMe: boolean,
   ): ChatRoomListItemDto {
     let other: (typeof room.participants)[number] | null = null;
     for (const p of room.participants) {
@@ -179,7 +216,7 @@ export async function getChatRooms(
       roomId: room.id,
       status: room.status,
       isBlocked: room.status === "blocked",
-      blockedByMe: room.blocked_by_user_id === currentUserId,
+      blockedByMe,
       createdAt: room.created_at.toISOString(),
       expiresAt: room.expires_at.toISOString(),
       otherUser: other ? {

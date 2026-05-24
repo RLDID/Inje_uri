@@ -9,6 +9,7 @@ export interface Chat {
   lastMessage?: Message;
   unreadCount: number;
   status: ChatStatus;
+  blockedByMe?: boolean;
   chatType: ChatType; // 채팅 유형 추가
   createdAt: Date;
   expiresAt: Date;
@@ -34,6 +35,7 @@ export interface Message {
 export type MessageType = 'text' | 'image' | 'system';
 export type SystemMessageKind = 'match_started' | 'chat_expiring';
 export type ChatStatus = 'active' | 'expired' | 'blocked';
+export type PlaceSuggestionStatus = 'pending' | 'accepted' | 'dismissed';
 
 // 채팅방 제한 제거됨 - 무제한 채팅 가능
 export interface ChatLimitInfo {
@@ -60,4 +62,35 @@ export interface ChatRoomListItemDto {
     createdAt: string;
   } | null;
   unreadCount: number;
+}
+
+export interface PlaceCategory {
+  id: string;
+  code: string;
+  name: string;
+}
+
+export interface PlaceTag {
+  id: string;
+  tag: string;
+}
+
+export interface Place {
+  id: string;
+  name: string;
+  address: string;
+  imageUrl: string | null;
+  description: string | null;
+  category: PlaceCategory;
+  tags: PlaceTag[];
+}
+
+export interface ChatPlaceSuggestion {
+  id: string;
+  roomId: string;
+  placeId: string;
+  triggeredKeyword: string | null;
+  status: PlaceSuggestionStatus;
+  suggestedAt: Date;
+  place: Place;
 }
