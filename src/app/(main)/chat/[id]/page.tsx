@@ -19,13 +19,14 @@ import {
   getChatRoomPlaceSuggestions,
   getChatRoom,
   getChatMessages,
+  blockChatRoom,
   leaveChatRoom,
   markChatRoomRead,
   sendChatMessage,
   updateChatRoomPlaceSuggestionStatus,
 } from '@/lib/api/chat';
 import { getMe } from '@/lib/api/profile';
-import { blockUser, reportTarget } from '@/lib/api/safety';
+import { reportTarget } from '@/lib/api/safety';
 import { trackChatOpened } from '@/lib/analytics';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { usePolling } from '@/lib/hooks/usePolling';
@@ -743,7 +744,7 @@ function ChatRoomPageContent() {
 
     if (confirmAction === 'block') {
       try {
-        await blockUser(otherUser.id);
+        await blockChatRoom(chat.id);
       } catch (error) {
         showToast(error instanceof Error ? error.message : '차단하지 못했습니다.', 'error');
         return;

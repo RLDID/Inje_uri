@@ -727,8 +727,8 @@
       "/api/chat-room/{id}/block": {
         patch: {
           tags: ["채팅방"],
-          summary: "채팅방 차단 상태 전이",
-          description: "D 파트가 차단 완료 후 호출. status=blocked + blocked_by_user_id 기록.",
+          summary: "채팅방에서 상대 차단",
+          description: "채팅방에서 상대를 차단한다. 방 status는 바꾸지 않고 차단한 사용자에게만 blockedByMe 정책이 적용된다.",
           parameters: [{ $ref: "#/components/parameters/ChatRoomId" }],          
           responses: {
             "200": {
@@ -743,6 +743,7 @@
                         type: "object",
                         properties: {
                           roomStatus: { type: "string", example: "blocked" },
+                          blockId: { type: "integer", example: 12 },
                         },
                       },
                     },

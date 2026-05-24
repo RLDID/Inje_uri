@@ -10,8 +10,8 @@ import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import { CHAT_UNREAD_REFRESH_EVENT, getChatRemainingTime, getOtherParticipant } from '@/lib/utils/chat';
 import { CenteredModal } from '@/components/ui/BottomSheet';
 import { useToast } from '@/components/ui';
-import { leaveChatRoom } from '@/lib/api/chat';
-import { blockUser, reportTarget } from '@/lib/api/safety';
+import { blockChatRoom, leaveChatRoom } from '@/lib/api/chat';
+import { reportTarget } from '@/lib/api/safety';
 import { buildChatRoomHref, buildProfileDetailHref, useCurrentRouteContext } from '@/lib/navigation';
 
 type ChatPreviewAction = 'report' | 'block';
@@ -109,7 +109,7 @@ function ChatPreviewComponent({ chat, showTypeBadge = false, currentUserId, onCh
         });
         showToast('신고가 접수되었고 대화 내역이 함께 제출되었어요.', 'success');
       } else {
-        await blockUser(user.id, `채팅방에서 차단 (${chat.id})`);
+        await blockChatRoom(chat.id);
         showToast('상대방을 차단했어요.', 'success');
       }
 
