@@ -241,6 +241,17 @@ function areSamePlaceSuggestions(left: ChatPlaceSuggestion[], right: ChatPlaceSu
   ));
 }
 
+function createInitialTimeInfo() {
+  return {
+    hours: 0,
+    minutes: 0,
+    totalMinutes: 0,
+    isExpired: false,
+    isExpiringSoon: false,
+    timeLabel: '로딩 중...',
+  };
+}
+
 function ChatRoomPageContent() {
   const params = useParams();
   const router = useRouter();
@@ -267,14 +278,7 @@ function ChatRoomPageContent() {
   const [imgError, setImgError] = useState(false);
   const [roomRestriction, setRoomRestriction] = useState<ChatRoomRestriction>(null);
   const [hasReportedRoom, setHasReportedRoom] = useState(false);
-  const [timeInfo, setTimeInfo] = useState({
-    hours: 0,
-    minutes: 0,
-    totalMinutes: 0,
-    isExpired: false,
-    isExpiringSoon: false,
-    timeLabel: '로딩 중...',
-  });
+  const [timeInfo, setTimeInfo] = useState(createInitialTimeInfo);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const didInitialScrollRef = useRef(false);
   const trackedChatOpenIdRef = useRef<string | null>(null);
@@ -300,8 +304,25 @@ function ChatRoomPageContent() {
     lastReadMessageIdRef.current = null;
     lastScrollYRef.current = 0;
     isLoadingOlderMessagesRef.current = false;
+
+    setIsLoadingRoom(true);
     setIsLoadingOlderMessages(false);
     setHasMoreOlderMessages(false);
+    setChat(null);
+    setMessages([]);
+    setPlaceSuggestions([]);
+    setIsPlacePanelCollapsed(false);
+    setIsPlaceGalleryOpen(false);
+    setHidePlaceSuggestions(false);
+    setUpdatingPlaceSuggestionId(null);
+    setShowMenu(false);
+    setConfirmAction(null);
+    setLeaveRoomOnSubmit(false);
+    setReportDescription('');
+    setImgError(false);
+    setRoomRestriction(null);
+    setHasReportedRoom(false);
+    setTimeInfo(createInitialTimeInfo());
   }, [chatId]);
 
   const applyLoadedMessages = useCallback((
