@@ -12,3 +12,8 @@ export function fail(code: string, message: string, status = 400) {
     { status },
   );
 }
+
+export function noStore<T extends NextResponse>(response: T): T {
+  response.headers.set("Cache-Control", "no-store, max-age=0");
+  return response;
+}

@@ -4,6 +4,7 @@ import { AppError } from "@/server/lib/app-error";
 import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
 import type { ActiveBlockListRow } from "@/server/repositories/safety/safety.repository";
 import { restoreBlockedRoomsBetweenUsers } from "@/server/repositories/chat/chatRoom.repo";
+import { canTakeUserSafetyAction } from "@/server/services/user/profile-access.service";
 import type {
   BlockListDto,
   BlockListItemDto,
@@ -38,6 +39,13 @@ export async function createReport(
     alsoBlock: boolean;
   },
 ): Promise<CreateReportResultDto> {
+  if (params.targetType === "user") {
+    const canReportUser = await canTakeUserSafetyAction(reporterUserId, params.targetId);
+    if (!canReportUser) {
+      throw new AppError("TARGET_NOT_FOUND", "?좉퀬 ??곸씠 議댁옱?섏? ?딆뒿?덈떎.");
+    }
+  }
+
   const targetOwnerUserId = await repo.findTargetOwnerUserId(params.targetType, params.targetId, reporterUserId);
 
   if (targetOwnerUserId === null) {
@@ -90,6 +98,11 @@ export async function blockUser(
   const targetUser = await repo.findUserById(blockedUserId);
   if (!targetUser) {
     throw new AppError("USER_NOT_FOUND", "존재하지 않는 사용자입니다.");
+  }
+
+  const canBlockUser = await canTakeUserSafetyAction(blockerUserId, blockedUserId);
+  if (!canBlockUser) {
+    throw new AppError("USER_NOT_FOUND", "議댁옱?섏? ?딅뒗 ?ъ슜?먯엯?덈떎.");
   }
 
   const existingBlock = await repo.findExistingBlock(blockerUserId, blockedUserId);

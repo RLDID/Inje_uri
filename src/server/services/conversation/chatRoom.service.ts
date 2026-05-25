@@ -13,7 +13,7 @@
   import { SafetyRepository } from "@/server/repositories/safety/safety.repository";
   import { chat_room_source_type } from "@/generated/prisma/client";
   import { prisma } from "@/server/db/prisma";
-  import type { PrismaTransactionClient } from "@/server/db/prisma";
+  import type { PrismaDbClient, PrismaTransactionClient } from "@/server/db/prisma";
   import type { ChatRoomListItemDto } from "@/lib/types/chat";
   import { isAdminOperatorEmail } from "@/server/services/admin/admin-operator.constants";
 
@@ -32,6 +32,74 @@
     tx?: PrismaTransactionClient;
   };
 
+  type ChatRoomSourceDb = Pick<PrismaDbClient, "$queryRaw">;
+  type ExistsRow = { exists: number };
+
+  async function hasAnyRow(rowsPromise: Promise<ExistsRow[]>): Promise<boolean> {
+    const rows = await rowsPromise;
+    return rows.length > 0;
+  }
+
+  async function hasValidInterestSource(input: CreateChatRoomParams, db: ChatRoomSourceDb): Promise<boolean> {
+    const sourceInterestId = input.sourceInterestId;
+    if (sourceInterestId === undefined || !Number.isInteger(sourceInterestId) || sourceInterestId <= 0) {
+      return false;
+    }
+
+    return hasAnyRow(db.$queryRaw<ExistsRow[]>`
+      SELECT 1 AS exists
+      FROM interests i
+      WHERE i.id = ${sourceInterestId}
+        AND i.status = 'accepted'
+        AND i.matched_at IS NOT NULL
+        AND (
+          (i.from_user_id = ${input.requestUserId} AND i.to_user_id = ${input.targetUserId})
+          OR
+          (i.from_user_id = ${input.targetUserId} AND i.to_user_id = ${input.requestUserId})
+        )
+      LIMIT 1
+    `);
+  }
+
+  async function hasValidCommentSource(input: CreateChatRoomParams, db: ChatRoomSourceDb): Promise<boolean> {
+    const sourceCommentId = input.sourceCommentId;
+    if (sourceCommentId === undefined || !Number.isInteger(sourceCommentId) || sourceCommentId <= 0) {
+      return false;
+    }
+
+    return hasAnyRow(db.$queryRaw<ExistsRow[]>`
+      SELECT 1 AS exists
+      FROM feed_comments c
+      JOIN self_date_feeds f
+        ON f.id = c.feed_id
+      JOIN users commenter
+        ON commenter.id = c.commenter_user_id
+      WHERE c.id = ${sourceCommentId}
+        AND f.author_user_id = ${input.requestUserId}
+        AND c.commenter_user_id = ${input.targetUserId}
+        AND c.deleted_at IS NULL
+        AND f.status = 'active'
+        AND f.expires_at > NOW()
+        AND commenter.status = 'active'
+        AND commenter.deleted_at IS NULL
+      LIMIT 1
+    `);
+  }
+
+  async function hasValidChatRoomSource(input: CreateChatRoomParams): Promise<boolean> {
+    const db = input.tx ?? prisma;
+
+    if (input.sourceType === "interest") {
+      return hasValidInterestSource(input, db);
+    }
+
+    if (input.sourceType === "comment") {
+      return hasValidCommentSource(input, db);
+    }
+
+    return false;
+  }
+
   // ─────────────────────────────────────────────
   // 채팅방 생성
   // ─────────────────────────────────────────────
@@ -48,6 +116,11 @@
    */
   export async function createChatRoom(input: CreateChatRoomParams) {
     const { requestUserId, targetUserId, sourceType } = input;
+
+    const validSource = await hasValidChatRoomSource(input);
+    if (!validSource) {
+      return { error: ERROR.INVALID_SOURCE } as const;
+    }
 
     // 1. 양방향 차단 검사 — 어느 쪽이든 상대를 차단 중이면 새 방 거부
     const activeBlock = await safetyRepo.findActiveBlockBetweenUsers(requestUserId, targetUserId);

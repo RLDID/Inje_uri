@@ -34,6 +34,16 @@ import {
   updateUserPasswordHash,
 } from '@/server/repositories/user/user.repository';
 
+type UpstreamInjeBody = {
+  status?: unknown;
+  message?: unknown;
+};
+
+type InjeCheckSuccessResponse = {
+  status: string;
+  message: string;
+};
+
 export interface RegisterInput {
   loginId: string;
   password: string;
@@ -217,9 +227,9 @@ async function generateTodayRecommendationsAfterRegister(userId: number) {
   }
 }
 
-function parseUpstreamInjeBody(rawText: string): { status?: string; message?: string } | null {
+function parseUpstreamInjeBody(rawText: string): UpstreamInjeBody | null {
   try {
-    return JSON.parse(rawText) as { status?: string; message?: string };
+    return JSON.parse(rawText) as UpstreamInjeBody;
   } catch {
     const jsonStart = rawText.lastIndexOf('{');
     if (jsonStart < 0) {
@@ -227,23 +237,85 @@ function parseUpstreamInjeBody(rawText: string): { status?: string; message?: st
     }
 
     try {
-      return JSON.parse(rawText.slice(jsonStart)) as { status?: string; message?: string };
+      return JSON.parse(rawText.slice(jsonStart)) as UpstreamInjeBody;
     } catch {
       return null;
     }
   }
 }
 
-function normalizeUpstreamMessage(message: string | undefined): string {
-  if (!message) {
+function normalizeUpstreamStatus(status: unknown): string {
+  if (status === undefined || status === null) {
     return '';
   }
 
-  return message.replace(/\\\//g, '/').trim();
+  return String(status).trim().toLowerCase();
+}
+
+function normalizeUpstreamMessage(message: unknown): string {
+  if (message === undefined || message === null) {
+    return '';
+  }
+
+  return String(message).replace(/\\\//g, '/').trim();
+}
+
+function parseInjeCheckSuccessAllowlistJson(rawValue: string): InjeCheckSuccessResponse[] {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(rawValue);
+  } catch {
+    throw new Error('INJE_CHECK_SUCCESS_RESPONSES must be a JSON array.');
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error('INJE_CHECK_SUCCESS_RESPONSES must be a JSON array.');
+  }
+
+  return parsed
+    .map((item) => {
+      if (typeof item !== 'object' || item === null) {
+        return null;
+      }
+
+      const record = item as Record<string, unknown>;
+      const status = normalizeUpstreamStatus(record.status);
+      const message = normalizeUpstreamMessage(record.message);
+
+      return status && message ? { status, message } : null;
+    })
+    .filter((item): item is InjeCheckSuccessResponse => item !== null);
+}
+
+function getInjeCheckSuccessAllowlist(): InjeCheckSuccessResponse[] {
+  const rawJsonAllowlist = process.env.INJE_CHECK_SUCCESS_RESPONSES?.trim();
+  if (rawJsonAllowlist) {
+    return parseInjeCheckSuccessAllowlistJson(rawJsonAllowlist);
+  }
+
+  const status = normalizeUpstreamStatus(process.env.INJE_CHECK_SUCCESS_STATUS);
+  const message = normalizeUpstreamMessage(process.env.INJE_CHECK_SUCCESS_MESSAGE);
+
+  return status && message ? [{ status, message }] : [];
+}
+
+function isAllowedInjeCheckSuccessResponse(upstreamBody: UpstreamInjeBody): boolean {
+  const allowlist = getInjeCheckSuccessAllowlist();
+  if (allowlist.length === 0) {
+    return false;
+  }
+
+  const upstreamStatus = normalizeUpstreamStatus(upstreamBody.status);
+  const upstreamMessage = normalizeUpstreamMessage(upstreamBody.message);
+
+  return allowlist.some((allowed) => (
+    allowed.status === upstreamStatus && allowed.message === upstreamMessage
+  ));
 }
 
 export async function verifyInjeStudent(studentNumber: string, birth: string) {
-  let upstreamBody: { status?: string; message?: string } | null = null;
+  let upstreamBody: UpstreamInjeBody | null = null;
 
   try {
     const upstreamResponse = await fetch(BUS_INJE_CHECK_ENDPOINT, {
@@ -270,7 +342,15 @@ export async function verifyInjeStudent(studentNumber: string, birth: string) {
   }
 
   const upstreamMessage = normalizeUpstreamMessage(upstreamBody.message);
-  if (upstreamMessage === INJE_CHECK_FAIL_MESSAGE) {
+  if (upstreamMessage === normalizeUpstreamMessage(INJE_CHECK_FAIL_MESSAGE)) {
+    throw new ApiError(ERROR.INVALID_CREDENTIALS, '입력한 정보를 찾을수 없습니다.');
+  }
+
+  if (!isAllowedInjeCheckSuccessResponse(upstreamBody)) {
+    console.warn('[POST /api/auth/inje-check] rejected non-allowlisted upstream response', {
+      status: normalizeUpstreamStatus(upstreamBody.status),
+      message: upstreamMessage,
+    });
     throw new ApiError(ERROR.INVALID_CREDENTIALS, '입력한 정보를 찾을수 없습니다.');
   }
 
@@ -412,11 +492,13 @@ export async function verifyAccountRecoveryIdentity(input: {
   mode?: 'id' | 'password';
   studentNumber: string;
   birth: string;
+  realName: string;
   email?: string;
 }): Promise<AccountRecoveryVerificationResult> {
   const mode = input.mode ?? 'id';
   const studentNumber = input.studentNumber.trim();
   const birth = input.birth.trim();
+  const realName = input.realName.trim();
   const email = input.email?.trim().toLowerCase() ?? '';
 
   if (!studentNumber) {
@@ -425,6 +507,10 @@ export async function verifyAccountRecoveryIdentity(input: {
 
   if (!/^\d{6}$/.test(birth)) {
     throw new ApiError(ERROR.VALIDATION_ERROR, '생년월일 6자리를 입력해주세요.');
+  }
+
+  if (!realName) {
+    throw new ApiError(ERROR.VALIDATION_ERROR, '이름을 입력해주세요.');
   }
 
   if (mode === 'password' && !email) {
@@ -437,6 +523,11 @@ export async function verifyAccountRecoveryIdentity(input: {
 
   const user = await findUserForAccountRecovery(studentNumber);
   if (!user || !user.login_id || !isBirthHashMatch(user.birth_hash, birth)) {
+    throw new ApiError(ERROR.INVALID_VERIFICATION, '입력한 정보와 일치하는 계정을 찾을 수 없습니다.');
+  }
+
+  const normalizeName = (value: string) => value.replace(/\s+/g, '').toLowerCase();
+  if (normalizeName(user.real_name) !== normalizeName(realName)) {
     throw new ApiError(ERROR.INVALID_VERIFICATION, '입력한 정보와 일치하는 계정을 찾을 수 없습니다.');
   }
 
