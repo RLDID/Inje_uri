@@ -19,6 +19,7 @@ interface AccountRecoveryVerifyBody {
   mode?: unknown;
   studentNumber?: unknown;
   birth?: unknown;
+  realName?: unknown;
   email?: unknown;
 }
 
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
       mode,
       studentNumber: normalizeString(body.studentNumber),
       birth: normalizeString(body.birth),
+      realName: normalizeString(body.realName),
       email: normalizeString(body.email).toLowerCase(),
     };
     const rateLimitSet = buildAuthRateLimitSet('account-recovery', request, input.studentNumber);

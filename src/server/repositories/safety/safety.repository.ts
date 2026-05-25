@@ -39,22 +39,37 @@ export class SafetyRepository {
   async findTargetOwnerUserId(targetType: string, targetId: number, reporterUserId: number): Promise<number | null> {
     switch (targetType) {
       case "user": {
-        const user = await this.db.user.findUnique({
-          where: { id: targetId },
+        const user = await this.db.user.findFirst({
+          where: {
+            id: targetId,
+            status: "active",
+            deleted_at: null,
+          },
           select: { id: true },
         });
         return user ? user.id : null;
       }
       case "feed": {
-        const feed = await this.db.selfDateFeed.findUnique({
-          where: { id: targetId },
+        const feed = await this.db.selfDateFeed.findFirst({
+          where: {
+            id: targetId,
+            status: "active",
+            expires_at: { gt: new Date() },
+          },
           select: { author_user_id: true },
         });
         return feed ? feed.author_user_id : null;
       }
       case "feed_comment": {
-        const comment = await this.db.feedComment.findUnique({
-          where: { id: targetId },
+        const comment = await this.db.feedComment.findFirst({
+          where: {
+            id: targetId,
+            deleted_at: null,
+            feed: {
+              status: "active",
+              expires_at: { gt: new Date() },
+            },
+          },
           select: { commenter_user_id: true },
         });
         return comment ? comment.commenter_user_id : null;
@@ -64,6 +79,7 @@ export class SafetyRepository {
           where: {
             chat_room_id: targetId,
             user_id: reporterUserId,
+            left_at: null,
           },
           select: { user_id: true },
         });
@@ -73,14 +89,18 @@ export class SafetyRepository {
           where: {
             chat_room_id: targetId,
             user_id: { not: reporterUserId },
+            left_at: null,
           },
           select: { user_id: true },
         });
         return otherParticipant ? otherParticipant.user_id : null;
       }
       case "message": {
-        const message = await this.db.message.findUnique({
-          where: { id: targetId },
+        const message = await this.db.message.findFirst({
+          where: {
+            id: targetId,
+            deleted_at: null,
+          },
           select: { sender_user_id: true, chat_room_id: true },
         });
         if (!message) return null;
@@ -89,6 +109,7 @@ export class SafetyRepository {
           where: {
             chat_room_id: message.chat_room_id,
             user_id: reporterUserId,
+            left_at: null,
           },
           select: { user_id: true },
         });
@@ -177,8 +198,12 @@ export class SafetyRepository {
   }
 
   async findUserById(userId: number): Promise<{ id: number } | null> {
-    return this.db.user.findUnique({
-      where: { id: userId },
+    return this.db.user.findFirst({
+      where: {
+        id: userId,
+        status: "active",
+        deleted_at: null,
+      },
       select: { id: true },
     });
   }

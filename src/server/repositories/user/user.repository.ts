@@ -17,6 +17,7 @@ export type UserUpdateData = Partial<{
 export type AccountRecoveryUser = {
   id: number;
   login_id: string | null;
+  real_name: string;
   email: string;
   birth_hash: string | null;
   status: string;
@@ -83,6 +84,7 @@ export async function findUserForAccountRecovery(studentNumber: string): Promise
     select: {
       id: true,
       login_id: true,
+      real_name: true,
       email: true,
       birth_hash: true,
       status: true,
@@ -115,9 +117,25 @@ export async function findActiveUserProfileById(userId: number) {
       status: 'active',
       deleted_at: null,
     },
-    include: {
+    select: {
+      id: true,
+      email: true,
+      nickname: true,
+      age: true,
+      gender: true,
+      university: true,
+      department: true,
+      student_year: true,
+      bio: true,
+      last_active_at: true,
       userProfileImages: {
         orderBy: { sort_order: 'asc' },
+        select: {
+          id: true,
+          image_url: true,
+          sort_order: true,
+          is_primary: true,
+        },
       },
       userKeywordSelections: {
         include: {

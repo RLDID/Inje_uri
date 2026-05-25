@@ -38,6 +38,7 @@ export function AccountRecoveryPageClient() {
   const [mode, setMode] = useState<RecoveryMode>(() => resolveMode(searchParams.get('mode')));
   const [studentNumber, setStudentNumber] = useState('');
   const [birth, setBirth] = useState('');
+  const [realName, setRealName] = useState('');
   const [email, setEmail] = useState('');
   const [loginId, setLoginId] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -74,9 +75,10 @@ export function AccountRecoveryPageClient() {
 
     const normalizedStudentNumber = studentNumber.trim();
     const normalizedBirth = birth.trim();
+    const normalizedRealName = realName.trim();
     const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedStudentNumber || !normalizedBirth) {
-      const message = '학번과 생년월일을 모두 입력해주세요.';
+    if (!normalizedStudentNumber || !normalizedBirth || !normalizedRealName) {
+      const message = '학번, 생년월일, 이름을 모두 입력해주세요.';
       setErrorMessage(message);
       showToast(message, 'error');
       return;
@@ -114,6 +116,7 @@ export function AccountRecoveryPageClient() {
           mode,
           studentNumber: normalizedStudentNumber,
           birth: normalizedBirth,
+          realName: normalizedRealName,
           email: mode === 'password' ? normalizedEmail : undefined,
         }),
       });
@@ -232,8 +235,8 @@ export function AccountRecoveryPageClient() {
             </h1>
             <p className="mt-2 text-sm leading-6 text-[var(--color-text-secondary)]">
               {mode === 'password'
-                ? '가입할 때 인증한 학번, 생년월일, 이메일로 본인 확인을 진행합니다.'
-                : '가입할 때 인증한 학번과 생년월일로 본인 확인을 진행합니다.'}
+                ? '가입할 때 인증한 학번, 생년월일, 이름, 이메일로 본인 확인을 진행합니다.'
+                : '가입할 때 인증한 학번, 생년월일, 이름으로 본인 확인을 진행합니다.'}
             </p>
           </div>
 
@@ -322,6 +325,22 @@ export function AccountRecoveryPageClient() {
                       placeholder="생년월일 6자리"
                       className={inputClassName}
                       disabled={isBusy}
+                    />
+                  </UnderlinedField>
+
+                  <UnderlinedField fieldId="recoveryRealName" icon={<PersonIcon />} label="이름">
+                    <input
+                      id="recoveryRealName"
+                      type="text"
+                      value={realName}
+                      onChange={(event) => {
+                        setRealName(event.target.value);
+                        resetResult();
+                      }}
+                      placeholder="이름"
+                      className={inputClassName}
+                      disabled={isBusy}
+                      autoComplete="name"
                     />
                   </UnderlinedField>
 
@@ -479,6 +498,15 @@ function LockIcon() {
     <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="5" y="11" width="14" height="10" rx="2" />
       <path d="M8 11V8a4 4 0 0 1 8 0v3" />
+    </svg>
+  );
+}
+
+function PersonIcon() {
+  return (
+    <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 21a8 8 0 0 0-16 0" />
+      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }

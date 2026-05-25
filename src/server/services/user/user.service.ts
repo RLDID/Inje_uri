@@ -18,6 +18,7 @@ import { findActiveRoomBetweenUsers } from '@/server/repositories/chat/chatRoom.
 import { SafetyRepository } from '@/server/repositories/safety/safety.repository';
 import { prisma } from '@/server/db/prisma';
 import { isAdminOperatorEmail } from '@/server/services/admin/admin-operator.constants';
+import { canViewUserProfile } from '@/server/services/user/profile-access.service';
 
 const safetyRepo = new SafetyRepository(prisma);
 
@@ -325,6 +326,19 @@ export async function getCurrentUserProfile(userId: number) {
 }
 
 export async function getUserProfileDetail(currentUserId: number, targetUserId: number) {
+  if (currentUserId !== targetUserId) {
+    const activeBlock = await safetyRepo.findActiveBlockBetweenUsers(currentUserId, targetUserId);
+
+    if (activeBlock) {
+      throw new ApiError(ERROR.NOT_FOUND, '?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎.');
+    }
+
+    const canView = await canViewUserProfile(currentUserId, targetUserId);
+    if (!canView) {
+      throw new ApiError(ERROR.NOT_FOUND, '?ъ슜???뺣낫瑜?李얠쓣 ???놁뒿?덈떎.');
+    }
+  }
+
   const user = await findActiveUserProfileById(targetUserId);
 
   if (!user) {
