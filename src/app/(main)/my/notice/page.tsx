@@ -1,5 +1,6 @@
 'use client';
 
+import { Suspense } from 'react';
 import { PageContainer, PageContent, PageHeader } from '@/components/layout';
 import { useSafeBack } from '@/lib/navigation';
 
@@ -45,7 +46,7 @@ const NOTICES = [
   },
 ] as const;
 
-export default function NoticePage() {
+function NoticePageContent() {
   const { goBack } = useSafeBack({ fallbackPath: '/my' });
 
   return (
@@ -99,5 +100,13 @@ export default function NoticePage() {
         </div>
       </PageContent>
     </PageContainer>
+  );
+}
+
+export default function NoticePage() {
+  return (
+    <Suspense fallback={<PageContainer><div /></PageContainer>}>
+      <NoticePageContent />
+    </Suspense>
   );
 }
