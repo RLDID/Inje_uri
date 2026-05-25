@@ -3,11 +3,13 @@ import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 import bcrypt from 'bcrypt';
 import {
+  INJE_CHECK_ALREADY_REGISTERED_MESSAGE,
   BUS_INJE_CHECK_ENDPOINT,
   INJE_CHECK_FAIL_MESSAGE,
 } from '@/lib/auth/constants';
 import { PROFILE_CATEGORY_CODES, type KeywordSelectionPayload, type ProfileCategoryCode } from '@/lib/types';
 import {
+  ACTIVE_USER_STATUS,
   createUserSession,
   hashBirth,
   hashStudentNumber,
@@ -28,6 +30,7 @@ import {
   createUserWithKeywordSelections,
   findUserByEmail,
   findUserForAccountRecovery,
+  findUserForStudentVerification,
   findUserByLoginId,
   findUserByNickname,
   findUserByStudentNumber,
@@ -353,6 +356,26 @@ function isAllowedInjeCheckSuccessResponse(upstreamBody: UpstreamInjeBody): bool
   ));
 }
 
+function isAlreadyRegisteredInBusMessage(upstreamMessage: string): boolean {
+  return upstreamMessage === normalizeUpstreamMessage(INJE_CHECK_ALREADY_REGISTERED_MESSAGE);
+}
+
+async function resolveAlreadyRegisteredBusNextStep(
+  studentNumber: string,
+  birth: string,
+): Promise<'login' | 'register' | null> {
+  const user = await findUserForStudentVerification(studentNumber);
+  if (!user) {
+    return 'register';
+  }
+
+  if (user.deleted_at !== null || user.status !== ACTIVE_USER_STATUS) {
+    return null;
+  }
+
+  return isBirthHashMatch(user.birth_hash, birth) ? 'login' : null;
+}
+
 export async function verifyInjeStudent(studentNumber: string, birth: string) {
   let upstreamBody: UpstreamInjeBody | null = null;
 
@@ -383,6 +406,23 @@ export async function verifyInjeStudent(studentNumber: string, birth: string) {
   const upstreamMessage = getNormalizedInjeMessage(upstreamBody);
   if (upstreamMessage === normalizeUpstreamMessage(INJE_CHECK_FAIL_MESSAGE)) {
     throw new ApiError(ERROR.INVALID_CREDENTIALS, '입력한 정보를 찾을수 없습니다.');
+  }
+
+  if (isAlreadyRegisteredInBusMessage(upstreamMessage)) {
+    const nextStep = await resolveAlreadyRegisteredBusNextStep(studentNumber, birth);
+    if (!nextStep) {
+      throw new ApiError(ERROR.INVALID_CREDENTIALS, '입력한 정보를 찾을수 없습니다.');
+    }
+
+    // Temporary compatibility path for students already registered in the bus system.
+    const token = await issuePreSignupVerification(studentNumber, birth);
+    return {
+      token,
+      data: {
+        verified: true,
+        nextStep,
+      },
+    };
   }
 
   if (!isAllowedInjeCheckSuccessResponse(upstreamBody)) {
