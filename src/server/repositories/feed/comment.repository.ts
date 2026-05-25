@@ -167,6 +167,8 @@ export class CommentRepository {
         commenter_user_id: userId,
         deleted_at: null,
         feed: {
+          status: "active",
+          expires_at: { gt: new Date() },
           author_user: {
             status: { not: "banned" },
           },

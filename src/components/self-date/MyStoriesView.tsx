@@ -25,7 +25,7 @@ import {
   type AppSection,
   useCurrentRouteContext,
 } from '@/lib/navigation';
-import { getFeedRemainingTime } from '@/lib/utils/feed';
+import { getFeedRemainingTime, isValidFeed } from '@/lib/utils/feed';
 import { getUserAcademicLabel } from '@/lib/utils';
 import type { FeedCategory, Story, FeedReaction } from '@/lib/types';
 
@@ -50,6 +50,37 @@ function getStoryCategoryList(story: Story): FeedCategory[] {
   }
 
   return story.category ? [story.category] : [];
+}
+
+function LikedFeedSkeletonList() {
+  return (
+    <div className="content-stack" aria-hidden="true">
+      {[1, 2, 3].map((item) => (
+        <article
+          key={item}
+          className="animate-pulse rounded-2xl border border-[var(--color-border-light)] bg-[var(--color-surface)] p-4"
+        >
+          <div className="flex items-start gap-3">
+            <div className="h-12 w-12 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="h-4 w-28 rounded-full bg-[var(--color-surface-secondary)]" />
+              <div className="h-3 w-40 rounded-full bg-[var(--color-surface-secondary)]" />
+            </div>
+            <div className="h-9 w-9 shrink-0 rounded-full bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="mt-4 space-y-2">
+            <div className="h-4 w-full rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="h-4 w-2/3 rounded-full bg-[var(--color-surface-secondary)]" />
+          </div>
+          <div className="mt-4 aspect-[4/3] rounded-2xl bg-[var(--color-surface-secondary)]" />
+          <div className="mt-4 flex items-center justify-between">
+            <div className="h-7 w-20 rounded-full bg-[var(--color-surface-secondary)]" />
+            <div className="h-6 w-16 rounded-full bg-[var(--color-surface-secondary)]" />
+          </div>
+        </article>
+      ))}
+    </div>
+  );
 }
 
 function readReactionChatIds(): string[] {
@@ -127,6 +158,7 @@ export function MyStoriesView({
   const { currentPath } = useCurrentRouteContext();
   const editImageInputRef = useRef<HTMLInputElement>(null);
   const hasShownEditHintRef = useRef(false);
+  const hasLoadedStoriesRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState<MyFeedTab>(() => (
     searchParams.get('tab') === 'liked' ? 'liked' : 'mine'
@@ -143,6 +175,7 @@ export function MyStoriesView({
   const [reactionReportDescription, setReactionReportDescription] = useState('');
   const [deleteTargetStory, setDeleteTargetStory] = useState<Story | null>(null);
   const [isDeletingFeed, setIsDeletingFeed] = useState(false);
+  const [isLoadingStories, setIsLoadingStories] = useState(true);
   const [myStories, setMyStories] = useState<Story[]>([]);
   const [likedStories, setLikedStories] = useState<Story[]>([]);
   const [reactionChatIds, setReactionChatIds] = useState<string[]>(() => readReactionChatIds());
@@ -153,6 +186,10 @@ export function MyStoriesView({
     let cancelled = false;
 
     async function loadStories() {
+      if (!hasLoadedStoriesRef.current) {
+        setIsLoadingStories(true);
+      }
+
       try {
         const [mine, commented] = await Promise.all([
           getMyFeeds(),
@@ -165,11 +202,16 @@ export function MyStoriesView({
 
         if (!cancelled) {
           setMyStories(mineWithReactions);
-          setLikedStories(commented);
+          setLikedStories(commented.filter(isValidFeed));
         }
       } catch (error) {
         if (!cancelled) {
           showToast(error instanceof Error ? error.message : '피드 목록을 불러오지 못했어요.', 'error');
+        }
+      } finally {
+        if (!cancelled) {
+          hasLoadedStoriesRef.current = true;
+          setIsLoadingStories(false);
         }
       }
     }
@@ -190,6 +232,16 @@ export function MyStoriesView({
   useEffect(() => {
     writeReactionChatIds(reactionChatIds);
   }, [reactionChatIds]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setLikedStories((prevStories) => prevStories.filter(isValidFeed));
+    }, 60_000);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isEditHintTargetVisible || hasShownEditHintRef.current) {
@@ -663,7 +715,9 @@ export function MyStoriesView({
             </div>
           )
         ) : (
-          likedStories.length === 0 ? (
+          isLoadingStories ? (
+            <LikedFeedSkeletonList />
+          ) : likedStories.length === 0 ? (
             <div className="rounded-[24px] bg-[var(--color-surface-secondary)] px-6 py-10 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">
                 <svg className="h-8 w-8 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="currentColor">
