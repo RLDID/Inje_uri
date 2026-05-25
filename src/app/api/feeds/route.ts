@@ -62,6 +62,21 @@ function parseStringList(value: unknown): string[] | null {
   return items.length > 0 ? items : null;
 }
 
+function parseQueryKeywords(searchParams: URLSearchParams): string[] | null {
+  const values = [
+    ...searchParams.getAll("keyword"),
+    ...searchParams.getAll("keywords"),
+  ];
+
+  const keywords = values
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+
+  const uniqueKeywords = [...new Set(keywords)];
+  return uniqueKeywords.length > 0 ? uniqueKeywords : null;
+}
+
 async function parseCreateFeedRequest(request: NextRequest) {
   const contentType = request.headers.get("content-type") ?? "";
 
@@ -130,10 +145,10 @@ export async function GET(request: NextRequest) {
     const currentUserId = user.id;
 
     const { searchParams } = new URL(request.url);
-    const keyword = searchParams.get("keyword");
+    const keywords = parseQueryKeywords(searchParams);
     const cursor = searchParams.get("cursor");
 
-    const data = await listFeeds(currentUserId, keyword, cursor);
+    const data = await listFeeds(currentUserId, keywords, cursor);
     return ok(data);
   } catch (error) {
     if (error instanceof AppError) return fail(error.code, error.message);

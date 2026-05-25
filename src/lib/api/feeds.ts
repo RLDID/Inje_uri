@@ -4,9 +4,20 @@ import { getMe } from '@/lib/api/profile';
 import { PLACEHOLDER_PROFILE_IMAGE } from '@/lib/constants';
 import type { FeedCategory, FeedDetailDto, FeedListDto, FeedReaction, RecordFeedViewResultDto, Story } from '@/lib/types';
 
-export async function getFeeds(keyword?: string | null, cursor?: string | null): Promise<{ items: Story[]; nextCursor: string | null }> {
+export async function getFeeds(keyword?: string | string[] | null, cursor?: string | null): Promise<{ items: Story[]; nextCursor: string | null }> {
   const params = new URLSearchParams();
-  if (keyword) params.set('keyword', keyword);
+  const keywords = Array.isArray(keyword)
+    ? keyword.map((item) => item.trim()).filter(Boolean)
+    : keyword?.trim()
+      ? [keyword.trim()]
+      : [];
+
+  if (keywords.length === 1) {
+    params.set('keyword', keywords[0]);
+  } else if (keywords.length > 1) {
+    params.set('keywords', keywords.join(','));
+  }
+
   if (cursor) params.set('cursor', cursor);
   const query = params.toString();
   const data = await apiGet<FeedListDto>(`/api/feeds${query ? `?${query}` : ''}`);
@@ -89,6 +100,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
         status: string;
         expiresAt: string;
         viewCount: number;
+        images?: Array<{ imageId: number; imageUrl: string; sortOrder: number }>;
         keywords?: Array<{ feedKeywordId: number; code?: string; name: string }>;
         author: { userId: number; nickname: string; gender: string; profileImage: string | null };
       };
@@ -115,7 +127,12 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
     },
     content: {
       text: item.feed.text,
-      images: [],
+      images: (item.feed.images ?? []).map((image) => image.imageUrl).filter(Boolean),
+      imageMetas: (item.feed.images ?? []).map((image) => ({
+        id: String(image.imageId),
+        imageUrl: image.imageUrl,
+        order: image.sortOrder,
+      })),
     },
     category: feedKeywordToCategory(item.feed.keywords?.[0]),
     categories: item.feed.keywords?.map(feedKeywordToCategory) ?? ['hobby'],

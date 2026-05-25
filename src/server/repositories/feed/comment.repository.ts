@@ -31,6 +31,10 @@ const myCommentedFeedSelect = {
       text: true,
       status: true,
       expires_at: true,
+      images: {
+        orderBy: { sort_order: "asc" },
+        select: { id: true, image_url: true, sort_order: true },
+      },
       keywords: {
         select: {
           feed_keyword: {

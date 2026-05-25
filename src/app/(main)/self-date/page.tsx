@@ -47,6 +47,19 @@ function isValidFilter(filter: string | null): filter is FeedFilterCategoryId {
   return !!filter && FEED_FILTER_CATEGORIES.some((category) => category.id === filter);
 }
 
+const FEED_FILTER_KEYWORD_CODES: Record<Exclude<FeedFilterCategoryId, 'all'>, string[]> = {
+  festival: ['festival'],
+  walk: ['walk'],
+  cafe: ['cafe'],
+  food: ['restaurant'],
+  study: ['study'],
+  other: ['movie', 'drive', 'exercise', 'exhibition', 'drink', 'reading', 'chat', 'hobby'],
+};
+
+function getFeedFilterKeywords(filter: FeedFilterCategoryId): string[] | null {
+  return filter === 'all' ? null : FEED_FILTER_KEYWORD_CODES[filter];
+}
+
 function ActionHintBadge({
   id,
   isVisible,
@@ -205,6 +218,14 @@ function SelfDatePageContent() {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeActionHint, setActiveActionHint] = useState<MainActionHint | null>('create');
 
+  const loadFeedPage = useCallback(async (filter: FeedFilterCategoryId, cursor?: string | null) => {
+    const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
+    const { items, nextCursor: nextPageCursor } = await getFeeds(getFeedFilterKeywords(filter), cursor);
+    const stories = items.filter((story) => isValidFeed(story) && !hiddenUserIdSet.has(story.author.id));
+
+    return { stories, nextCursor: nextPageCursor };
+  }, []);
+
   useEffect(() => {
     const myFeedsHintTimeoutId = window.setTimeout(() => {
       setActiveActionHint('myFeeds');
@@ -247,13 +268,11 @@ function SelfDatePageContent() {
 
     async function loadFeeds() {
       try {
-        const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
-        const { items, nextCursor: cursor } = await getFeeds();
+        const { stories, nextCursor: cursor } = await loadFeedPage(initialFilter);
         if (cancelled) {
           return;
         }
 
-        const stories = items.filter((story) => isValidFeed(story) && !hiddenUserIdSet.has(story.author.id));
         setSelectedFilter(initialFilter);
         setFeeds(stories);
         setShownIds(stories.map((story) => story.id));
@@ -280,16 +299,48 @@ function SelfDatePageContent() {
     return () => {
       cancelled = true;
     };
-  }, [showToast]);
+  }, [loadFeedPage, showToast]);
 
   useEffect(() => {
     if (!isHydrated || appliedFilterParamRef.current === filterParam) {
       return;
     }
 
+    let cancelled = false;
+    const nextFilter = isValidFilter(filterParam) ? filterParam : 'all';
+
     appliedFilterParamRef.current = filterParam;
-    setSelectedFilter(isValidFilter(filterParam) ? filterParam : 'all');
-  }, [filterParam, isHydrated]);
+    setSelectedFilter(nextFilter);
+    setIsHydrated(false);
+    setFeeds([]);
+    setShownIds([]);
+    setNextCursor(null);
+    setHasReachedEnd(false);
+
+    loadFeedPage(nextFilter)
+      .then(({ stories, nextCursor: cursor }) => {
+        if (cancelled) {
+          return;
+        }
+
+        setFeeds(stories);
+        setShownIds(stories.map((story) => story.id));
+        setNextCursor(cursor);
+        setHasReachedEnd(cursor === null);
+        setIsHydrated(true);
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          showToast(error instanceof Error ? error.message : '피드를 불러오지 못했어요.', 'error');
+          setIsHydrated(true);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filterParam, isHydrated, loadFeedPage, showToast]);
 
   useEffect(() => {
     if (!isHydrated) {
@@ -328,14 +379,39 @@ function SelfDatePageContent() {
 
     const nextSearch = params.toString();
     const nextPath = nextSearch ? `${pathname}?${nextSearch}` : pathname;
+    const currentUrlFilter = isValidFilter(filterParam) ? filterParam : 'all';
+
+    if (currentUrlFilter === nextFilter) {
+      appliedFilterParamRef.current = filterParam;
+      setIsHydrated(false);
+      setFeeds([]);
+      setShownIds([]);
+      setNextCursor(null);
+      setHasReachedEnd(false);
+
+      loadFeedPage(nextFilter)
+        .then(({ stories, nextCursor: cursor }) => {
+          setFeeds(stories);
+          setShownIds(stories.map((story) => story.id));
+          setNextCursor(cursor);
+          setHasReachedEnd(cursor === null);
+          setIsHydrated(true);
+          window.scrollTo({ top: 0, behavior: 'auto' });
+        })
+        .catch((error) => {
+          showToast(error instanceof Error ? error.message : '피드를 불러오지 못했어요.', 'error');
+          setIsHydrated(true);
+        });
+
+      return;
+    }
+
     router.replace(nextPath, { scroll: false });
   };
 
   const handleRefresh = useCallback(async () => {
     try {
-      const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
-      const { items, nextCursor: cursor } = await getFeeds();
-      const stories = items.filter((story) => isValidFeed(story) && !hiddenUserIdSet.has(story.author.id));
+      const { stories, nextCursor: cursor } = await loadFeedPage(selectedFilter);
       setFeeds(stories);
       setShownIds(stories.map((feed) => feed.id));
       setNextCursor(cursor);
@@ -344,7 +420,7 @@ function SelfDatePageContent() {
     } catch (error) {
       showToast(error instanceof Error ? error.message : '피드를 새로고침하지 못했어요.', 'error');
     }
-  }, [showToast]);
+  }, [loadFeedPage, selectedFilter, showToast]);
 
   const triggerPullRefresh = useCallback(() => {
     setIsPullRefreshing(true);
@@ -372,13 +448,8 @@ function SelfDatePageContent() {
         if (entry.isIntersecting && !isLoadingMore && !hasReachedEnd && nextCursor) {
           setIsLoadingMore(true);
 
-          getFeeds(null, nextCursor)
-            .then(({ items, nextCursor: cursor }) => {
-              const hiddenUserIdSet = new Set(readSelfDateHiddenUserIds());
-              const moreFeeds = items.filter((story) => (
-                isValidFeed(story) && !hiddenUserIdSet.has(story.author.id)
-              ));
-
+          loadFeedPage(selectedFilter, nextCursor)
+            .then(({ stories: moreFeeds, nextCursor: cursor }) => {
               if (moreFeeds.length > 0) {
                 setFeeds((prevFeeds) => [...prevFeeds, ...moreFeeds]);
                 setShownIds((prevIds) => [...prevIds, ...moreFeeds.map((feed) => feed.id)]);
@@ -400,7 +471,7 @@ function SelfDatePageContent() {
 
     observer.observe(target);
     return () => observer.disconnect();
-  }, [hasReachedEnd, isHydrated, isLoadingMore, nextCursor, showToast]);
+  }, [hasReachedEnd, isHydrated, isLoadingMore, loadFeedPage, nextCursor, selectedFilter, showToast]);
 
   useEffect(() => {
     const interval = setInterval(() => {

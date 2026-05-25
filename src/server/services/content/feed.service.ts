@@ -136,7 +136,7 @@ async function resolveFeedKeywordIds(input: FeedKeywordInput): Promise<number[]>
 
 export async function listFeeds(
   currentUserId: number,
-  keyword: string | null,
+  keywords: string[] | null,
   cursor: string | null,
 ): Promise<FeedListDto> {
   const now = new Date();
@@ -162,13 +162,15 @@ export async function listFeeds(
     where.id = { notIn: [...excludedFeedIds] };
   }
 
-  if (keyword) {
+  const keywordFilters = [...new Set((keywords ?? []).map((keyword) => keyword.trim()).filter(Boolean))];
+
+  if (keywordFilters.length > 0) {
     where.keywords = {
       some: {
         feed_keyword: {
           OR: [
-            { code: keyword },
-            { name: keyword },
+            { code: { in: keywordFilters } },
+            { name: { in: keywordFilters } },
           ],
         },
       },
