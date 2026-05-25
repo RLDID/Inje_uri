@@ -135,7 +135,11 @@ function CreateStoryPageContent() {
       return;
     }
 
-    const handleWindowFocus = () => {
+    const schedulePickerCancelReset = () => {
+      if (cancelSelectionTimerRef.current) {
+        window.clearTimeout(cancelSelectionTimerRef.current);
+      }
+
       cancelSelectionTimerRef.current = window.setTimeout(() => {
         setPendingPicker(null);
         setIsProcessingImage(false);
@@ -148,10 +152,24 @@ function CreateStoryPageContent() {
       }, 700);
     };
 
+    const handleWindowFocus = () => {
+      schedulePickerCancelReset();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        schedulePickerCancelReset();
+      }
+    };
+
     window.addEventListener('focus', handleWindowFocus);
+    window.addEventListener('pageshow', handleWindowFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       window.removeEventListener('focus', handleWindowFocus);
+      window.removeEventListener('pageshow', handleWindowFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (cancelSelectionTimerRef.current) {
         window.clearTimeout(cancelSelectionTimerRef.current);
         cancelSelectionTimerRef.current = null;
@@ -191,6 +209,7 @@ function CreateStoryPageContent() {
       return;
     }
 
+    resetPickerState();
     setShowImageOptions(false);
     setPendingPicker(source);
     setIsProcessingImage(true);
@@ -266,6 +285,8 @@ function CreateStoryPageContent() {
   const handleImageSelection = async (event: ChangeEvent<HTMLInputElement>, source: PickerSource) => {
     const files = Array.from(event.target.files ?? []);
     if (files.length === 0) {
+      event.target.value = '';
+      resetPickerState();
       return;
     }
 

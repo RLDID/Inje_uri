@@ -8,6 +8,8 @@ export interface User {
   studentYear: number;
   studentNumber?: number | string;
   gender: 'male' | 'female';
+  hideGender?: boolean;
+  isOperator?: boolean;
   profileImages: string[];
   profileImageMetas?: Array<{
     id: string;

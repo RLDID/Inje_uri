@@ -60,6 +60,10 @@ function getFeedFilterKeywords(filter: FeedFilterCategoryId): string[] | null {
   return filter === 'all' ? null : FEED_FILTER_KEYWORD_CODES[filter];
 }
 
+function isStoryLiked(story: Story, likedFeedIds: Set<string>): boolean {
+  return likedFeedIds.has(story.id) || story.isLikedByMe === true;
+}
+
 function ActionHintBadge({
   id,
   isVisible,
@@ -496,7 +500,11 @@ function SelfDatePageContent() {
   };
 
   const handleHeartClick = (story: Story) => {
-    if (likedFeedIds.has(story.id)) {
+    if (story.isMine) {
+      return;
+    }
+
+    if (isStoryLiked(story, likedFeedIds)) {
       showToast('이미 호감을 보낸 피드예요.', 'info');
       return;
     }
@@ -517,7 +525,11 @@ function SelfDatePageContent() {
     const targetFeed = heartTargetFeed;
     const targetFeedId = targetFeed.id;
 
-    if (likedFeedIds.has(targetFeedId) || pendingLikeFeedId === targetFeedId) {
+    if (targetFeed.isMine) {
+      return;
+    }
+
+    if (isStoryLiked(targetFeed, likedFeedIds) || pendingLikeFeedId === targetFeedId) {
       return;
     }
 
@@ -549,6 +561,15 @@ function SelfDatePageContent() {
   };
 
   const handleProfileClick = (story: Story) => {
+    if (story.isMine) {
+      handleCardClick(story);
+      return;
+    }
+
+    if (story.author.isOperator) {
+      return;
+    }
+
     router.push(
       buildProfileDetailHref(story.author.id, 'self-date', {
         sourcePath: currentPath,
@@ -560,8 +581,7 @@ function SelfDatePageContent() {
 
   const hiddenUserIds = new Set(readSelfDateHiddenUserIds());
   const filteredFeeds = feeds.filter((feed) => (
-    !likedFeedIds.has(feed.id)
-    && !hiddenUserIds.has(feed.author.id)
+    !hiddenUserIds.has(feed.author.id)
     && matchesStoryFilter(feed, selectedFilter)
   ));
   const handleTouchStart = (event: React.TouchEvent<HTMLElement>) => {
@@ -809,8 +829,9 @@ function SelfDatePageContent() {
                 onCardClick={() => handleCardClick(story)}
                 onHeartClick={() => handleHeartClick(story)}
                 onProfileClick={() => handleProfileClick(story)}
-                isLiked={likedFeedIds.has(story.id)}
+                isLiked={isStoryLiked(story, likedFeedIds)}
                 isLikePending={pendingLikeFeedId === story.id}
+                showHeartButton={!story.isMine}
                 priorityImage={index === 0}
               />
             ))}

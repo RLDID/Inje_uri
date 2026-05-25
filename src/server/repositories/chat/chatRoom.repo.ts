@@ -65,6 +65,7 @@
             user: {
               select: {
                 id: true,
+                email: true,
                 nickname: true, //채팅방 목록에 표시할 이름
                 userProfileImages: {
                   where: { is_primary: true },
@@ -108,6 +109,7 @@
             user: {
               select: {
                 id: true,
+                email: true,
                 nickname: true,
                 userProfileImages: {
                   where: { is_primary: true },

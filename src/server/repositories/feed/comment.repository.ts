@@ -45,8 +45,10 @@ const myCommentedFeedSelect = {
       author_user: {
         select: {
           id: true,
+          email: true,
           nickname: true,
           gender: true,
+          onboarding_completed: true,
           userProfileImages: {
             where: { is_primary: true },
             select: { image_url: true },

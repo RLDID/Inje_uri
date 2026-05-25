@@ -61,7 +61,11 @@ export function FeedCard({
   const authorProfileImage = author?.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE;
   const authorGender = author?.gender === 'female' ? 'female' : 'male';
   const genderLabel = authorGender === 'female' ? '여성' : '남성';
-  const avatarBorderClass = authorGender === 'female'
+  const shouldShowGender = !author?.hideGender;
+  const canOpenAuthorProfile = Boolean(author && !author.isOperator);
+  const avatarBorderClass = !shouldShowGender
+    ? 'border-[var(--color-border-light)]'
+    : authorGender === 'female'
     ? 'border-[var(--color-pink-cta)]'
     : 'border-[var(--color-blue-secondary)]';
   const authorAcademicLabel = author ? getUserAcademicLabel(author) : '프로필 정보를 불러올 수 없어요';
@@ -94,7 +98,7 @@ export function FeedCard({
 
   const handleProfileClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    if (!author) {
+    if (!canOpenAuthorProfile) {
       return;
     }
     onProfileClick?.();
@@ -124,9 +128,9 @@ export function FeedCard({
         <button
           type="button"
           onClick={handleProfileClick}
-          disabled={!author}
-          className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 bg-[var(--color-surface-secondary)] shadow-sm ${avatarBorderClass}`}
-          aria-label={`${authorNickname} 프로필 보기`}
+          disabled={!canOpenAuthorProfile}
+          className={`relative h-12 w-12 shrink-0 overflow-hidden rounded-full border-2 bg-[var(--color-surface-secondary)] shadow-sm ${canOpenAuthorProfile ? '' : 'cursor-default'} ${avatarBorderClass}`}
+          aria-label={canOpenAuthorProfile ? `${authorNickname} 프로필 보기` : `${authorNickname} 운영자 프로필`}
         >
           <Image
             src={authorProfileImage}
@@ -141,17 +145,21 @@ export function FeedCard({
             <button
               type="button"
               onClick={handleProfileClick}
-              disabled={!author}
-              className="block min-w-0 truncate text-left font-semibold text-[var(--color-text-primary)] transition-opacity hover:opacity-80"
+              disabled={!canOpenAuthorProfile}
+              className={`block min-w-0 truncate text-left font-semibold text-[var(--color-text-primary)] transition-opacity ${canOpenAuthorProfile ? 'hover:opacity-80' : 'cursor-default'}`}
             >
               {authorNickname}
             </button>
-            <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-tertiary)]" aria-hidden="true">
-              ·
-            </span>
-            <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-secondary)]">
-              {genderLabel}
-            </span>
+            {shouldShowGender && (
+              <>
+                <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-tertiary)]" aria-hidden="true">
+                  ·
+                </span>
+                <span className="shrink-0 text-[11px] font-medium text-[var(--color-text-secondary)]">
+                  {genderLabel}
+                </span>
+              </>
+            )}
             {author?.isGraduate && (
               <span className="shrink-0 rounded-full bg-[var(--color-surface-secondary)] px-2 py-0.5 text-[11px] font-medium text-[var(--color-text-secondary)]">
                 졸업생

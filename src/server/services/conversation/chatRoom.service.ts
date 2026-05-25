@@ -15,6 +15,7 @@
   import { prisma } from "@/server/db/prisma";
   import type { PrismaTransactionClient } from "@/server/db/prisma";
   import type { ChatRoomListItemDto } from "@/lib/types/chat";
+  import { isAdminOperatorEmail } from "@/server/services/admin/admin-operator.constants";
 
   const safetyRepo = new SafetyRepository(prisma);
 
@@ -234,6 +235,7 @@ export async function getChatRooms(
         userId: other.user.id,
         nickname: other.user.nickname,
         profileImage: other.user.userProfileImages[0]?.image_url ?? null,
+        isOperator: isAdminOperatorEmail(other.user.email),
       } : null,
       lastMessage: lastMsg ? {
         id: lastMsg.id,

@@ -270,7 +270,11 @@ export function MyStoriesView({
     );
   };
 
-  const handleOpenProfile = (userId: string) => {
+  const handleOpenProfile = (userId: string, options: { disabled?: boolean } = {}) => {
+    if (options.disabled) {
+      return;
+    }
+
     router.push(
       buildProfileDetailHref(userId, 'self-date', {
         sourcePath: currentPath,
@@ -579,38 +583,52 @@ export function MyStoriesView({
                       </div>
                     </div>
 
-                    {storyCategories.length > 0 && (
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {storyCategories.map((category) => (
-                          <span
-                            key={category}
-                            className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
-                              isFestivalFeedCategory(category)
-                                ? FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS
-                                : 'bg-[var(--color-chip-background)] text-[var(--color-text-secondary)]'
-                            }`}
-                          >
-                            {getFeedCategoryLabel(category)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleOpenFeedDetail(story)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          handleOpenFeedDetail(story);
+                        }
+                      }}
+                      className="mt-3 cursor-pointer rounded-[18px] transition-opacity active:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-focus)]/30"
+                      aria-label="피드 상세보기"
+                    >
+                      {storyCategories.length > 0 && (
+                        <div className="flex flex-wrap gap-2">
+                          {storyCategories.map((category) => (
+                            <span
+                              key={category}
+                              className={`rounded-full px-3 py-1.5 text-[12px] font-semibold ${
+                                isFestivalFeedCategory(category)
+                                  ? FESTIVAL_FEED_CATEGORY_DISPLAY_CLASS
+                                  : 'bg-[var(--color-chip-background)] text-[var(--color-text-secondary)]'
+                              }`}
+                            >
+                              {getFeedCategoryLabel(category)}
+                            </span>
+                          ))}
+                        </div>
+                      )}
 
-                    <p data-clarity-mask className="mt-3 leading-7 text-[var(--color-text-primary)]">
-                      {story.content.text}
-                    </p>
+                      <p data-clarity-mask className="mt-3 leading-7 text-[var(--color-text-primary)]">
+                        {story.content.text}
+                      </p>
 
-                    {story.content.images && story.content.images.length > 0 && (
-                      <div className="mt-4 overflow-hidden rounded-[22px] bg-[var(--color-surface-secondary)]">
-                        <Image
-                          src={story.content.images[0]}
-                          alt="피드 이미지"
-                          width={400}
-                          height={300}
-                          className="h-auto w-full object-cover"
-                        />
-                      </div>
-                    )}
+                      {story.content.images && story.content.images.length > 0 && (
+                        <div className="mt-4 overflow-hidden rounded-[22px] bg-[var(--color-surface-secondary)]">
+                          <Image
+                            src={story.content.images[0]}
+                            alt="피드 이미지"
+                            width={400}
+                            height={300}
+                            className="h-auto w-full object-cover"
+                          />
+                        </div>
+                      )}
+                    </div>
 
                     <div className="mt-5">
                       <div className="mb-3 flex items-center gap-2">
@@ -741,7 +759,7 @@ export function MyStoriesView({
                   key={story.id}
                   story={story}
                   onCardClick={() => handleOpenFeedDetail(story)}
-                  onProfileClick={() => handleOpenProfile(story.author.id)}
+                  onProfileClick={() => handleOpenProfile(story.author.id, { disabled: story.author.isOperator })}
                   isLiked
                   showHeartButton={false}
                 />

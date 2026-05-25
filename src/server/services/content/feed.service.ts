@@ -8,6 +8,9 @@ import {
   saveFeedImageFile,
 } from "@/server/services/content/feed-image-storage";
 import { decodeFeedCursor, encodeFeedCursor } from "@/lib/utils/cursor";
+import {
+  isAdminOperatorEmail,
+} from "@/server/services/admin/admin-operator.constants";
 import type {
   CreateFeedResultDto,
   FeedDetailDto,
@@ -48,7 +51,13 @@ function assertFeedImageCount(imageCount: number) {
   }
 }
 
-function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
+function toFeedListItemDto(
+  row: FeedListRow,
+  options: { commentedFeedIds?: Set<number>; currentUserId?: number } = {},
+): FeedListItemDto {
+  const isOperator = isAdminOperatorEmail(row.author_user.email);
+  const isMine = row.author_user.id === options.currentUserId;
+
   return {
     feedId: row.id,
     text: row.text,
@@ -59,6 +68,8 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
       userId: row.author_user.id,
       nickname: row.author_user.nickname,
       gender: row.author_user.gender,
+      hideGender: isOperator || !row.author_user.onboarding_completed,
+      isOperator,
       profileImage: row.author_user.userProfileImages[0]?.image_url ?? null,
     },
     keywords: row.keywords.map((k) => ({
@@ -74,10 +85,18 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
     })),
     commentCount: row._count.comments,
     viewCount: row._count.views,
+    commentedByMe: options.commentedFeedIds?.has(row.id) ?? false,
+    isMine,
   };
 }
 
-function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
+function toFeedDetailDto(
+  row: FeedDetailRow,
+  options: { commentedByMe?: boolean; currentUserId?: number } = {},
+): FeedDetailDto {
+  const isOperator = isAdminOperatorEmail(row.author_user.email);
+  const isMine = row.author_user_id === options.currentUserId;
+
   return {
     feed: {
       feedId: row.id,
@@ -91,6 +110,8 @@ function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
         userId: row.author_user.id,
         nickname: row.author_user.nickname,
         gender: row.author_user.gender,
+        hideGender: isOperator || !row.author_user.onboarding_completed,
+        isOperator,
         department: row.author_user.department,
         studentYear: row.author_user.student_year,
         bio: row.author_user.bio,
@@ -112,6 +133,8 @@ function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
       })),
       commentCount: row._count.comments,
       viewCount: row._count.views,
+      commentedByMe: options.commentedByMe ?? false,
+      isMine,
     },
   };
 }
@@ -173,14 +196,12 @@ export async function listFeeds(
     author_user: { status: { not: "banned" } },
   };
 
-  where.author_user_id = {
-    not: currentUserId,
-    ...(blockedUserIds.size > 0 ? { notIn: [...blockedUserIds] } : {}),
-  };
+  if (blockedUserIds.size > 0) {
+    where.author_user_id = { notIn: [...blockedUserIds] };
+  }
 
-  const excludedFeedIds = new Set([...commentedFeedIds, ...reportedFeedIds]);
-  if (excludedFeedIds.size > 0) {
-    where.id = { notIn: [...excludedFeedIds] };
+  if (reportedFeedIds.size > 0) {
+    where.id = { notIn: [...reportedFeedIds] };
   }
 
   const keywordFilters = [...new Set((keywords ?? []).map((keyword) => keyword.trim()).filter(Boolean))];
@@ -216,7 +237,7 @@ export async function listFeeds(
   const lastRow = slice[slice.length - 1];
 
   return {
-    items: slice.map(toFeedListItemDto),
+    items: slice.map((row) => toFeedListItemDto(row, { commentedFeedIds, currentUserId })),
     nextCursor:
       hasNextPage && lastRow
         ? encodeFeedCursor({ boostScore: lastRow.boost_score, id: lastRow.id })
@@ -229,14 +250,17 @@ export async function createFeed(
   text: string,
   feedKeywordInput: FeedKeywordInput,
   images: File[] = [],
+  options: { skipActiveFeedCheck?: boolean } = {},
 ): Promise<CreateFeedResultDto> {
   const now = new Date();
   const normalizedText = normalizeFeedText(text);
   assertFeedImageCount(images.length);
 
-  const existing = await repo.findActiveFeedByUser(authorUserId, now);
-  if (existing) {
-    throw new AppError("FEED_ALREADY_ACTIVE", "이미 활성 상태인 피드가 있습니다. 기존 피드가 만료된 후 작성해주세요.");
+  if (!options.skipActiveFeedCheck) {
+    const existing = await repo.findActiveFeedByUser(authorUserId, now);
+    if (existing) {
+      throw new AppError("FEED_ALREADY_ACTIVE", "이미 활성 상태인 피드가 있습니다. 기존 피드가 만료된 후 작성해주세요.");
+    }
   }
 
   const feedKeywordIds = await resolveFeedKeywordIds(feedKeywordInput);
@@ -298,7 +322,9 @@ export async function getFeedDetail(
     }
   }
 
-  return toFeedDetailDto(feed);
+  const commentedByMe = Boolean(await repo.findExistingCommentByUser(feedId, currentUserId));
+
+  return toFeedDetailDto(feed, { commentedByMe, currentUserId });
 }
 
 export async function updateFeed(

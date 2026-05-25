@@ -3,6 +3,7 @@ import { prisma } from "@/server/db/prisma";
 import { CommentRepository } from "@/server/repositories/feed/comment.repository";
 import * as chatRoomService from "@/server/services/conversation/chatRoom.service";
 import { ERROR } from "@/server/lib/errors";
+import { isAdminOperatorEmail } from "@/server/services/admin/admin-operator.constants";
 import type {
   CommentListDto,
   CommentListItemDto,
@@ -47,6 +48,8 @@ function toCommentListItemDto(row: CommentListRow): CommentListItemDto {
 }
 
 function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemDto {
+  const isOperator = isAdminOperatorEmail(row.feed.author_user.email);
+
   return {
     comment: {
       commentId: row.id,
@@ -73,6 +76,8 @@ function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemD
           userId: row.feed.author_user.id,
           nickname: row.feed.author_user.nickname,
           gender: row.feed.author_user.gender,
+          hideGender: isOperator || !row.feed.author_user.onboarding_completed,
+          isOperator,
           profileImage: row.feed.author_user.userProfileImages[0]?.image_url ?? null,
         },
     },

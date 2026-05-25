@@ -17,6 +17,7 @@ import {
 import { findActiveRoomBetweenUsers } from '@/server/repositories/chat/chatRoom.repo';
 import { SafetyRepository } from '@/server/repositories/safety/safety.repository';
 import { prisma } from '@/server/db/prisma';
+import { isAdminOperatorEmail } from '@/server/services/admin/admin-operator.constants';
 
 const safetyRepo = new SafetyRepository(prisma);
 
@@ -327,6 +328,10 @@ export async function getUserProfileDetail(currentUserId: number, targetUserId: 
   const user = await findActiveUserProfileById(targetUserId);
 
   if (!user) {
+    throw new ApiError(ERROR.NOT_FOUND, '사용자 정보를 찾을 수 없습니다.');
+  }
+
+  if (isAdminOperatorEmail(user.email)) {
     throw new ApiError(ERROR.NOT_FOUND, '사용자 정보를 찾을 수 없습니다.');
   }
 

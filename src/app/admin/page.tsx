@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Button, ConfirmSheet, ImageCarousel, useToast } from '@/components/ui';
 import type {
   AdminLoginResultDto,
@@ -13,6 +13,8 @@ import type {
   AdminReportStatusFilter,
   AdminReportUpdateResultDto,
   ApiResponse,
+  ChatRoomListItemDto,
+  KeywordListDto,
 } from '@/lib/types';
 
 interface AdminRecommendationResetResultDto {
@@ -26,7 +28,7 @@ interface AdminRecommendationResetResultDto {
   };
 }
 
-type AdminSection = 'reports' | 'support';
+type AdminSection = 'reports' | 'support' | 'operator-feed' | 'operator-chat';
 type AdminInquiryStatus = 'received' | 'in_review' | 'answered';
 type AdminInquiryStatusFilter = 'all' | AdminInquiryStatus;
 
@@ -52,11 +54,80 @@ interface AdminSupportInquiryListDto {
   totalPages: number;
 }
 
+interface AdminOperatorFeedResultDto {
+  feedId: number;
+  expiresAt: string;
+  operator: AdminOperatorSummaryDto;
+}
+
+interface AdminOperatorSummaryDto {
+  userId: number;
+  nickname: string;
+  onboardingCompleted: boolean;
+}
+
+interface AdminOperatorReactionDto {
+  commentId: number;
+  content: string;
+  createdAt: string;
+  chatRoomId: number | null;
+  commenter: {
+    userId: number;
+    nickname: string;
+    profileImage: string | null;
+  };
+  feed: {
+    feedId: number;
+    text: string;
+    createdAt: string;
+  };
+}
+
+interface AdminOperatorChatReactionListDto {
+  operator: AdminOperatorSummaryDto;
+  items: AdminOperatorReactionDto[];
+}
+
+interface AdminOperatorChatRoomListDto {
+  operator: AdminOperatorSummaryDto;
+  rooms: ChatRoomListItemDto[];
+}
+
+interface AdminOperatorChatMessageDto {
+  id: number;
+  sender_user_id: number;
+  type: string;
+  content: string;
+  created_at: string;
+}
+
+interface AdminOperatorChatMessagesDto {
+  operator: AdminOperatorSummaryDto;
+  messages: AdminOperatorChatMessageDto[];
+}
+
+interface AdminOperatorChatStartDto {
+  operator: AdminOperatorSummaryDto;
+  chatRoomId: number;
+}
+
+interface AdminOperatorChatSendDto {
+  operator: AdminOperatorSummaryDto;
+  message: AdminOperatorChatMessageDto;
+}
+
+interface AdminOperatorChatExpireDto {
+  operator: AdminOperatorSummaryDto;
+  room: ChatRoomListItemDto;
+}
+
 const SHOW_RECOMMENDATION_RESET_BUTTON = false;
 
 const ADMIN_SECTIONS: Array<{ value: AdminSection; label: string }> = [
   { value: 'reports', label: '신고 관리' },
   { value: 'support', label: '문의 관리' },
+  { value: 'operator-feed', label: '운영자 피드' },
+  { value: 'operator-chat', label: '운영자 채팅' },
 ];
 
 const STATUS_FILTERS: Array<{ value: AdminReportStatusFilter; label: string }> = [
@@ -141,8 +212,9 @@ async function readAdminResponse<T>(response: Response): Promise<T> {
 
 async function adminRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
+  const isFormDataBody = typeof FormData !== 'undefined' && init.body instanceof FormData;
 
-  if (init.body && !headers.has('Content-Type')) {
+  if (init.body && !isFormDataBody && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -446,6 +518,21 @@ function ReportItem({
               <p className="mt-1 max-h-24 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-5 text-[var(--color-text-secondary)]">
                 {item.target.content.text?.trim() || '내용 본문 없음'}
               </p>
+              {item.target.content.images.length > 0 && (
+                <div className="mt-3 max-w-[220px]">
+                  <ImageCarousel
+                    images={item.target.content.images}
+                    aspectRatio="1/1"
+                    alt="피드 이미지"
+                    className="rounded-lg"
+                    showIndicators={item.target.content.images.length > 1}
+                    showCountBadge={item.target.content.images.length > 1}
+                  />
+                  <p className="mt-1 text-center text-[11px] text-[var(--color-text-tertiary)]">
+                    피드 이미지 {item.target.content.images.length}장
+                  </p>
+                </div>
+              )}
               <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
                 상태 {item.target.content.status ?? '-'} · 작성 {formatDateTime(item.target.content.createdAt)}
               </p>
@@ -624,6 +711,25 @@ export default function AdminPage() {
   const [updatingNicknameInquiryId, setUpdatingNicknameInquiryId] = useState<number | null>(null);
   const [isLoadingInquiries, setIsLoadingInquiries] = useState(false);
   const [inquiryLoadError, setInquiryLoadError] = useState('');
+  const [operatorFeedKeywords, setOperatorFeedKeywords] = useState<KeywordListDto['items']>([]);
+  const [operatorFeedText, setOperatorFeedText] = useState('');
+  const [operatorFeedKeywordIds, setOperatorFeedKeywordIds] = useState<number[]>([]);
+  const [operatorFeedImages, setOperatorFeedImages] = useState<File[]>([]);
+  const [operatorFeedLoadError, setOperatorFeedLoadError] = useState('');
+  const [isLoadingOperatorFeedKeywords, setIsLoadingOperatorFeedKeywords] = useState(false);
+  const [isSubmittingOperatorFeed, setIsSubmittingOperatorFeed] = useState(false);
+  const [operatorChatRooms, setOperatorChatRooms] = useState<ChatRoomListItemDto[]>([]);
+  const [operatorChatReactions, setOperatorChatReactions] = useState<AdminOperatorReactionDto[]>([]);
+  const [operatorChatMessages, setOperatorChatMessages] = useState<AdminOperatorChatMessageDto[]>([]);
+  const [operatorChatUser, setOperatorChatUser] = useState<AdminOperatorSummaryDto | null>(null);
+  const [selectedOperatorChatRoomId, setSelectedOperatorChatRoomId] = useState<number | null>(null);
+  const [operatorChatDraftMessage, setOperatorChatDraftMessage] = useState('');
+  const [operatorChatLoadError, setOperatorChatLoadError] = useState('');
+  const [isLoadingOperatorChats, setIsLoadingOperatorChats] = useState(false);
+  const [isLoadingOperatorMessages, setIsLoadingOperatorMessages] = useState(false);
+  const [startingOperatorReactionId, setStartingOperatorReactionId] = useState<number | null>(null);
+  const [isSendingOperatorChatMessage, setIsSendingOperatorChatMessage] = useState(false);
+  const [expiringOperatorChatRoomId, setExpiringOperatorChatRoomId] = useState<number | null>(null);
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
   const [isResettingRecommendations, setIsResettingRecommendations] = useState(false);
 
@@ -694,6 +800,70 @@ export default function AdminPage() {
     }
   }, []);
 
+  const loadOperatorFeedKeywords = useCallback(async () => {
+    setIsLoadingOperatorFeedKeywords(true);
+    setOperatorFeedLoadError('');
+
+    try {
+      const data = await adminRequest<KeywordListDto>('/api/feeds/keywords');
+      setOperatorFeedKeywords(data.items);
+    } catch (error) {
+      setOperatorFeedKeywords([]);
+      setOperatorFeedLoadError(error instanceof Error ? error.message : '피드 키워드를 불러오지 못했어요.');
+    } finally {
+      setIsLoadingOperatorFeedKeywords(false);
+    }
+  }, []);
+
+  const loadOperatorChatMessages = useCallback(async (roomId: number, options: { silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setIsLoadingOperatorMessages(true);
+    }
+
+    try {
+      const data = await adminRequest<AdminOperatorChatMessagesDto>(`/api/admin/operator/chat/rooms/${roomId}/messages?limit=50`);
+      setOperatorChatUser(data.operator);
+      setOperatorChatMessages([...data.messages].reverse());
+      setSelectedOperatorChatRoomId(roomId);
+    } catch (error) {
+      if (!options.silent) {
+        showToast(error instanceof Error ? error.message : '운영자 채팅 메시지를 불러오지 못했어요.', 'error');
+      }
+    } finally {
+      if (!options.silent) {
+        setIsLoadingOperatorMessages(false);
+      }
+    }
+  }, [showToast]);
+
+  const loadOperatorChats = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setIsLoadingOperatorChats(true);
+      setOperatorChatLoadError('');
+    }
+
+    try {
+      const [roomsData, reactionsData] = await Promise.all([
+        adminRequest<AdminOperatorChatRoomListDto>('/api/admin/operator/chat/rooms'),
+        adminRequest<AdminOperatorChatReactionListDto>('/api/admin/operator/chat/reactions'),
+      ]);
+
+      setOperatorChatUser(roomsData.operator);
+      setOperatorChatRooms(roomsData.rooms);
+      setOperatorChatReactions(reactionsData.items);
+    } catch (error) {
+      if (!options.silent) {
+        setOperatorChatRooms([]);
+        setOperatorChatReactions([]);
+        setOperatorChatLoadError(error instanceof Error ? error.message : '운영자 채팅을 불러오지 못했어요.');
+      }
+    } finally {
+      if (!options.silent) {
+        setIsLoadingOperatorChats(false);
+      }
+    }
+  }, []);
+
   useEffect(() => {
     if (activeSection === 'reports') {
       void loadReports(filterStatus);
@@ -705,6 +875,33 @@ export default function AdminPage() {
       void loadInquiries(inquiryFilterStatus);
     }
   }, [activeSection, inquiryFilterStatus, loadInquiries]);
+
+  useEffect(() => {
+    if (activeSection === 'operator-feed') {
+      void loadOperatorFeedKeywords();
+    }
+  }, [activeSection, loadOperatorFeedKeywords]);
+
+  useEffect(() => {
+    if (activeSection === 'operator-chat') {
+      void loadOperatorChats();
+    }
+  }, [activeSection, loadOperatorChats]);
+
+  useEffect(() => {
+    if (activeSection !== 'operator-chat' || isAuthenticated !== true) {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadOperatorChats({ silent: true });
+      if (selectedOperatorChatRoomId) {
+        void loadOperatorChatMessages(selectedOperatorChatRoomId, { silent: true });
+      }
+    }, 10000);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeSection, isAuthenticated, loadOperatorChatMessages, loadOperatorChats, selectedOperatorChatRoomId]);
 
   const filteredCountLabel = useMemo(() => {
     if (!summary) {
@@ -719,6 +916,41 @@ export default function AdminPage() {
   }, [filterStatus, summary]);
 
   const inquiryCountLabel = useMemo(() => `${inquiryTotal}건`, [inquiryTotal]);
+  const operatorFeedImageCountLabel = useMemo(() => `${operatorFeedImages.length}/4`, [operatorFeedImages.length]);
+  const selectedOperatorChatRoom = useMemo(
+    () => operatorChatRooms.find((room) => room.roomId === selectedOperatorChatRoomId) ?? null,
+    [operatorChatRooms, selectedOperatorChatRoomId],
+  );
+  const unresolvedOperatorReactions = useMemo(
+    () => operatorChatReactions.filter((reaction) => reaction.chatRoomId === null),
+    [operatorChatReactions],
+  );
+  const isActiveSectionLoading = activeSection === 'support'
+    ? isLoadingInquiries
+    : activeSection === 'operator-feed'
+      ? isLoadingOperatorFeedKeywords || isSubmittingOperatorFeed
+      : activeSection === 'operator-chat'
+        ? isLoadingOperatorChats || isLoadingOperatorMessages || isSendingOperatorChatMessage || expiringOperatorChatRoomId !== null
+        : isLoadingReports;
+
+  const refreshActiveSection = () => {
+    if (activeSection === 'support') {
+      void loadInquiries(inquiryFilterStatus);
+      return;
+    }
+
+    if (activeSection === 'operator-feed') {
+      void loadOperatorFeedKeywords();
+      return;
+    }
+
+    if (activeSection === 'operator-chat') {
+      void loadOperatorChats();
+      return;
+    }
+
+    void loadReports(filterStatus);
+  };
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -734,6 +966,10 @@ export default function AdminPage() {
       setIsAuthenticated(true);
       if (activeSection === 'support') {
         await loadInquiries(inquiryFilterStatus);
+      } else if (activeSection === 'operator-feed') {
+        await loadOperatorFeedKeywords();
+      } else if (activeSection === 'operator-chat') {
+        await loadOperatorChats();
       } else {
         await loadReports(filterStatus);
       }
@@ -759,6 +995,25 @@ export default function AdminPage() {
     setUpdatingInquiryId(null);
     setUpdatingNicknameInquiryId(null);
     setInquiryLoadError('');
+    setOperatorFeedKeywords([]);
+    setOperatorFeedText('');
+    setOperatorFeedKeywordIds([]);
+    setOperatorFeedImages([]);
+    setOperatorFeedLoadError('');
+    setIsLoadingOperatorFeedKeywords(false);
+    setIsSubmittingOperatorFeed(false);
+    setOperatorChatRooms([]);
+    setOperatorChatReactions([]);
+    setOperatorChatMessages([]);
+    setOperatorChatUser(null);
+    setSelectedOperatorChatRoomId(null);
+    setOperatorChatDraftMessage('');
+    setOperatorChatLoadError('');
+    setIsLoadingOperatorChats(false);
+    setIsLoadingOperatorMessages(false);
+    setStartingOperatorReactionId(null);
+    setIsSendingOperatorChatMessage(false);
+    setExpiringOperatorChatRoomId(null);
     setIsResetConfirmOpen(false);
     setIsResettingRecommendations(false);
   };
@@ -886,6 +1141,159 @@ export default function AdminPage() {
     }
   };
 
+  const toggleOperatorFeedKeyword = (keywordId: number) => {
+    setOperatorFeedKeywordIds((prevIds) => (
+      prevIds.includes(keywordId)
+        ? prevIds.filter((id) => id !== keywordId)
+        : [...prevIds, keywordId]
+    ));
+  };
+
+  const handleOperatorFeedImageChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []).filter((file) => file.type.startsWith('image/'));
+    const nextFiles = files.slice(0, 4);
+
+    if (files.length > 4) {
+      showToast('이미지는 최대 4장까지 첨부할 수 있어요.', 'error');
+    }
+
+    setOperatorFeedImages(nextFiles);
+  };
+
+  const handleSubmitOperatorFeed = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const text = operatorFeedText.trim();
+    if (!text) {
+      showToast('운영자 피드 본문을 입력해주세요.', 'error');
+      return;
+    }
+
+    if (text.length > 200) {
+      showToast('피드 본문은 200자 이하로 입력해주세요.', 'error');
+      return;
+    }
+
+    if (operatorFeedKeywordIds.length === 0) {
+      showToast('피드 키워드를 1개 이상 선택해주세요.', 'error');
+      return;
+    }
+
+    setIsSubmittingOperatorFeed(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('text', text);
+      formData.append('feedKeywordIds', JSON.stringify(operatorFeedKeywordIds));
+      for (const image of operatorFeedImages) {
+        formData.append('images', image);
+      }
+
+      const data = await adminRequest<AdminOperatorFeedResultDto>('/api/admin/operator/feed', {
+        method: 'POST',
+        body: formData,
+      });
+
+      setOperatorFeedText('');
+      setOperatorFeedImages([]);
+      showToast(`${data.operator.nickname} 피드를 올렸어요.`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '운영자 피드를 올리지 못했어요.', 'error');
+    } finally {
+      setIsSubmittingOperatorFeed(false);
+    }
+  };
+
+  const handleStartOperatorReactionChat = async (reaction: AdminOperatorReactionDto) => {
+    setStartingOperatorReactionId(reaction.commentId);
+
+    try {
+      const data = await adminRequest<AdminOperatorChatStartDto>(
+        `/api/admin/operator/chat/reactions/${reaction.commentId}/start`,
+        { method: 'POST' },
+      );
+
+      setOperatorChatUser(data.operator);
+      setSelectedOperatorChatRoomId(data.chatRoomId);
+      await loadOperatorChats();
+      await loadOperatorChatMessages(data.chatRoomId);
+      showToast(`${reaction.commenter.nickname}님과 채팅을 열었어요.`, 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '운영자 채팅을 열지 못했어요.', 'error');
+    } finally {
+      setStartingOperatorReactionId(null);
+    }
+  };
+
+  const handleSelectOperatorChatRoom = async (roomId: number) => {
+    if (selectedOperatorChatRoomId === roomId && operatorChatMessages.length > 0) {
+      return;
+    }
+
+    await loadOperatorChatMessages(roomId);
+  };
+
+  const handleSendOperatorChatMessage = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const content = operatorChatDraftMessage.trim();
+    if (!selectedOperatorChatRoomId) {
+      showToast('채팅방을 먼저 선택해주세요.', 'error');
+      return;
+    }
+
+    if (!content) {
+      return;
+    }
+
+    setIsSendingOperatorChatMessage(true);
+
+    try {
+      const data = await adminRequest<AdminOperatorChatSendDto>(
+        `/api/admin/operator/chat/rooms/${selectedOperatorChatRoomId}/messages`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ content }),
+        },
+      );
+
+      setOperatorChatUser(data.operator);
+      setOperatorChatMessages((prevMessages) => [...prevMessages, data.message]);
+      setOperatorChatDraftMessage('');
+      await loadOperatorChats();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '운영자 채팅 메시지를 보내지 못했어요.', 'error');
+    } finally {
+      setIsSendingOperatorChatMessage(false);
+    }
+  };
+
+  const handleExpireOperatorChatRoom = async () => {
+    if (!selectedOperatorChatRoom) {
+      return;
+    }
+
+    setExpiringOperatorChatRoomId(selectedOperatorChatRoom.roomId);
+
+    try {
+      const data = await adminRequest<AdminOperatorChatExpireDto>(
+        `/api/admin/operator/chat/rooms/${selectedOperatorChatRoom.roomId}/expire`,
+        { method: 'POST' },
+      );
+
+      setOperatorChatUser(data.operator);
+      setOperatorChatRooms((prevRooms) => prevRooms.map((room) => (
+        room.roomId === data.room.roomId ? data.room : room
+      )));
+      await loadOperatorChats();
+      showToast('운영자 채팅방을 만료 처리했어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '운영자 채팅방을 만료 처리하지 못했어요.', 'error');
+    } finally {
+      setExpiringOperatorChatRoomId(null);
+    }
+  };
+
   const handleResetRecommendations = async () => {
     setIsResettingRecommendations(true);
 
@@ -940,7 +1348,7 @@ export default function AdminPage() {
                 variant="danger"
                 size="sm"
                 loading={isResettingRecommendations}
-                disabled={isLoadingReports || isLoadingInquiries}
+                disabled={isLoadingReports || isLoadingInquiries || isLoadingOperatorFeedKeywords || isSubmittingOperatorFeed}
                 onClick={() => setIsResetConfirmOpen(true)}
               >
                 추천 초기화
@@ -950,12 +1358,8 @@ export default function AdminPage() {
               type="button"
               variant="secondary"
               size="sm"
-              loading={activeSection === 'support' ? isLoadingInquiries : isLoadingReports}
-              onClick={() => (
-                activeSection === 'support'
-                  ? void loadInquiries(inquiryFilterStatus)
-                  : void loadReports(filterStatus)
-              )}
+              loading={isActiveSectionLoading}
+              onClick={refreshActiveSection}
             >
               새로고침
             </Button>
@@ -965,7 +1369,7 @@ export default function AdminPage() {
           </div>
         </header>
 
-        <section className="grid gap-2 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] p-2 sm:grid-cols-2">
+        <section className="grid gap-2 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] p-2 sm:grid-cols-4">
           {ADMIN_SECTIONS.map((section) => {
             const isSelected = activeSection === section.value;
 
@@ -1050,6 +1454,311 @@ export default function AdminPage() {
           </div>
         </section>
           </>
+        )}
+
+        {activeSection === 'operator-feed' && (
+          <section className="rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-light)] px-4 py-3">
+              <div>
+                <h2 className="text-base font-bold text-[var(--color-text-primary)]">운영자 피드 작성</h2>
+                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">인제우리 우곰이 명의로 지금우리 피드를 게시합니다.</p>
+              </div>
+              <span className="rounded-full bg-[var(--color-surface-secondary)] px-3 py-1 text-xs font-bold text-[var(--color-text-secondary)]">
+                이미지 {operatorFeedImageCountLabel}
+              </span>
+            </div>
+
+            <form onSubmit={handleSubmitOperatorFeed} className="grid gap-4 p-4">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold text-[var(--color-text-primary)]">본문</span>
+                <textarea
+                  value={operatorFeedText}
+                  onChange={(event) => setOperatorFeedText(event.target.value.slice(0, 200))}
+                  rows={5}
+                  placeholder="인스타 홍보, 이벤트 안내 등 게시할 내용을 입력하세요."
+                  className="w-full resize-none rounded-lg border border-[var(--color-border)] bg-white px-4 py-3 text-sm leading-6 text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/15"
+                />
+                <span className="mt-1 block text-right text-xs text-[var(--color-text-tertiary)]">{operatorFeedText.length}/200</span>
+              </label>
+
+              <div>
+                <p className="mb-2 text-sm font-bold text-[var(--color-text-primary)]">키워드</p>
+                {isLoadingOperatorFeedKeywords ? (
+                  <div className="rounded-lg bg-[var(--color-surface-secondary)] px-4 py-6 text-center text-sm font-medium text-[var(--color-text-secondary)]">
+                    키워드를 불러오는 중이에요
+                  </div>
+                ) : operatorFeedLoadError ? (
+                  <div className="rounded-lg bg-[#FFF1F6] px-4 py-3 text-sm font-medium text-[#9A3155]">
+                    {operatorFeedLoadError}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {operatorFeedKeywords.map((keyword) => {
+                      const isSelected = operatorFeedKeywordIds.includes(keyword.feedKeywordId);
+
+                      return (
+                        <button
+                          key={keyword.feedKeywordId}
+                          type="button"
+                          onClick={() => toggleOperatorFeedKeyword(keyword.feedKeywordId)}
+                          className={`rounded-full border px-3 py-2 text-sm font-semibold transition ${
+                            isSelected
+                              ? 'border-[var(--color-pink-cta)] bg-[var(--color-brand-pink)] text-[var(--color-pink-cta)]'
+                              : 'border-[var(--color-border)] bg-white text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-secondary)]'
+                          }`}
+                        >
+                          {keyword.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-bold text-[var(--color-text-primary)]">이미지</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleOperatorFeedImageChange}
+                  className="block w-full rounded-lg border border-[var(--color-border)] bg-white px-3 py-2 text-sm text-[var(--color-text-secondary)] file:mr-3 file:rounded-lg file:border-0 file:bg-[var(--color-surface-secondary)] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[var(--color-text-primary)]"
+                />
+                {operatorFeedImages.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {operatorFeedImages.map((image) => (
+                      <span key={`${image.name}-${image.size}`} className="rounded-full bg-[var(--color-surface-secondary)] px-3 py-1 text-xs font-semibold text-[var(--color-text-secondary)]">
+                        {image.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </label>
+
+              <div className="flex justify-end">
+                <Button
+                  type="submit"
+                  loading={isSubmittingOperatorFeed}
+                  disabled={isLoadingOperatorFeedKeywords || Boolean(operatorFeedLoadError)}
+                >
+                  피드 올리기
+                </Button>
+              </div>
+            </form>
+          </section>
+        )}
+
+        {activeSection === 'operator-chat' && (
+          <section className="rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-light)] px-4 py-3">
+              <div>
+                <h2 className="text-base font-bold text-[var(--color-text-primary)]">운영자 채팅</h2>
+                <p className="mt-1 text-sm text-[var(--color-text-secondary)]">
+                  {operatorChatUser
+                    ? `${operatorChatUser.nickname} 계정으로 문의성 반응에 답장합니다.`
+                    : '운영자 계정으로 지금우리 피드 반응 문의를 받습니다.'}
+                </p>
+              </div>
+              <span className="rounded-full bg-[var(--color-surface-secondary)] px-3 py-1 text-xs font-bold text-[var(--color-text-secondary)]">
+                채팅 {operatorChatRooms.length}개
+              </span>
+            </div>
+
+            {operatorChatLoadError ? (
+              <div className="py-16 text-center">
+                <p className="text-base font-bold text-[var(--color-text-primary)]">운영자 채팅을 불러오지 못했어요</p>
+                <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{operatorChatLoadError}</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 p-4 lg:grid-cols-[340px_1fr]">
+                <div className="space-y-4">
+                  <section className="rounded-lg border border-[var(--color-border-light)]">
+                    <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] px-3 py-2">
+                      <h3 className="text-sm font-bold text-[var(--color-text-primary)]">새 문의 반응</h3>
+                      <span className="text-xs font-semibold text-[var(--color-text-tertiary)]">{unresolvedOperatorReactions.length}건</span>
+                    </div>
+                    <div className="max-h-[320px] space-y-2 overflow-y-auto p-3">
+                      {isLoadingOperatorChats ? (
+                        <p className="py-8 text-center text-sm font-medium text-[var(--color-text-secondary)]">불러오는 중이에요</p>
+                      ) : unresolvedOperatorReactions.length === 0 ? (
+                        <div className="py-8 text-center">
+                          <p className="text-sm font-bold text-[var(--color-text-primary)]">대기 중인 반응이 없어요</p>
+                          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">하트 반응이 들어오면 여기서 채팅을 열 수 있어요.</p>
+                        </div>
+                      ) : (
+                        unresolvedOperatorReactions.map((reaction) => (
+                          <article key={reaction.commentId} className="rounded-lg bg-[var(--color-surface-secondary)] p-3">
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{reaction.commenter.nickname}</p>
+                                <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">{formatDateTime(reaction.createdAt)}</p>
+                              </div>
+                              <Button
+                                type="button"
+                                size="sm"
+                                loading={startingOperatorReactionId === reaction.commentId}
+                                onClick={() => void handleStartOperatorReactionChat(reaction)}
+                              >
+                                채팅 열기
+                              </Button>
+                            </div>
+                            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
+                              {reaction.content.trim() || '하트 반응'}
+                            </p>
+                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
+                              피드: {reaction.feed.text}
+                            </p>
+                          </article>
+                        ))
+                      )}
+                    </div>
+                  </section>
+
+                  <section className="rounded-lg border border-[var(--color-border-light)]">
+                    <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] px-3 py-2">
+                      <h3 className="text-sm font-bold text-[var(--color-text-primary)]">채팅방</h3>
+                      <span className="text-xs font-semibold text-[var(--color-text-tertiary)]">{operatorChatRooms.length}개</span>
+                    </div>
+                    <div className="max-h-[420px] space-y-2 overflow-y-auto p-3">
+                      {isLoadingOperatorChats ? (
+                        <p className="py-8 text-center text-sm font-medium text-[var(--color-text-secondary)]">불러오는 중이에요</p>
+                      ) : operatorChatRooms.length === 0 ? (
+                        <div className="py-8 text-center">
+                          <p className="text-sm font-bold text-[var(--color-text-primary)]">열린 채팅방이 없어요</p>
+                          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">새 문의 반응에서 채팅을 열어주세요.</p>
+                        </div>
+                      ) : (
+                        operatorChatRooms.map((room) => {
+                          const isSelected = selectedOperatorChatRoomId === room.roomId;
+                          const isClosed = room.status !== 'active';
+                          const preview = room.lastMessage
+                            ? room.lastMessage.type === 'image'
+                              ? '이미지 메시지'
+                              : room.lastMessage.content
+                            : '아직 메시지가 없어요';
+
+                          return (
+                            <button
+                              key={room.roomId}
+                              type="button"
+                              onClick={() => void handleSelectOperatorChatRoom(room.roomId)}
+                              className={`w-full rounded-lg border p-3 text-left transition ${
+                                isSelected
+                                  ? 'border-[var(--color-pink-cta)] bg-[var(--color-brand-pink)]'
+                                  : 'border-[var(--color-border-light)] bg-white hover:border-[var(--color-border)]'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="min-w-0 truncate text-sm font-bold text-[var(--color-text-primary)]">
+                                  {room.otherUser?.nickname ?? '알 수 없는 사용자'}
+                                </p>
+                                {room.unreadCount > 0 && (
+                                  <span className="shrink-0 rounded-full bg-[var(--color-pink-cta)] px-2 py-0.5 text-[11px] font-bold text-white">
+                                    {room.unreadCount}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">{preview}</p>
+                              <p className="mt-2 text-[11px] text-[var(--color-text-tertiary)]">
+                                {isClosed ? '닫힘' : '만료'} {formatDateTime(room.expiresAt)}
+                              </p>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
+                </div>
+
+                <div className="flex min-h-[560px] flex-col rounded-lg border border-[var(--color-border-light)]">
+                  {selectedOperatorChatRoom ? (
+                    <>
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-light)] px-4 py-3">
+                        <div>
+                          <p className="text-sm font-bold text-[var(--color-text-primary)]">
+                            {selectedOperatorChatRoom.otherUser?.nickname ?? '알 수 없는 사용자'}
+                          </p>
+                          <p className="mt-1 text-xs text-[var(--color-text-secondary)]">
+                            {selectedOperatorChatRoom.status === 'active' ? '운영자 계정으로 답장 중' : '닫힌 채팅방'}
+                            {' · '}
+                            {selectedOperatorChatRoom.status === 'active' ? '만료' : '닫힘'} {formatDateTime(selectedOperatorChatRoom.expiresAt)}
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          loading={expiringOperatorChatRoomId === selectedOperatorChatRoom.roomId}
+                          disabled={selectedOperatorChatRoom.status !== 'active'}
+                          onClick={() => void handleExpireOperatorChatRoom()}
+                        >
+                          만료
+                        </Button>
+                      </div>
+
+                      <div className="flex-1 space-y-3 overflow-y-auto bg-[var(--color-surface-secondary)] p-4">
+                        {isLoadingOperatorMessages ? (
+                          <p className="py-16 text-center text-sm font-medium text-[var(--color-text-secondary)]">메시지를 불러오는 중이에요</p>
+                        ) : operatorChatMessages.length === 0 ? (
+                          <div className="py-16 text-center">
+                            <p className="text-sm font-bold text-[var(--color-text-primary)]">아직 메시지가 없어요</p>
+                            <p className="mt-1 text-xs text-[var(--color-text-secondary)]">아래 입력창에서 먼저 안내 메시지를 보낼 수 있어요.</p>
+                          </div>
+                        ) : (
+                          operatorChatMessages.map((message) => {
+                            const isMine = operatorChatUser?.userId === message.sender_user_id;
+                            const messageContent = message.type === 'image' ? '이미지 메시지' : message.content;
+
+                            return (
+                              <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[78%] rounded-lg px-3 py-2 ${
+                                  isMine
+                                    ? 'bg-[var(--color-pink-cta)] text-white'
+                                    : 'bg-white text-[var(--color-text-primary)]'
+                                }`}
+                                >
+                                  <p className="whitespace-pre-wrap break-words text-sm leading-6">{messageContent}</p>
+                                  <p className={`mt-1 text-[11px] ${isMine ? 'text-white/75' : 'text-[var(--color-text-tertiary)]'}`}>
+                                    {formatDateTime(message.created_at)}
+                                  </p>
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+
+                      <form onSubmit={handleSendOperatorChatMessage} className="flex gap-2 border-t border-[var(--color-border-light)] p-3">
+                        <input
+                          value={operatorChatDraftMessage}
+                          onChange={(event) => setOperatorChatDraftMessage(event.target.value)}
+                          placeholder={selectedOperatorChatRoom.status === 'active' ? '문의 답장을 입력하세요.' : '닫힌 채팅방에는 답장할 수 없어요.'}
+                          disabled={selectedOperatorChatRoom.status !== 'active'}
+                          className="min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-white px-4 py-3 text-sm text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/15"
+                        />
+                        <Button
+                          type="submit"
+                          loading={isSendingOperatorChatMessage}
+                          disabled={selectedOperatorChatRoom.status !== 'active' || !operatorChatDraftMessage.trim() || isLoadingOperatorMessages}
+                        >
+                          보내기
+                        </Button>
+                      </form>
+                    </>
+                  ) : (
+                    <div className="flex flex-1 items-center justify-center p-8 text-center">
+                      <div>
+                        <p className="text-base font-bold text-[var(--color-text-primary)]">채팅방을 선택해주세요</p>
+                        <p className="mt-2 text-sm text-[var(--color-text-secondary)]">
+                          여러 사용자와 열린 채팅방을 왼쪽 목록에서 전환하며 답장할 수 있어요.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
         )}
 
         {activeSection === 'support' && (

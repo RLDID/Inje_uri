@@ -36,6 +36,8 @@ export interface MyCommentedFeedItemDto {
       userId: number;
       nickname: string;
       gender: string;
+      hideGender?: boolean;
+      isOperator?: boolean;
       profileImage: string | null;
     };
   };

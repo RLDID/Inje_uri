@@ -32,6 +32,8 @@ export interface Story {
   createdAt: Date;
   expiresAt: Date;
   isExpired: boolean;
+  isLikedByMe?: boolean;
+  isMine?: boolean;
   reactions?: FeedReaction[];
 }
 

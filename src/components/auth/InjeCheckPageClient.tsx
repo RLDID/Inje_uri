@@ -6,6 +6,7 @@ import { PageContainer } from '@/components/layout';
 import { Button, Card, useToast } from '@/components/ui';
 import { PRE_AUTH_CREDENTIALS_STORAGE_KEY } from '@/lib/auth/constants';
 import { APP_NAME } from '@/lib/constants';
+import { markPwaInstallPopupPending } from '@/lib/pwa/loginInstallPrompt';
 
 interface InjeCheckResponse {
   success?: boolean;
@@ -161,6 +162,7 @@ export function InjeCheckPageClient() {
 
       if (response.ok && payload.success) {
         showToast('로그인되었습니다.', 'success');
+        markPwaInstallPopupPending();
         const nextPath = resolveNextPath(searchParams.get('next'));
         startTransition(() => {
           router.replace(nextPath);

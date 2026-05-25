@@ -86,6 +86,7 @@ export async function getMyFeeds(): Promise<Story[]> {
     createdAt: new Date(data.feed.createdAt),
     expiresAt: new Date(data.feed.expiresAt),
     isExpired: new Date(data.feed.expiresAt).getTime() <= Date.now(),
+    isMine: true,
     reactions: [],
   }];
 }
@@ -102,7 +103,14 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
         viewCount: number;
         images?: Array<{ imageId: number; imageUrl: string; sortOrder: number }>;
         keywords?: Array<{ feedKeywordId: number; code?: string; name: string }>;
-        author: { userId: number; nickname: string; gender: string; profileImage: string | null };
+        author: {
+          userId: number;
+          nickname: string;
+          gender: string;
+          hideGender?: boolean;
+          isOperator?: boolean;
+          profileImage: string | null;
+        };
       };
     }>;
   }>('/api/feeds/commented-by-me');
@@ -117,6 +125,8 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
       department: '',
       studentYear: 1,
       gender: item.feed.author.gender as 'male' | 'female',
+      hideGender: item.feed.author.hideGender,
+      isOperator: item.feed.author.isOperator,
       profileImages: item.feed.author.profileImage ? [item.feed.author.profileImage] : [PLACEHOLDER_PROFILE_IMAGE],
       personality: [],
       interests: [],
@@ -140,6 +150,7 @@ export async function getMyCommentedFeeds(): Promise<Story[]> {
     createdAt: new Date(item.comment.createdAt),
     expiresAt: new Date(item.feed.expiresAt),
     isExpired: new Date(item.feed.expiresAt).getTime() <= Date.now(),
+    isLikedByMe: true,
     reactions: [],
   }));
 }

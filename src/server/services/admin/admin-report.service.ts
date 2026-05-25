@@ -118,11 +118,13 @@ function toReportContent(
   text: string | null,
   status: string | null,
   createdAt: Date | null,
+  images: string[] = [],
 ): AdminReportTargetContext['content'] {
   return {
     text,
     status,
     createdAt: createdAt?.toISOString() ?? null,
+    images,
   };
 }
 
@@ -182,6 +184,10 @@ async function resolveReportTargetContexts(rows: AdminReportForAction[]): Promis
             status: true,
             created_at: true,
             author_user: { select: adminReportUserSelect },
+            images: {
+              orderBy: { sort_order: 'asc' },
+              select: { image_url: true },
+            },
           },
         })
       : Promise.resolve([]),
@@ -259,7 +265,12 @@ async function resolveReportTargetContexts(rows: AdminReportForAction[]): Promis
       contexts.set(row.id, feed
         ? {
             ownerUser: toReportUserSummaryDto(feed.author_user),
-            content: toReportContent(feed.text, feed.status, feed.created_at),
+            content: toReportContent(
+              feed.text,
+              feed.status,
+              feed.created_at,
+              feed.images.map((image) => image.image_url),
+            ),
           }
         : emptyTargetContext());
       continue;
