@@ -3,6 +3,7 @@ import { AuthSessionGuard } from '@/components/auth/AuthSessionGuard';
 import { NavigationTracker } from '@/components/navigation/NavigationTracker';
 import { ChatExpiryNotifier } from '@/components/chat/ChatExpiryNotifier';
 import { BottomNavWithUnread } from '@/components/layout/BottomNavWithUnread';
+import { PwaInstallLoginPopup } from '@/components/pwa/PwaInstallLoginPopup';
 
 export default function MainLayout({
   children,
@@ -19,6 +20,9 @@ export default function MainLayout({
       </Suspense>
       <Suspense fallback={null}>
         <ChatExpiryNotifier />
+      </Suspense>
+      <Suspense fallback={null}>
+        <PwaInstallLoginPopup />
       </Suspense>
       {children}
       <Suspense fallback={null}>

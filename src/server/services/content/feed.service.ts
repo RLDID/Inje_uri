@@ -8,6 +8,9 @@ import {
   saveFeedImageFile,
 } from "@/server/services/content/feed-image-storage";
 import { decodeFeedCursor, encodeFeedCursor } from "@/lib/utils/cursor";
+import {
+  isAdminOperatorEmail,
+} from "@/server/services/admin/admin-operator.constants";
 import type {
   CreateFeedResultDto,
   FeedDetailDto,
@@ -19,6 +22,8 @@ import type {
 } from "@/lib/types/feed";
 
 const FEED_PAGE_SIZE = 20;
+const MAX_FEED_TEXT_LENGTH = 200;
+const MAX_FEED_IMAGES = 4;
 
 const repo = new FeedRepository(prisma);
 
@@ -27,7 +32,32 @@ type FeedKeywordInput = {
   codes?: string[] | null;
 };
 
-function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
+function normalizeFeedText(text: string): string {
+  const trimmedText = text.trim();
+  if (!trimmedText) {
+    throw new AppError("INVALID_TEXT", "피드 본문은 빈 값이 아닌 문자열이어야 합니다.");
+  }
+
+  if (trimmedText.length > MAX_FEED_TEXT_LENGTH) {
+    throw new AppError("INVALID_TEXT", `피드 본문은 ${MAX_FEED_TEXT_LENGTH}자 이하로 입력해주세요.`);
+  }
+
+  return trimmedText;
+}
+
+function assertFeedImageCount(imageCount: number) {
+  if (imageCount > MAX_FEED_IMAGES) {
+    throw new AppError("INVALID_INPUT", `이미지는 최대 ${MAX_FEED_IMAGES}개까지 등록할 수 있습니다.`);
+  }
+}
+
+function toFeedListItemDto(
+  row: FeedListRow,
+  options: { commentedFeedIds?: Set<number>; currentUserId?: number } = {},
+): FeedListItemDto {
+  const isOperator = isAdminOperatorEmail(row.author_user.email);
+  const isMine = row.author_user.id === options.currentUserId;
+
   return {
     feedId: row.id,
     text: row.text,
@@ -38,6 +68,8 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
       userId: row.author_user.id,
       nickname: row.author_user.nickname,
       gender: row.author_user.gender,
+      hideGender: isOperator || !row.author_user.onboarding_completed,
+      isOperator,
       profileImage: row.author_user.userProfileImages[0]?.image_url ?? null,
     },
     keywords: row.keywords.map((k) => ({
@@ -53,10 +85,18 @@ function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
     })),
     commentCount: row._count.comments,
     viewCount: row._count.views,
+    commentedByMe: options.commentedFeedIds?.has(row.id) ?? false,
+    isMine,
   };
 }
 
-function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
+function toFeedDetailDto(
+  row: FeedDetailRow,
+  options: { commentedByMe?: boolean; currentUserId?: number } = {},
+): FeedDetailDto {
+  const isOperator = isAdminOperatorEmail(row.author_user.email);
+  const isMine = row.author_user_id === options.currentUserId;
+
   return {
     feed: {
       feedId: row.id,
@@ -70,6 +110,8 @@ function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
         userId: row.author_user.id,
         nickname: row.author_user.nickname,
         gender: row.author_user.gender,
+        hideGender: isOperator || !row.author_user.onboarding_completed,
+        isOperator,
         department: row.author_user.department,
         studentYear: row.author_user.student_year,
         bio: row.author_user.bio,
@@ -91,6 +133,8 @@ function toFeedDetailDto(row: FeedDetailRow): FeedDetailDto {
       })),
       commentCount: row._count.comments,
       viewCount: row._count.views,
+      commentedByMe: options.commentedByMe ?? false,
+      isMine,
     },
   };
 }
@@ -136,7 +180,7 @@ async function resolveFeedKeywordIds(input: FeedKeywordInput): Promise<number[]>
 
 export async function listFeeds(
   currentUserId: number,
-  keyword: string | null,
+  keywords: string[] | null,
   cursor: string | null,
 ): Promise<FeedListDto> {
   const now = new Date();
@@ -152,23 +196,23 @@ export async function listFeeds(
     author_user: { status: { not: "banned" } },
   };
 
-  where.author_user_id = {
-    not: currentUserId,
-    ...(blockedUserIds.size > 0 ? { notIn: [...blockedUserIds] } : {}),
-  };
-
-  const excludedFeedIds = new Set([...commentedFeedIds, ...reportedFeedIds]);
-  if (excludedFeedIds.size > 0) {
-    where.id = { notIn: [...excludedFeedIds] };
+  if (blockedUserIds.size > 0) {
+    where.author_user_id = { notIn: [...blockedUserIds] };
   }
 
-  if (keyword) {
+  if (reportedFeedIds.size > 0) {
+    where.id = { notIn: [...reportedFeedIds] };
+  }
+
+  const keywordFilters = [...new Set((keywords ?? []).map((keyword) => keyword.trim()).filter(Boolean))];
+
+  if (keywordFilters.length > 0) {
     where.keywords = {
       some: {
         feed_keyword: {
           OR: [
-            { code: keyword },
-            { name: keyword },
+            { code: { in: keywordFilters } },
+            { name: { in: keywordFilters } },
           ],
         },
       },
@@ -193,7 +237,7 @@ export async function listFeeds(
   const lastRow = slice[slice.length - 1];
 
   return {
-    items: slice.map(toFeedListItemDto),
+    items: slice.map((row) => toFeedListItemDto(row, { commentedFeedIds, currentUserId })),
     nextCursor:
       hasNextPage && lastRow
         ? encodeFeedCursor({ boostScore: lastRow.boost_score, id: lastRow.id })
@@ -206,12 +250,17 @@ export async function createFeed(
   text: string,
   feedKeywordInput: FeedKeywordInput,
   images: File[] = [],
+  options: { skipActiveFeedCheck?: boolean } = {},
 ): Promise<CreateFeedResultDto> {
   const now = new Date();
+  const normalizedText = normalizeFeedText(text);
+  assertFeedImageCount(images.length);
 
-  const existing = await repo.findActiveFeedByUser(authorUserId, now);
-  if (existing) {
-    throw new AppError("FEED_ALREADY_ACTIVE", "이미 활성 상태인 피드가 있습니다. 기존 피드가 만료된 후 작성해주세요.");
+  if (!options.skipActiveFeedCheck) {
+    const existing = await repo.findActiveFeedByUser(authorUserId, now);
+    if (existing) {
+      throw new AppError("FEED_ALREADY_ACTIVE", "이미 활성 상태인 피드가 있습니다. 기존 피드가 만료된 후 작성해주세요.");
+    }
   }
 
   const feedKeywordIds = await resolveFeedKeywordIds(feedKeywordInput);
@@ -227,7 +276,7 @@ export async function createFeed(
   const imageUrls = await Promise.all(images.map((image) => saveFeedImageFile(image)));
 
   const feed = await prisma.$transaction(async (tx) => {
-    const createdFeed = await repo.createFeedWithKeywords(tx, { authorUserId, text: text.trim(), expiresAt }, feedKeywordIds);
+    const createdFeed = await repo.createFeedWithKeywords(tx, { authorUserId, text: normalizedText, expiresAt }, feedKeywordIds);
     await repo.createFeedImages(
       tx,
       createdFeed.id,
@@ -273,7 +322,9 @@ export async function getFeedDetail(
     }
   }
 
-  return toFeedDetailDto(feed);
+  const commentedByMe = Boolean(await repo.findExistingCommentByUser(feedId, currentUserId));
+
+  return toFeedDetailDto(feed, { commentedByMe, currentUserId });
 }
 
 export async function updateFeed(
@@ -302,13 +353,19 @@ export async function updateFeed(
     throw new AppError("FEED_NOT_AVAILABLE", "만료된 피드는 수정할 수 없습니다.");
   }
 
+  const normalizedText = text === undefined ? undefined : normalizeFeedText(text);
+  const deleteImageIdSet = new Set(deleteImageIds);
+  const existingImageIds = new Set(feed.images.map((image) => image.id));
+  const deletedExistingImageCount = [...deleteImageIdSet].filter((imageId) => existingImageIds.has(imageId)).length;
+  assertFeedImageCount(feed.images.length - deletedExistingImageCount + images.length);
+
   const feedKeywordIds = feedKeywordInput ? await resolveFeedKeywordIds(feedKeywordInput) : undefined;
 
   const imageUrls = await Promise.all(images.map((image) => saveFeedImageFile(image)));
   const deletedImageUrls: string[] = [];
 
   await prisma.$transaction(async (tx) => {
-    const nextText = text?.trim() ?? feed.text;
+    const nextText = normalizedText ?? feed.text;
     await repo.updateFeedText(tx, feedId, nextText, now);
     if (feedKeywordIds) await repo.replaceFeedKeywords(tx, feedId, feedKeywordIds);
 

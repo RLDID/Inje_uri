@@ -1,6 +1,6 @@
 import { prisma } from "@/server/db/prisma";
 
-const HIDDEN_PLACE_NAMES = ["A동", "D동"];
+const HIDDEN_PLACE_NAMES = ["A동", "D동", "백곰", "코딩하는 백곰이"];
 
 export type CreateSuggestionInput = {
     chatRoomId: number;
@@ -44,6 +44,14 @@ export async function updateSuggestionStatus(id: number, status: string) {
     return prisma.chatRoomPlaceSuggestion.update({
         where: { id },
         data: { status },
+        include: { place: { include: { category: true, tags: true } } },
+    });
+}
+
+export async function updateSuggestionTriggeredKeyword(id: number, triggeredKeyword: string) {
+    return prisma.chatRoomPlaceSuggestion.update({
+        where: { id },
+        data: { triggered_keyword: triggeredKeyword },
         include: { place: { include: { category: true, tags: true } } },
     });
 }

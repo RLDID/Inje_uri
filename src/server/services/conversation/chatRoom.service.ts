@@ -15,6 +15,7 @@
   import { prisma } from "@/server/db/prisma";
   import type { PrismaTransactionClient } from "@/server/db/prisma";
   import type { ChatRoomListItemDto } from "@/lib/types/chat";
+  import { isAdminOperatorEmail } from "@/server/services/admin/admin-operator.constants";
 
   const safetyRepo = new SafetyRepository(prisma);
 
@@ -55,14 +56,23 @@
     }
 
     // 2. active 중복 확인
-    const existing = await
-  chatRoomRepo.findActiveRoomBetweenUsers(requestUserId, targetUserId, input.tx);
+    const existing = await chatRoomRepo.findActiveRoomBetweenUsers(
+      requestUserId,
+      targetUserId,
+      input.tx,
+      sourceType,
+    );
     if (existing) {
       return { error: ERROR.DUPLICATE_ACTIVE_ROOM } as const;
     }
 
     // 2. 재매칭 7일 정책
-    const lastLeft = await chatRoomRepo.findLastLeftRoomBetweenUsers(requestUserId, targetUserId, input.tx);
+    const lastLeft = await chatRoomRepo.findLastLeftRoomBetweenUsers(
+      requestUserId,
+      targetUserId,
+      input.tx,
+      sourceType,
+    );
     if (lastLeft) {
       let latestLeftAt: Date | null = null;
 
@@ -199,8 +209,10 @@ export async function getChatRooms(
     return result;
   }
 
+  type ChatRoomForListItem = Awaited<ReturnType<typeof chatRoomRepo.findRoomsByUserId>>[number];
+
   function toChatRoomListItemDto(
-    room: Awaited<ReturnType<typeof chatRoomRepo.findRoomsByUserId>>[number],
+    room: ChatRoomForListItem,
     currentUserId: number,
     unreadCount: number,
     blockedByMe: boolean,
@@ -223,6 +235,7 @@ export async function getChatRooms(
         userId: other.user.id,
         nickname: other.user.nickname,
         profileImage: other.user.userProfileImages[0]?.image_url ?? null,
+        isOperator: isAdminOperatorEmail(other.user.email),
       } : null,
       lastMessage: lastMsg ? {
         id: lastMsg.id,
@@ -244,17 +257,34 @@ export async function getChatRooms(
     const room = await chatRoomRepo.findRoomById(roomId);
     if (!room) return { error: ERROR.NOT_FOUND } as const;
 
-    let isParticipant = false;
+    let me: (typeof room.participants)[number] | null = null;
     for (const p of room.participants) {
       if (p.user_id === userId) {
-        isParticipant = true;
+        me = p;
         break;
       }
     }
-    if (!isParticipant) return { error: ERROR.FORBIDDEN } as
+    if (!me || me.left_at !== null) return { error: ERROR.FORBIDDEN } as
   const;
 
-    return { room };
+    const other = room.participants.find((participant) => participant.user_id !== userId);
+    if (other && room.status === "blocked") {
+      await chatRoomRepo.restoreBlockedRoomsBetweenUsers(userId, other.user_id);
+      room.status = room.expires_at > new Date() ? "active" : "expired";
+      room.blocked_by_user_id = null;
+    }
+
+    let blockedByMe = false;
+    if (other) {
+      const block = await safetyRepo.findExistingBlock(userId, other.user_id);
+      blockedByMe = Boolean(block && !block.unblocked_at);
+    }
+
+    const unreadCount = blockedByMe || room.status === "blocked"
+      ? 0
+      : await messageReadRepo.getUnreadCount(userId, room.id);
+
+    return { room: toChatRoomListItemDto(room, userId, unreadCount, blockedByMe) };
   }
   
 
@@ -305,27 +335,40 @@ export async function getChatRooms(
   }
 
   // ─────────────────────────────────────────────
-  // 차단 전이
+  // 채팅방에서 상대 차단
   // ─────────────────────────────────────────────
 
   /**
-   * 차단 상태 전이 — D가 차단 완료 후 호출.
-   * chat_rooms.status = blocked + blocked_by_user_id 기록.
+   * 채팅방에서 상대를 차단한다.
+   * 현재 정책은 방 status를 blocked로 바꾸지 않고, 차단 관계만 저장한다.
+   * 그래서 차단한 사람에게만 blockedByMe로 제한되고 상대에게는 차단 사실이 노출되지 않는다.
    */
   export async function blockChatRoom(roomId: number, blockedByUserId: number) {
     const room = await chatRoomRepo.findRoomById(roomId);
     if (!room) return { error: ERROR.NOT_FOUND } as const;
 
     // 요청자가 참여자인지 확인
-    const isParticipant = room.participants.some(p => p.user_id === blockedByUserId);
-    if (!isParticipant) return { error: ERROR.FORBIDDEN } as const;
+    const requester = room.participants.find((participant) => participant.user_id === blockedByUserId);
+    if (!requester || requester.left_at !== null) return { error: ERROR.FORBIDDEN } as const;
 
-    // 이미 종료/차단된 방인지 확인
-    if (room.status === "blocked" || room.status === "closed") {
+    if (room.status === "closed") {
       return { error: ERROR.ROOM_NOT_ACTIVE } as const;
     }
 
-    await chatRoomRepo.updateRoomStatus(roomId, "blocked", blockedByUserId);
+    const other = room.participants.find((participant) => participant.user_id !== blockedByUserId);
+    if (!other) return { error: ERROR.NOT_FOUND } as const;
 
-    return { roomStatus: "blocked" };
+    const existingBlock = await safetyRepo.findExistingBlock(blockedByUserId, other.user_id);
+    if (existingBlock && !existingBlock.unblocked_at) {
+      return { roomStatus: "blocked", blockId: existingBlock.id };
+    }
+
+    const reason = `채팅방에서 차단 (${roomId})`;
+    const block = existingBlock
+      ? await safetyRepo.reactivateBlock(existingBlock.id, reason)
+      : await safetyRepo.createBlock(blockedByUserId, other.user_id, reason);
+
+    await chatRoomRepo.restoreBlockedRoomsBetweenUsers(blockedByUserId, other.user_id);
+
+    return { roomStatus: "blocked", blockId: block.id };
   }

@@ -53,6 +53,7 @@ export interface ChatRoomListItemDto {
     userId: number;
     nickname: string;
     profileImage: string | null;
+    isOperator?: boolean;
   } | null;
   lastMessage: {
     id: number;

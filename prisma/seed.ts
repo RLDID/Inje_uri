@@ -300,7 +300,6 @@ const placeCategorySeeds = [
   { code: "park",       name: "Park" },
   { code: "activity",   name: "Activity" },
   { code: "campus",     name: "Campus" },
-  { code: "egg",        name: "플러팅"},
   { code: "coding",     name: "컴공"},
   { code: "gate",        name: "Gate"},
 
@@ -357,12 +356,6 @@ const placeSeeds :{
     categoryCode: "activity",
     places:[
       { name: "운동장",     description: "인제대학교 운동장",    tags: ["운동", "축구", "달리기"], image_url: "/place/Place_platGround2.jpg" },
-    ]
-  },
-  {
-    categoryCode: "egg",
-    places:[
-      { name: "백곰",       description: "인제대학교 마스코트",    tags: ["백곰이", "백곰", "마스코트"], image_url: "/place/egg.png" },
     ]
   },
   {
@@ -807,7 +800,7 @@ async function seedTestAuthSessions() {
 
 async function seedPlaces() {
     await prisma.place.updateMany({
-      where: { name: { in: ["A동", "D동"] } },
+      where: { name: { in: ["A동", "D동", "백곰", "코딩하는 백곰이"] } },
       data: { is_active: false },
     });
 

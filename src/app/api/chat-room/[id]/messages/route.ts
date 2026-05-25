@@ -4,6 +4,8 @@ import { ok, fail } from "@/server/lib/response";
 import { ERROR } from "@/server/lib/errors";
 import * as messageService from "@/server/services/conversation/message.service";
 
+const ALLOWED_CHAT_IMAGE_CONTENTS = new Set(["/place/egg.png", "/place/coding.png"]);
+
 export async function GET(req: NextRequest,{ params }: { params: Promise<{ id: string }> }) {
     const user = await getAuthUser(req);
     if (!user) return fail(ERROR.UNAUTHORIZED, "인증이 필요합니다.");
@@ -36,16 +38,25 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다.");
 
     const body = await req.json();
-    const { content } = body;
+    const { content, type, suppressPlaceTrigger } = body;
+    const messageType = type === undefined ? "text" : type;
 
     if (!content || typeof content !== "string" || content.trim() === "") {
         return fail(ERROR.INVALID_CONTENT,  "메시지 내용이 유효하지 않습니다.");
     }
+    if (messageType !== "text" && messageType !== "image") {
+      return fail(ERROR.INVALID_CONTENT, "메시지 타입이 유효하지 않습니다.");
+    }
     if (content.trim().length > 1000) {
       return fail(ERROR.INVALID_CONTENT, "메시지는 1000자 이하로 입력해주세요.");
     }
+    if (messageType === "image" && !ALLOWED_CHAT_IMAGE_CONTENTS.has(content.trim())) {
+      return fail(ERROR.INVALID_CONTENT, "전송할 수 없는 이미지입니다.");
+    }
 
-    const result = await messageService.sendMessage(roomId, user.id, content.trim());
+    const result = await messageService.sendMessage(roomId, user.id, content.trim(), messageType, {
+      suppressPlaceTrigger: suppressPlaceTrigger === true,
+    });
 
     if ("error" in result) {
         const err = result.error!;

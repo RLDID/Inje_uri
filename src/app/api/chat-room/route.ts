@@ -9,7 +9,6 @@ export async function POST(req: NextRequest) {
     const user = await getAuthUser(req);
     if (!user) return fail(ERROR.UNAUTHORIZED, "인증이 필요합니다");
     // const user = {id:1} as any;
-    console.log(user);
     const body = await req.json();
     const { targetUserId, sourceType, sourceInterestId, sourceCommentId } = body;
 

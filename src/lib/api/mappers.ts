@@ -354,6 +354,7 @@ export function mapChatListItem(dto: ChatRoomListItemDto, currentUser: User | nu
   const other = dto.otherUser
     ? createMinimalUser(String(dto.otherUser.userId), dto.otherUser.nickname, dto.otherUser.profileImage)
     : createMinimalUser('unknown', '알 수 없음');
+  other.isOperator = dto.otherUser?.isOperator;
 
   return {
     id: String(dto.roomId),
@@ -399,6 +400,8 @@ export function mapFeedListItemToStory(dto: FeedListItemDto): Story {
     author: {
       ...createMinimalUser(String(dto.author.userId), dto.author.nickname, dto.author.profileImage),
       gender: normalizeGender(dto.author.gender),
+      hideGender: dto.author.hideGender,
+      isOperator: dto.author.isOperator,
     },
     content: {
       text: dto.text,
@@ -415,6 +418,8 @@ export function mapFeedListItemToStory(dto: FeedListItemDto): Story {
     createdAt: new Date(dto.createdAt),
     expiresAt: new Date(dto.expiresAt),
     isExpired: new Date(dto.expiresAt).getTime() <= Date.now(),
+    isLikedByMe: dto.commentedByMe,
+    isMine: dto.isMine,
     reactions: [],
   };
 }
@@ -426,6 +431,8 @@ export function mapFeedDetailToStory(dto: FeedDetailDto): Story {
     author: {
       ...createMinimalUser(String(feed.author.userId), feed.author.nickname, feed.author.profileImages[0]?.imageUrl),
       gender: feed.author.gender === 'female' ? 'female' : 'male',
+      hideGender: feed.author.hideGender,
+      isOperator: feed.author.isOperator,
       department: feed.author.department,
       studentYear: feed.author.studentYear,
       bio: feed.author.bio ?? undefined,
@@ -446,6 +453,8 @@ export function mapFeedDetailToStory(dto: FeedDetailDto): Story {
     createdAt: new Date(feed.createdAt),
     expiresAt: new Date(feed.expiresAt),
     isExpired: new Date(feed.expiresAt).getTime() <= Date.now(),
+    isLikedByMe: feed.commentedByMe,
+    isMine: feed.isMine,
     reactions: [],
   };
 }

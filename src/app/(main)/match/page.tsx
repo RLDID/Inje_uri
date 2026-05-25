@@ -22,9 +22,18 @@ import type { Chat, DailyRecommendation, FeedReaction, Interest, User } from '@/
 const MATCH_VIEW_STATE_KEY = 'match:daily-recommendation';
 const MATCH_READ_NOTIFICATION_IDS_KEY = 'match:read-notification-ids';
 const MATCH_DELETED_NOTIFICATION_IDS_KEY = 'match:deleted-notification-ids';
+const MATCH_NOTIFICATION_STORAGE_PREFIX = 'injeuri:match-notifications:';
 const INTEREST_HIDDEN_USER_IDS_KEY = 'interest:hidden-user-ids';
 const INTEREST_CHAT_STARTED_USER_IDS_KEY = 'interest:chat-started-user-ids';
 const MATCH_HEADER_HINT_STEP_MS = 2500;
+const UPDATE_NOTICE_NOTIFICATION: MatchNotification = {
+  id: 'notice-2026-05-25-now-woori-update',
+  href: '/my/notice',
+  title: '새로운 업데이트가 있어요',
+  description: '지금우리 피드와 닉네임 변경 신청 안내를 확인해보세요.',
+  createdAt: new Date('2026-05-25T20:00:00+09:00'),
+  unread: true,
+};
 
 type MatchHeaderHint = 'heart' | 'notification';
 
@@ -63,6 +72,42 @@ function addUserIdToRouteState(key: string, userId: string): string[] {
   writeRouteViewState<string[]>(key, nextIds);
 
   return nextIds;
+}
+
+function normalizeNotificationIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value.filter((item): item is string => typeof item === 'string' && item.length > 0)));
+}
+
+function readStoredNotificationIds(key: string): string[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const storedValue = window.localStorage.getItem(`${MATCH_NOTIFICATION_STORAGE_PREFIX}${key}`);
+    return storedValue ? normalizeNotificationIds(JSON.parse(storedValue)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredNotificationIds(key: string, ids: string[]) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(
+      `${MATCH_NOTIFICATION_STORAGE_PREFIX}${key}`,
+      JSON.stringify(normalizeNotificationIds(ids)),
+    );
+  } catch {
+    // Ignore storage failures to avoid breaking the notification panel.
+  }
 }
 
 function formatNotificationTime(date: Date): string {
@@ -409,13 +454,30 @@ function MatchPageContent() {
   }, []);
 
   useEffect(() => {
-    const frameId = window.requestAnimationFrame(() => {
-      setReadNotificationIds(readRouteViewState<string[]>(MATCH_READ_NOTIFICATION_IDS_KEY, []));
-      setDeletedNotificationIds(readRouteViewState<string[]>(MATCH_DELETED_NOTIFICATION_IDS_KEY, []));
-    });
+    const syncNotificationIds = () => {
+      const readIds = normalizeNotificationIds([
+        ...readStoredNotificationIds(MATCH_READ_NOTIFICATION_IDS_KEY),
+        ...readRouteViewState<string[]>(MATCH_READ_NOTIFICATION_IDS_KEY, []),
+      ]);
+      const deletedIds = normalizeNotificationIds([
+        ...readStoredNotificationIds(MATCH_DELETED_NOTIFICATION_IDS_KEY),
+        ...readRouteViewState<string[]>(MATCH_DELETED_NOTIFICATION_IDS_KEY, []),
+      ]);
+
+      setReadNotificationIds(readIds);
+      setDeletedNotificationIds(deletedIds);
+      writeStoredNotificationIds(MATCH_READ_NOTIFICATION_IDS_KEY, readIds);
+      writeStoredNotificationIds(MATCH_DELETED_NOTIFICATION_IDS_KEY, deletedIds);
+    };
+
+    const frameId = window.requestAnimationFrame(syncNotificationIds);
+    window.addEventListener('focus', syncNotificationIds);
+    window.addEventListener('storage', syncNotificationIds);
 
     return () => {
       window.cancelAnimationFrame(frameId);
+      window.removeEventListener('focus', syncNotificationIds);
+      window.removeEventListener('storage', syncNotificationIds);
     };
   }, []);
 
@@ -578,7 +640,7 @@ function MatchPageContent() {
       unread: !interest.isRead,
     }));
 
-    return [...items, ...feedReactionNotifications, ...receivedHeartNotifications]
+    return [UPDATE_NOTICE_NOTIFICATION, ...items, ...feedReactionNotifications, ...receivedHeartNotifications]
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
   }, [chats, currentUser?.id, feedReactionItems, notificationNow, pendingReceivedInterests]);
   const notifications = useMemo(
@@ -589,21 +651,41 @@ function MatchPageContent() {
     Boolean(notification.unread && !readNotificationIds.includes(notification.id))
   );
   const hasUnreadNotification = notifications.some(isNotificationUnread);
-  const handleNotificationClick = (notification: MatchNotification) => {
+
+  const markNotificationsAsRead = (notificationIds: string[]) => {
+    if (notificationIds.length === 0) {
+      return;
+    }
+
     setReadNotificationIds((prevIds) => {
-      const nextIds = prevIds.includes(notification.id) ? prevIds : [...prevIds, notification.id];
-      writeRouteViewState<string[]>(MATCH_READ_NOTIFICATION_IDS_KEY, nextIds);
+      const nextIds = normalizeNotificationIds([...prevIds, ...notificationIds]);
+      writeStoredNotificationIds(MATCH_READ_NOTIFICATION_IDS_KEY, nextIds);
       return nextIds;
     });
+  };
+
+  const handleNotificationClick = (notification: MatchNotification) => {
+    markNotificationsAsRead([notification.id]);
     setIsNotificationPanelOpen(false);
     router.push(notification.href);
   };
+
+  const handleNotificationPanelToggle = () => {
+    setActiveHeaderHint(null);
+
+    if (!isNotificationPanelOpen) {
+      markNotificationsAsRead(notifications.map((notification) => notification.id));
+    }
+
+    setIsNotificationPanelOpen((isOpen) => !isOpen);
+  };
+
   const handleClearNotifications = () => {
     const allNotificationIds = rawNotifications.map((notification) => notification.id);
     setDeletedNotificationIds(allNotificationIds);
     setReadNotificationIds(allNotificationIds);
-    writeRouteViewState<string[]>(MATCH_DELETED_NOTIFICATION_IDS_KEY, allNotificationIds);
-    writeRouteViewState<string[]>(MATCH_READ_NOTIFICATION_IDS_KEY, allNotificationIds);
+    writeStoredNotificationIds(MATCH_DELETED_NOTIFICATION_IDS_KEY, allNotificationIds);
+    writeStoredNotificationIds(MATCH_READ_NOTIFICATION_IDS_KEY, allNotificationIds);
     setIsNotificationPanelOpen(false);
     showToast('알림을 모두 삭제했어요.', 'success');
   };
@@ -629,10 +711,7 @@ function MatchPageContent() {
             hasUnread={hasUnreadNotification}
             isOpen={isNotificationPanelOpen}
             showHint={activeHeaderHint === 'notification'}
-            onClick={() => {
-              setActiveHeaderHint(null);
-              setIsNotificationPanelOpen((isOpen) => !isOpen);
-            }}
+            onClick={handleNotificationPanelToggle}
           />
         </div>
       </header>
