@@ -1,10 +1,14 @@
 import { prisma } from '@/server/db/prisma';
 
-export async function prunePreSignupVerifications(studentNumber: string) {
+export async function prunePreSignupVerifications(input: {
+  studentNumber: string;
+  studentNumberHash: string;
+}) {
   return prisma.preSignupVerification.deleteMany({
     where: {
       OR: [
-        { student_number: studentNumber },
+        { student_number_hash: input.studentNumberHash },
+        { student_number: input.studentNumber },
         { expires_at: { lte: new Date() } },
       ],
     },
@@ -14,6 +18,7 @@ export async function prunePreSignupVerifications(studentNumber: string) {
 export async function createPreSignupVerification(input: {
   tokenHash: string;
   studentNumber: string;
+  studentNumberHash: string;
   birthHash: string;
   expiresAt: Date;
 }) {
@@ -21,6 +26,7 @@ export async function createPreSignupVerification(input: {
     data: {
       token_hash: input.tokenHash,
       student_number: input.studentNumber,
+      student_number_hash: input.studentNumberHash,
       birth_hash: input.birthHash,
       expires_at: input.expiresAt,
     },
