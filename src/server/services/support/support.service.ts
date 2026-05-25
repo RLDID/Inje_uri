@@ -1,10 +1,14 @@
 import type { support_inquiry_status } from "@/generated/prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { AppError } from "@/server/lib/app-error";
+import { ERROR } from "@/server/lib/errors";
 import { SupportRepository } from "@/server/repositories/support/support.repository";
 import type { SupportInquiryRow, SupportInquiryWithUserRow } from "@/server/repositories/support/support.repository";
+import { findUserByNickname, updateUser } from "@/server/repositories/user/user.repository";
 
 const repo = new SupportRepository(prisma);
+const MIN_NICKNAME_LENGTH = 2;
+const MAX_NICKNAME_LENGTH = 50;
 
 export type SupportInquiryDto = {
   id: number;
@@ -51,6 +55,28 @@ function toDtoWithUser(row: SupportInquiryWithUserRow): SupportInquiryWithUserDt
     ...toDto(row),
     user: row.user ?? null,
   };
+}
+
+function normalizeNickname(rawNickname: string): string {
+  const nickname = rawNickname.trim();
+  if (!nickname) {
+    throw new AppError(ERROR.VALIDATION_ERROR, "닉네임을 입력해주세요.");
+  }
+
+  if (nickname.length < MIN_NICKNAME_LENGTH || nickname.length > MAX_NICKNAME_LENGTH) {
+    throw new AppError(ERROR.VALIDATION_ERROR, `닉네임은 ${MIN_NICKNAME_LENGTH}자 이상 ${MAX_NICKNAME_LENGTH}자 이하여야 합니다.`);
+  }
+
+  return nickname;
+}
+
+function hasPrismaErrorCode(error: unknown, code: string): boolean {
+  return (
+    typeof error === "object"
+    && error !== null
+    && "code" in error
+    && (error as { code?: unknown }).code === code
+  );
 }
 
 export async function createSupportInquiry(
@@ -201,4 +227,48 @@ export async function updateAdminSupportInquiryStatus(
 
   const row = await repo.updateStatus(id, rawStatus);
   return toDto(row);
+}
+
+export async function updateAdminSupportInquiryUserNickname(
+  id: number,
+  rawNickname: string,
+): Promise<SupportInquiryWithUserDto> {
+  const nickname = normalizeNickname(rawNickname);
+  const existing = await repo.findByIdForAdmin(id);
+
+  if (!existing) {
+    throw new AppError(ERROR.NOT_FOUND, "문의를 찾을 수 없습니다.", 404);
+  }
+
+  if (!existing.user) {
+    throw new AppError(ERROR.USER_NOT_FOUND, "문의자 계정을 찾을 수 없습니다.", 404);
+  }
+
+  if (existing.user.nickname !== nickname) {
+    const duplicatedUser = await findUserByNickname(nickname, existing.user.id);
+    if (duplicatedUser) {
+      throw new AppError(ERROR.NICKNAME_ALREADY_EXISTS, "이미 사용 중인 닉네임입니다.");
+    }
+
+    try {
+      await updateUser(existing.user.id, { nickname });
+    } catch (error) {
+      if (hasPrismaErrorCode(error, "P2002")) {
+        throw new AppError(ERROR.NICKNAME_ALREADY_EXISTS, "이미 사용 중인 닉네임입니다.");
+      }
+
+      if (hasPrismaErrorCode(error, "P2025")) {
+        throw new AppError(ERROR.USER_NOT_FOUND, "문의자 계정을 찾을 수 없습니다.", 404);
+      }
+
+      throw error;
+    }
+  }
+
+  const updated = await repo.findByIdForAdmin(id);
+  if (!updated) {
+    throw new AppError(ERROR.NOT_FOUND, "문의를 찾을 수 없습니다.", 404);
+  }
+
+  return toDtoWithUser(updated);
 }

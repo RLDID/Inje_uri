@@ -59,7 +59,7 @@ function getTime(value: Date | string | undefined): number {
 function getChatListSignature(chats: Chat[]): string {
   return chats.map((chat) => {
     const otherUsers = chat.participants
-      .map((participant) => `${participant.user.id}:${participant.user.nickname}:${participant.user.profileImages[0] ?? ''}`)
+      .map((participant) => `${participant.user.id}:${participant.user.nickname}:${participant.user.profileImages[0] ?? ''}:${participant.user.isOperator === true ? 'operator' : 'user'}`)
       .join('|');
     const lastMessage = chat.lastMessage
       ? `${chat.lastMessage.id}:${chat.lastMessage.content}:${getTime(chat.lastMessage.createdAt)}`
@@ -83,6 +83,12 @@ function isSameUserShell(left: User | null, right: User): boolean {
       left.nickname === right.nickname &&
       left.profileImages[0] === right.profileImages[0],
   );
+}
+
+function isOperatorChat(chat: Chat, currentUserId: string): boolean {
+  return chat.participants.some((participant) => (
+    participant.user.id !== currentUserId && participant.user.isOperator === true
+  ));
 }
 
 function ChatListPageContent() {
@@ -132,7 +138,11 @@ function ChatListPageContent() {
     immediate: false,
   });
 
-  const visibleChats = chats.filter((chat) => chat.status === 'active' || chat.status === 'blocked');
+  const visibleChats = chats.filter((chat) => (
+    chat.status === 'active'
+    || chat.status === 'blocked'
+    || (chat.status === 'expired' && isOperatorChat(chat, currentUser?.id ?? ''))
+  ));
   const filteredChats = activeTab === 'all'
     ? visibleChats
     : visibleChats.filter((chat) => chat.unreadCount > 0);

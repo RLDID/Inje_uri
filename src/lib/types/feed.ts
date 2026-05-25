@@ -2,6 +2,8 @@ export interface FeedAuthorDto {
   userId: number;
   nickname: string;
   gender: string;
+  hideGender?: boolean;
+  isOperator?: boolean;
   profileImage: string | null;
 }
 
@@ -27,6 +29,8 @@ export interface FeedListItemDto {
   }>;
   commentCount: number;
   viewCount: number;
+  commentedByMe?: boolean;
+  isMine?: boolean;
 }
 
 export interface FeedListDto {
@@ -43,6 +47,8 @@ export interface FeedDetailAuthorDto {
   userId: number;
   nickname: string;
   gender: string;
+  hideGender?: boolean;
+  isOperator?: boolean;
   department: string;
   studentYear: number;
   bio: string | null;
@@ -69,6 +75,8 @@ export interface FeedDetailDto {
     images: FeedDetailImageDto[];
     commentCount: number;
     viewCount: number;
+    commentedByMe?: boolean;
+    isMine?: boolean;
   };
 }
 

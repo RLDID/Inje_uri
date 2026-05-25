@@ -31,6 +31,10 @@ const myCommentedFeedSelect = {
       text: true,
       status: true,
       expires_at: true,
+      images: {
+        orderBy: { sort_order: "asc" },
+        select: { id: true, image_url: true, sort_order: true },
+      },
       keywords: {
         select: {
           feed_keyword: {
@@ -41,8 +45,10 @@ const myCommentedFeedSelect = {
       author_user: {
         select: {
           id: true,
+          email: true,
           nickname: true,
           gender: true,
+          onboarding_completed: true,
           userProfileImages: {
             where: { is_primary: true },
             select: { image_url: true },
@@ -163,6 +169,8 @@ export class CommentRepository {
         commenter_user_id: userId,
         deleted_at: null,
         feed: {
+          status: "active",
+          expires_at: { gt: new Date() },
           author_user: {
             status: { not: "banned" },
           },

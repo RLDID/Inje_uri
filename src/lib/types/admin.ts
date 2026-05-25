@@ -39,6 +39,7 @@ export interface AdminReportListItemDto {
       text: string | null;
       status: string | null;
       createdAt: string | null;
+      images: string[];
     } | null;
   };
   reasonType: string;

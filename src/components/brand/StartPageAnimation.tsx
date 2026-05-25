@@ -12,7 +12,7 @@ let hasShownStartScreenInRuntime = false;
 
 export function StartPageAnimation() {
   const [isExiting, setIsExiting] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(() => !hasShownStartScreenInRuntime);
 
   useEffect(() => {
     const hideWithoutAnimation = () => {
@@ -59,39 +59,26 @@ export function StartPageAnimation() {
   }
 
   return (
-    <>
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `
-            try {
-              if (window.sessionStorage.getItem(${JSON.stringify(START_SCREEN_SEEN_KEY)}) === 'true') {
-                document.documentElement.dataset.startScreenSeen = 'true';
-              }
-            } catch (_) {}
-          `,
-        }}
-      />
-      <div
-        aria-hidden="true"
-        className="start-screen-overlay fixed inset-0 z-[220] flex h-[100dvh] w-screen justify-center overflow-hidden bg-white transition-opacity"
-        style={{
-          opacity: isExiting ? 0 : 1,
-          transitionDuration: `${FADE_OUT_MS}ms`,
-        }}
-      >
-        <div className="relative h-[100dvh] w-full max-w-[430px] overflow-hidden bg-white">
-          <Image
-            src={START_IMAGE_PATH}
-            alt=""
-            fill
-            priority
-            unoptimized
-            sizes="(max-width: 430px) 100vw, 430px"
-            className="object-contain"
-            draggable={false}
-          />
-        </div>
+    <div
+      aria-hidden="true"
+      className="start-screen-overlay fixed inset-0 z-[220] flex h-[100dvh] w-screen justify-center overflow-hidden bg-white transition-opacity"
+      style={{
+        opacity: isExiting ? 0 : 1,
+        transitionDuration: `${FADE_OUT_MS}ms`,
+      }}
+    >
+      <div className="relative h-[100dvh] w-full max-w-[430px] overflow-hidden bg-white">
+        <Image
+          src={START_IMAGE_PATH}
+          alt=""
+          fill
+          priority
+          unoptimized
+          sizes="(max-width: 430px) 100vw, 430px"
+          className="object-contain"
+          draggable={false}
+        />
       </div>
-    </>
+    </div>
   );
 }

@@ -30,11 +30,14 @@ export interface MyCommentedFeedItemDto {
     status: string;
     expiresAt: string;
     viewCount: number;
+    images: Array<{ imageId: number; imageUrl: string; sortOrder: number }>;
     keywords: Array<{ feedKeywordId: number; code: string; name: string }>;
     author: {
       userId: number;
       nickname: string;
       gender: string;
+      hideGender?: boolean;
+      isOperator?: boolean;
       profileImage: string | null;
     };
   };

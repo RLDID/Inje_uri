@@ -36,7 +36,7 @@ const menuItems: MenuItem[] = [
     id: 'notice',
     label: '공지사항',
     description: '인제우리의 새로운 소식과 안내를 확인해요.',
-    comingSoonMessage: '공지사항 화면은 준비 중이에요.',
+    href: '/my/notice',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
@@ -342,7 +342,7 @@ function MyPageContent() {
               </svg>
             </span>
             <span className="whitespace-nowrap text-[13px] font-semibold text-[var(--color-text-secondary)]">
-              반응한 피드
+              좋아요한 피드
             </span>
           </Link>
 
@@ -447,7 +447,6 @@ function MyPageContent() {
           >
             로그아웃
           </button>
-          <p className="text-xs text-[var(--color-text-tertiary)]">인제우리 v0.3.0</p>
           <div className="mt-3 flex justify-center gap-4 text-xs text-[var(--color-text-tertiary)]">
             <Link href="/my/terms" className="transition-colors hover:text-[var(--color-text-secondary)]">이용약관</Link>
             <span className="text-[var(--color-border)]">|</span>

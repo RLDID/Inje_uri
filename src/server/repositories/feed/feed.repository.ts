@@ -24,8 +24,10 @@ const feedListSelect = {
   author_user: {
     select: {
       id: true,
+      email: true,
       nickname: true,
       gender: true,
+      onboarding_completed: true,
       userProfileImages: {
         where: { is_primary: true },
         select: { image_url: true },
@@ -61,8 +63,10 @@ const feedDetailSelect = {
   author_user: {
     select: {
       id: true,
+      email: true,
       nickname: true,
       gender: true,
+      onboarding_completed: true,
       department: true,
       student_year: true,
       bio: true,
@@ -93,6 +97,9 @@ const feedForUpdateSelect = {
   text: true,
   status: true,
   expires_at: true,
+  images: {
+    select: { id: true },
+  },
 } satisfies Prisma.SelfDateFeedSelect;
 
 const feedForViewSelect = {
@@ -108,16 +115,36 @@ export type FeedForViewRow = Prisma.SelfDateFeedGetPayload<{ select: typeof feed
 export class FeedRepository {
   constructor(private readonly db: FeedRepositoryDb) {}
 
-  async findCommentedFeedIdsByUser(userId: number): Promise<Set<number>> {
+  async findCommentedFeedIdsByUser(userId: number, options: { excludeAuthorEmails?: string[] } = {}): Promise<Set<number>> {
     const rows = await this.db.feedComment.findMany({
       where: {
         commenter_user_id: userId,
         deleted_at: null,
+        ...(options.excludeAuthorEmails && options.excludeAuthorEmails.length > 0
+          ? {
+              feed: {
+                author_user: {
+                  email: { notIn: options.excludeAuthorEmails },
+                },
+              },
+            }
+          : {}),
       },
       select: { feed_id: true },
       distinct: ['feed_id'],
     });
     return new Set(rows.map((r) => r.feed_id));
+  }
+
+  async findExistingCommentByUser(feedId: number, userId: number) {
+    return this.db.feedComment.findFirst({
+      where: {
+        feed_id: feedId,
+        commenter_user_id: userId,
+        deleted_at: null,
+      },
+      select: { id: true },
+    });
   }
 
   async findReportedFeedIdsByUser(userId: number): Promise<Set<number>> {

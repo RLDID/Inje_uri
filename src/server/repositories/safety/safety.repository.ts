@@ -120,6 +120,19 @@ export class SafetyRepository {
     });
   }
 
+  async findRestrictingChatRoomReportByUser(reporterUserId: number, chatRoomId: number): Promise<{ id: number } | null> {
+    return this.db.report.findFirst({
+      where: {
+        reporter_user_id: reporterUserId,
+        target_type: "chat_room",
+        target_id: chatRoomId,
+        status: { not: "dismissed" },
+      },
+      select: { id: true },
+      orderBy: { created_at: "desc" },
+    });
+  }
+
   async createReportWithBlock(
     reportData: {
       reporterUserId: number;

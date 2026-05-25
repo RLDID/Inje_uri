@@ -3,6 +3,7 @@ import { prisma } from "@/server/db/prisma";
 import { CommentRepository } from "@/server/repositories/feed/comment.repository";
 import * as chatRoomService from "@/server/services/conversation/chatRoom.service";
 import { ERROR } from "@/server/lib/errors";
+import { isAdminOperatorEmail } from "@/server/services/admin/admin-operator.constants";
 import type {
   CommentListDto,
   CommentListItemDto,
@@ -17,6 +18,20 @@ import type {
 } from "@/server/repositories/feed/comment.repository";
 
 const repo = new CommentRepository(prisma);
+const MAX_FEED_COMMENT_CONTENT_LENGTH = 50;
+
+function normalizeCommentContent(content: string): string {
+  const trimmedContent = content.trim();
+  if (!trimmedContent) {
+    throw new AppError("INVALID_CONTENT", "피드 반응 메시지는 빈 값이 아닌 문자열이어야 합니다.");
+  }
+
+  if (trimmedContent.length > MAX_FEED_COMMENT_CONTENT_LENGTH) {
+    throw new AppError("INVALID_CONTENT", `피드 반응 메시지는 ${MAX_FEED_COMMENT_CONTENT_LENGTH}자 이하로 입력해주세요.`);
+  }
+
+  return trimmedContent;
+}
 
 function toCommentListItemDto(row: CommentListRow): CommentListItemDto {
   return {
@@ -33,6 +48,8 @@ function toCommentListItemDto(row: CommentListRow): CommentListItemDto {
 }
 
 function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemDto {
+  const isOperator = isAdminOperatorEmail(row.feed.author_user.email);
+
   return {
     comment: {
       commentId: row.id,
@@ -45,6 +62,11 @@ function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemD
       status: row.feed.status,
       expiresAt: row.feed.expires_at.toISOString(),
       viewCount: row.feed._count.views,
+      images: row.feed.images.map((image) => ({
+        imageId: image.id,
+        imageUrl: image.image_url,
+        sortOrder: image.sort_order,
+      })),
       keywords: row.feed.keywords.map((keyword) => ({
         feedKeywordId: keyword.feed_keyword.feed_keyword_id,
         code: keyword.feed_keyword.code,
@@ -54,6 +76,8 @@ function toMyCommentedFeedItemDto(row: MyCommentedFeedRow): MyCommentedFeedItemD
           userId: row.feed.author_user.id,
           nickname: row.feed.author_user.nickname,
           gender: row.feed.author_user.gender,
+          hideGender: isOperator || !row.feed.author_user.onboarding_completed,
+          isOperator,
           profileImage: row.feed.author_user.userProfileImages[0]?.image_url ?? null,
         },
     },
@@ -65,6 +89,7 @@ export async function createComment(
   feedId: number,
   content: string,
 ): Promise<CreateCommentResultDto> {
+  const normalizedContent = normalizeCommentContent(content);
   const feed = await repo.findFeedForComment(feedId);
 
   if (!feed) {
@@ -93,7 +118,7 @@ export async function createComment(
     throw new AppError("COMMENT_ALREADY_EXISTS", "이미 이 피드에 댓글을 작성했습니다.");
   }
 
-  const comment = await repo.createComment(feedId, currentUserId, content.trim());
+  const comment = await repo.createComment(feedId, currentUserId, normalizedContent);
   return { commentId: comment.id };
 }
 

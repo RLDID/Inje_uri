@@ -12,10 +12,11 @@ import {
   getFeedCategoryLabel,
   isFestivalFeedCategory,
 } from '@/lib/constants';
-import { createFeedComment, getFeed, recordFeedView } from '@/lib/api/feeds';
+import { createFeedComment, getFeed, getFeedComments, recordFeedView, selectFeedCommentChat } from '@/lib/api/feeds';
 import { reportTarget } from '@/lib/api/safety';
 import {
   buildProfileDetailHref,
+  buildChatRoomHref,
   useCurrentRouteContext,
   useSafeBack,
 } from '@/lib/navigation';
@@ -24,11 +25,37 @@ import {
 } from '@/lib/utils';
 import { getFeedRemainingTime, getStoryCategories } from '@/lib/utils/feed';
 import { trackNowWooriHeartSent } from '@/lib/analytics';
-import type { Story } from '@/lib/types';
+import type { FeedReaction, Story } from '@/lib/types';
 
 type OverlayState = 'none' | 'menu' | 'report' | 'interest';
 
 const PRIMARY_DETAIL_CATEGORIES = new Set(['festival', 'walk', 'cafe', 'food', 'study']);
+const REACTION_CHAT_SESSION_KEY = 'self-date:reaction-chats';
+
+function readReactionChatIds(): string[] {
+  if (typeof window === 'undefined') {
+    return [];
+  }
+
+  try {
+    const storedValue = window.sessionStorage.getItem(REACTION_CHAT_SESSION_KEY);
+    return storedValue ? JSON.parse(storedValue) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeReactionChatIds(reactionIds: string[]) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(REACTION_CHAT_SESSION_KEY, JSON.stringify(reactionIds));
+  } catch {
+    // ignore session storage errors
+  }
+}
 
 function FeedDetailSkeleton({ onBack = () => undefined }: { onBack?: () => void }) {
   return (
@@ -74,6 +101,9 @@ function SelfDateDetailPageContent() {
 
   const [story, setStory] = useState<Story | null>(null);
   const [isLoadingStory, setIsLoadingStory] = useState(true);
+  const [isLoadingReactions, setIsLoadingReactions] = useState(false);
+  const [receivedReactions, setReceivedReactions] = useState<FeedReaction[]>([]);
+  const [reactionChatIds, setReactionChatIds] = useState<string[]>(() => readReactionChatIds());
   const [overlayState, setOverlayState] = useState<OverlayState>('none');
   const [interestMessage, setInterestMessage] = useState('');
   const [reportDescription, setReportDescription] = useState('');
@@ -96,6 +126,8 @@ function SelfDateDetailPageContent() {
 
     async function loadStory() {
       setIsLoadingStory(true);
+      setIsLoadingReactions(false);
+      setReceivedReactions([]);
 
       try {
         const nextStory = await getFeed(storyId);
@@ -103,7 +135,26 @@ function SelfDateDetailPageContent() {
           return;
         }
 
+        let nextReactions: FeedReaction[] = [];
+        if (nextStory.isMine) {
+          setIsLoadingReactions(true);
+          try {
+            nextReactions = await getFeedComments(storyId);
+          } catch {
+            showToast('받은 호감을 불러오지 못했어요.', 'error');
+          } finally {
+            if (!cancelled) {
+              setIsLoadingReactions(false);
+            }
+          }
+        }
+
+        if (cancelled) {
+          return;
+        }
+
         setStory(nextStory);
+        setReceivedReactions(nextReactions);
         setTimeRemaining(getFeedRemainingTime(nextStory));
 
         const viewResult = await recordFeedView(storyId);
@@ -134,6 +185,10 @@ function SelfDateDetailPageContent() {
       cancelled = true;
     };
   }, [showToast, storyId]);
+
+  useEffect(() => {
+    writeReactionChatIds(reactionChatIds);
+  }, [reactionChatIds]);
 
   useEffect(() => {
     if (!story) {
@@ -175,11 +230,17 @@ function SelfDateDetailPageContent() {
   const activeContentImage = contentImages[activeImageIndex] ?? contentImages[0] ?? PLACEHOLDER_PROFILE_IMAGE;
   const hasActiveImageError = contentImgErrorIndexes.has(activeImageIndex);
   const previewImage = previewImageIndex !== null ? contentImages[previewImageIndex] : null;
-  const isInterestSent = likedFeedIds.has(story.id);
+  const isMyFeed = story.isMine === true;
+  const isInterestSent = likedFeedIds.has(story.id) || story.isLikedByMe === true;
   const isHeartDisabled = timeRemaining.isExpired || isInterestSent;
   const detailKeywords = getStoryCategories(story);
+  const canOpenAuthorProfile = !author.isOperator;
 
   const goToProfile = () => {
+    if (!canOpenAuthorProfile) {
+      return;
+    }
+
     router.push(
       buildProfileDetailHref(author.id, 'self-date', {
         sourcePath: currentPath,
@@ -190,6 +251,10 @@ function SelfDateDetailPageContent() {
   };
 
   const openInterestSheet = () => {
+    if (isMyFeed) {
+      return;
+    }
+
     if (isHeartDisabled) {
       return;
     }
@@ -199,6 +264,10 @@ function SelfDateDetailPageContent() {
   };
 
   const handleSubmitInterest = async () => {
+    if (isMyFeed) {
+      return;
+    }
+
     const message = interestMessage.trim();
     try {
       await createFeedComment(story.id, message || '하트만 보냈어요.');
@@ -212,13 +281,20 @@ function SelfDateDetailPageContent() {
       setOverlayState('none');
       setInterestMessage('');
       showToast(message ? '호감과 인사를 보냈어요.' : '호감을 보냈어요.', 'success');
-      router.replace(fallbackPath);
+      if (!story.author.isOperator) {
+        router.replace(fallbackPath);
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : '호감을 보내지 못했어요.', 'error');
     }
   };
 
   const handleReport = async () => {
+    if (isMyFeed) {
+      setOverlayState('none');
+      return;
+    }
+
     const description = reportDescription.trim();
     if (!description) {
       showToast('신고 사유를 입력해주세요.', 'error');
@@ -238,6 +314,39 @@ function SelfDateDetailPageContent() {
       router.replace(fallbackPath);
     } catch (error) {
       showToast(error instanceof Error ? error.message : '신고를 접수하지 못했어요.', 'error');
+    }
+  };
+
+  const handleEditFeed = () => {
+    setOverlayState('none');
+    router.push(`/my/posts/${story.id}/edit`);
+  };
+
+  const goToReactionProfile = (reaction: FeedReaction) => {
+    router.push(
+      buildProfileDetailHref(reaction.fromUser.id, 'self-date', {
+        sourcePath: currentPath,
+        sourceSection: ownerSection,
+        fallbackPath: currentPath,
+      }),
+    );
+  };
+
+  const handleStartReactionChat = async (reaction: FeedReaction) => {
+    try {
+      const result = await selectFeedCommentChat(reaction.id);
+      setReactionChatIds((prevReactionChatIds) => (
+        prevReactionChatIds.includes(reaction.id)
+          ? prevReactionChatIds
+          : [...prevReactionChatIds, reaction.id]
+      ));
+      showToast('채팅방이 열렸어요.', 'success');
+      router.push(buildChatRoomHref(String(result.chatRoomId), {
+        sourcePath: currentPath,
+        fallbackPath: currentPath,
+      }));
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '채팅방을 만들지 못했어요.', 'error');
     }
   };
 
@@ -270,8 +379,9 @@ function SelfDateDetailPageContent() {
               <button
                 type="button"
                 onClick={goToProfile}
-                className="h-14 w-14 shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-secondary)] transition-transform active:scale-95"
-                aria-label={`${author.nickname} 프로필 보기`}
+                disabled={!canOpenAuthorProfile}
+                className={`h-14 w-14 shrink-0 overflow-hidden rounded-full bg-[var(--color-surface-secondary)] ${canOpenAuthorProfile ? 'transition-transform active:scale-95' : 'cursor-default'}`}
+                aria-label={canOpenAuthorProfile ? `${author.nickname} 프로필 보기` : `${author.nickname} 운영자 프로필`}
               >
                 <Image
                   src={profileImage}
@@ -310,33 +420,35 @@ function SelfDateDetailPageContent() {
                     </p>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={openInterestSheet}
-                    disabled={isHeartDisabled}
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-pink)] transition-all active:scale-95 disabled:cursor-default ${
-                      isInterestSent
-                        ? 'text-[var(--color-pink-cta)] opacity-60'
-                        : 'text-[var(--color-pink-cta)]'
-                    }`}
-                    aria-label={
-                      isInterestSent
-                        ? `${author.nickname}님에게 이미 호감을 보냈어요`
-                        : `${author.nickname}님에게 호감 보내기`
-                    }
-                    aria-pressed={isInterestSent}
-                  >
-                    <svg
-                      className="h-[18px] w-[18px]"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      stroke="currentColor"
-                      strokeWidth={0}
-                      aria-hidden="true"
+                  {!isMyFeed && (
+                    <button
+                      type="button"
+                      onClick={openInterestSheet}
+                      disabled={isHeartDisabled}
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-pink)] transition-all active:scale-95 disabled:cursor-default ${
+                        isInterestSent
+                          ? 'text-[var(--color-pink-cta)] opacity-60'
+                          : 'text-[var(--color-pink-cta)]'
+                      }`}
+                      aria-label={
+                        isInterestSent
+                          ? `${author.nickname}님에게 이미 호감을 보냈어요`
+                          : `${author.nickname}님에게 호감 보내기`
+                      }
+                      aria-pressed={isInterestSent}
                     >
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-                    </svg>
-                  </button>
+                      <svg
+                        className="h-[18px] w-[18px]"
+                        viewBox="0 0 24 24"
+                        fill="currentColor"
+                        stroke="currentColor"
+                        strokeWidth={0}
+                        aria-hidden="true"
+                      >
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      </svg>
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
@@ -571,6 +683,99 @@ function SelfDateDetailPageContent() {
             </div>
           </div>
 
+          {isMyFeed && (
+            <div className="mt-5">
+              <div className="mb-3 flex items-center gap-2">
+                <svg className="h-5 w-5 text-[var(--color-text-secondary)]" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+                <span className="text-sm font-medium text-[var(--color-text-primary)]">
+                  하트 {receivedReactions.length}개
+                </span>
+              </div>
+
+              {isLoadingReactions ? (
+                <p className="text-sm text-[var(--color-text-tertiary)]">
+                  받은 하트를 불러오는 중이에요.
+                </p>
+              ) : receivedReactions.length === 0 ? (
+                <p className="text-sm text-[var(--color-text-tertiary)]">
+                  아직 받은 하트가 없어요.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {receivedReactions.map((reaction) => {
+                    const isReactionHandled = reactionChatIds.includes(reaction.id);
+
+                    return (
+                      <div
+                        key={reaction.id}
+                        className="relative rounded-[20px] bg-[var(--color-surface-secondary)] px-4 py-4"
+                      >
+                        <div className="flex items-start gap-3 pr-10">
+                          <button
+                            type="button"
+                            onClick={() => goToReactionProfile(reaction)}
+                            className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full"
+                            aria-label={`${reaction.fromUser.nickname} 프로필 보기`}
+                          >
+                            <Image
+                              src={reaction.fromUser.profileImages[0] || PLACEHOLDER_PROFILE_IMAGE}
+                              alt={reaction.fromUser.nickname}
+                              width={44}
+                              height={44}
+                              className="h-full w-full object-cover"
+                            />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => goToReactionProfile(reaction)}
+                            className="min-w-0 flex-1 text-left"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-[var(--color-text-primary)]">
+                                {reaction.fromUser.nickname}
+                              </span>
+                              <span className="text-xs text-[var(--color-text-tertiary)]">
+                                {reaction.fromUser.department}
+                              </span>
+                            </div>
+
+                            {reaction.message ? (
+                              <p data-clarity-mask className="mt-1 text-sm leading-6 text-[var(--color-text-secondary)]">
+                                &ldquo;{reaction.message}&rdquo;
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-sm leading-6 text-[var(--color-text-tertiary)]">
+                                하트만 보냈어요.
+                              </p>
+                            )}
+                          </button>
+                        </div>
+
+                        {!isReactionHandled && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              void handleStartReactionChat(reaction);
+                            }}
+                            className="mt-3 flex min-h-10 w-full items-center justify-center gap-1.5 rounded-full bg-[#e9799f] text-[14px] font-semibold text-white shadow-[0_3px_8px_rgba(233,121,159,0.24)] transition-transform active:scale-[0.99]"
+                          >
+                            <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                            </svg>
+                            채팅 시작하기
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="hidden">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -603,23 +808,33 @@ function SelfDateDetailPageContent() {
                 프로필 보기
               </button>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  setReportDescription('');
-                  setOverlayState('report');
-                }}
-                className="w-full px-6 py-4 text-left text-[0px] text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]"
-              >
-                <span className="text-base">피드 신고</span>
-                글 신고
-              </button>
+              {isMyFeed ? (
+                <button
+                  type="button"
+                  onClick={handleEditFeed}
+                  className="w-full px-6 py-4 text-left text-base font-medium text-[var(--color-text-primary)] transition-colors hover:bg-[var(--color-surface-secondary)]"
+                >
+                  피드 수정하기
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setReportDescription('');
+                    setOverlayState('report');
+                  }}
+                  className="w-full px-6 py-4 text-left text-[0px] text-[var(--color-error)] transition-colors hover:bg-[var(--color-error-bg)]"
+                >
+                  <span className="text-base">피드 신고</span>
+                  글 신고
+                </button>
+              )}
             </div>
           </div>
         </div>
       )}
 
-      {overlayState === 'report' && (
+      {overlayState === 'report' && !isMyFeed && (
         <div className="fixed inset-0 z-[145] flex items-end">
           <button
             type="button"
@@ -739,7 +954,7 @@ function SelfDateDetailPageContent() {
       )}
 
       <BottomSheet
-        isOpen={overlayState === 'interest'}
+        isOpen={overlayState === 'interest' && !isMyFeed}
         onClose={() => {
           setOverlayState('none');
           setInterestMessage('');

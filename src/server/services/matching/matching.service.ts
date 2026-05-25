@@ -59,7 +59,7 @@ export async function checkAndCreateMatch(
     const result = await prisma.$transaction(async (matchTx) => {
       await confirmMatch(myInterestId, reverseInterest.id, matchTx);
 
-      const existingRoom = await findActiveRoomBetweenUsers(myUserId, targetUserId, matchTx);
+      const existingRoom = await findActiveRoomBetweenUsers(myUserId, targetUserId, matchTx, "interest");
       if (existingRoom) {
         return { chatRoomId: existingRoom.id };
       }

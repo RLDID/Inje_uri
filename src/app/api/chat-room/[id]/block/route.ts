@@ -15,7 +15,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       const result = await chatRoomService.blockChatRoom(roomId, user.id);
 
       if ("error" in result) {
-          return fail(result.error!, "채팅방을 찾을 수 없습니다.");
+          const err = result.error!;
+          if (err === ERROR.FORBIDDEN) return fail(err, "접근 권한이 없습니다.");
+          if (err === ERROR.ROOM_NOT_ACTIVE) return fail(err, "비활성화된 채팅방입니다.");
+          return fail(err, "채팅방을 찾을 수 없습니다.");
       }
 
       return ok(result);

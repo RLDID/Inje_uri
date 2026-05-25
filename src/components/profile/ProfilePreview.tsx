@@ -34,6 +34,7 @@ export function ProfilePreview({
   isInterestDisabled = false,
 }: ProfilePreviewProps) {
   const showInterestButton = source === 'recommendation' && !!onSendInterest;
+  const genderLabel = user.gender === 'female' ? '여성' : '남성';
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [imageErrorIndexes, setImageErrorIndexes] = useState<Set<number>>(() => new Set());
   const touchStartX = useRef(0);
@@ -127,6 +128,12 @@ export function ProfilePreview({
                 <h2 className="text-[28px] font-semibold tracking-[-0.04em] text-[var(--color-text-primary)]">
                   {user.nickname}
                 </h2>
+                <span
+                  className="shrink-0 rounded-full bg-[var(--color-surface-secondary)] px-2.5 py-1 text-xs font-semibold text-[var(--color-text-primary)]"
+                  aria-label={`성별 ${genderLabel}`}
+                >
+                  {genderLabel}
+                </span>
                 {user.isGraduate && (
                   <span className="rounded-full bg-[var(--color-surface-secondary)] px-2.5 py-1 text-xs font-medium text-[var(--color-text-secondary)]">
                     졸업생

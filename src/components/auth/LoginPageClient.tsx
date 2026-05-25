@@ -6,6 +6,7 @@ import { StartPageAnimation } from '@/components/brand/StartPageAnimation';
 import { PageContainer } from '@/components/layout';
 import { useToast } from '@/components/ui';
 import { APP_NAME } from '@/lib/constants';
+import { markPwaInstallPopupPending } from '@/lib/pwa/loginInstallPrompt';
 
 interface LoginApiResponse {
   success?: boolean;
@@ -85,6 +86,7 @@ export function LoginPageClient() {
 
       if (response.ok && payload.success) {
         showToast('로그인되었습니다.', 'success');
+        markPwaInstallPopupPending();
         const nextPath = resolveNextPath(searchParams.get('next'));
         if (payload.data?.user?.onboardingCompleted === false) {
           const nextQuery = nextPath ? `&next=${encodeURIComponent(nextPath)}` : '';

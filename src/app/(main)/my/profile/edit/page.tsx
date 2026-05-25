@@ -23,6 +23,38 @@ import {
   mergeKeywordSelections,
 } from '@/lib/utils/profileKeywordSelections';
 
+type EditProfileFormState = {
+  lifestyle: string;
+  drinking: string;
+  smoking: string;
+  mbti: string;
+  personality: string[];
+  conversation: string;
+  interests: string[];
+  bio: string;
+};
+
+type EditProfileDraft = {
+  photos: string[];
+  photoIds: Array<string | undefined>;
+  deletedPhotoIds: string[];
+  profile: EditProfileFormState;
+  savedAt: number;
+};
+
+const PROFILE_EDIT_DRAFT_STORAGE_KEY = 'injeuri:my-profile-edit-draft';
+
+const EMPTY_PROFILE_FORM: EditProfileFormState = {
+  lifestyle: '',
+  drinking: '',
+  smoking: '',
+  mbti: '',
+  personality: [],
+  conversation: '',
+  interests: [],
+  bio: '',
+};
+
 function buildKeywordSelections(profile: {
   lifestyle: string;
   drinking: string;
@@ -35,6 +67,111 @@ function buildKeywordSelections(profile: {
   return ABOUT_ME_CATEGORY_CODES.map((categoryCode) => (
     buildKeywordSelection(categoryCode, profile[categoryCode])
   ));
+}
+
+function normalizeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function normalizePhotoIds(value: unknown, length: number): Array<string | undefined> {
+  const source = Array.isArray(value) ? value : [];
+  return Array.from({ length }, (_, index) => {
+    const item = source[index];
+    return typeof item === 'string' ? item : undefined;
+  });
+}
+
+function normalizeProfileDraft(value: unknown): EditProfileFormState | null {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const source = value as Partial<Record<keyof EditProfileFormState, unknown>>;
+  return {
+    lifestyle: typeof source.lifestyle === 'string' ? source.lifestyle : '',
+    drinking: typeof source.drinking === 'string' ? source.drinking : '',
+    smoking: typeof source.smoking === 'string' ? source.smoking : '',
+    mbti: typeof source.mbti === 'string' ? source.mbti : '',
+    personality: normalizeStringArray(source.personality),
+    conversation: typeof source.conversation === 'string' ? source.conversation : '',
+    interests: normalizeStringArray(source.interests),
+    bio: typeof source.bio === 'string' ? source.bio : '',
+  };
+}
+
+function readEditProfileDraft(): EditProfileDraft | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    const storedValue = window.sessionStorage.getItem(PROFILE_EDIT_DRAFT_STORAGE_KEY);
+    if (!storedValue) {
+      return null;
+    }
+
+    const parsed = JSON.parse(storedValue) as Partial<EditProfileDraft>;
+    const photos = normalizeStringArray(parsed.photos).slice(0, 6);
+    const profile = normalizeProfileDraft(parsed.profile);
+    if (!profile) {
+      return null;
+    }
+
+    return {
+      photos,
+      photoIds: normalizePhotoIds(parsed.photoIds, photos.length),
+      deletedPhotoIds: normalizeStringArray(parsed.deletedPhotoIds),
+      profile,
+      savedAt: typeof parsed.savedAt === 'number' ? parsed.savedAt : Date.now(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeEditProfileDraft(draft: EditProfileDraft) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(PROFILE_EDIT_DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {
+    // Large image drafts can exceed storage limits. In that case, keep the live state only.
+  }
+}
+
+function clearEditProfileDraft() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(PROFILE_EDIT_DRAFT_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function getDraftSignature(draft: Omit<EditProfileDraft, 'savedAt'>): string {
+  return JSON.stringify(draft);
+}
+
+function getFileExtensionFromMime(mimeType: string): string {
+  if (mimeType.includes('jpeg')) {
+    return 'jpg';
+  }
+  if (mimeType.includes('gif')) {
+    return 'gif';
+  }
+  return 'png';
+}
+
+async function dataUrlToFile(dataUrl: string, fileNamePrefix: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const extension = getFileExtensionFromMime(blob.type || 'image/png');
+  return new File([blob], `${fileNamePrefix}.${extension}`, { type: blob.type || 'image/png' });
 }
 
 function EditProfilePageContent() {
@@ -59,17 +196,10 @@ function EditProfilePageContent() {
   const [showPhotoOptions, setShowPhotoOptions] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const libraryInputRef = useRef<HTMLInputElement>(null);
+  const originalDraftSignatureRef = useRef<string | null>(null);
   const [originalKeywordSelections, setOriginalKeywordSelections] = useState<KeywordSelectionPayload[] | null>(null);
-  const [profile, setProfile] = useState({
-    lifestyle: '',
-    drinking: '',
-    smoking: '',
-    mbti: '',
-    personality: [] as string[],
-    conversation: '',
-    interests: [] as string[],
-    bio: '',
-  });
+  const [profile, setProfile] = useState<EditProfileFormState>(() => ({ ...EMPTY_PROFILE_FORM }));
+  const [isDraftReady, setIsDraftReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -88,11 +218,9 @@ function EditProfilePageContent() {
           imageUrl,
           sortOrder: index + 1,
         }));
-
-        setOriginalKeywordSelections(keywordSelections);
-        setPhotos(imageMetas.map((image) => image.imageUrl));
-        setPhotoIds(imageMetas.map((image) => image.id));
-        setProfile({
+        const loadedPhotos = imageMetas.map((image) => image.imageUrl);
+        const loadedPhotoIds = imageMetas.map((image) => image.id);
+        const loadedProfile = {
           lifestyle: getKeywordSelectionValues(keywordSelections, 'lifestyle')[0] ?? '',
           drinking: getKeywordSelectionValues(keywordSelections, 'drinking')[0] ?? '',
           smoking: getKeywordSelectionValues(keywordSelections, 'smoking')[0] ?? '',
@@ -101,7 +229,23 @@ function EditProfilePageContent() {
           conversation: getKeywordSelectionValues(keywordSelections, 'conversation')[0] ?? '',
           interests: getKeywordSelectionValues(keywordSelections, 'interests'),
           bio: me.bio || '',
+        };
+        const draft = readEditProfileDraft();
+
+        originalDraftSignatureRef.current = getDraftSignature({
+          photos: loadedPhotos,
+          photoIds: loadedPhotoIds,
+          deletedPhotoIds: [],
+          profile: loadedProfile,
         });
+
+        setOriginalKeywordSelections(keywordSelections);
+        setPhotos(draft?.photos ?? loadedPhotos);
+        setPhotoIds(draft?.photoIds ?? loadedPhotoIds);
+        setDeletedPhotoIds(draft?.deletedPhotoIds ?? []);
+        setProfile(draft?.profile ?? loadedProfile);
+        setBrokenPhotoIndices([]);
+        setIsDraftReady(true);
       } catch (error) {
         if (!cancelled) {
           showToast(error instanceof Error ? error.message : '프로필을 불러오지 못했어요.', 'error');
@@ -115,6 +259,30 @@ function EditProfilePageContent() {
       cancelled = true;
     };
   }, [showToast]);
+
+  useEffect(() => {
+    if (!isDraftReady || !originalDraftSignatureRef.current) {
+      return;
+    }
+
+    const draftSnapshot = {
+      photos,
+      photoIds: normalizePhotoIds(photoIds, photos.length),
+      deletedPhotoIds,
+      profile,
+    };
+    const draftSignature = getDraftSignature(draftSnapshot);
+
+    if (draftSignature === originalDraftSignatureRef.current) {
+      clearEditProfileDraft();
+      return;
+    }
+
+    writeEditProfileDraft({
+      ...draftSnapshot,
+      savedAt: Date.now(),
+    });
+  }, [deletedPhotoIds, isDraftReady, photoIds, photos, profile]);
 
   const handleCategoryChange = (categoryId: string, value: string | string[]) => {
     const isEmptySelection = Array.isArray(value) ? value.length === 0 : value.length === 0;
@@ -270,12 +438,13 @@ function EditProfilePageContent() {
       }
 
       for (const [index, src] of photos.entries()) {
-        const file = pendingPhotoFiles[src];
+        const file = pendingPhotoFiles[src] ?? (src.startsWith('data:') ? await dataUrlToFile(src, `profile-photo-${index + 1}`) : null);
         if (file) {
           await uploadMyProfileImage(file, index === 0);
         }
       }
 
+      clearEditProfileDraft();
       showToast('프로필 소개를 업데이트했어요.', 'success');
       goBack();
     } catch (error) {
