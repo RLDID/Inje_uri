@@ -263,7 +263,17 @@ function normalizeUpstreamMessage(message: unknown): string {
 
   return String(message).replace(/\\\//g, '/').trim();
 }
+function getUpstreamMessage(upstreamBody: UpstreamInjeBody): string {
+  const upstreamRecord = upstreamBody as UpstreamInjeBody & {
+    data?: {
+      message?: unknown;
+    };
+  };
 
+  return normalizeUpstreamMessage(
+    upstreamRecord.message ?? upstreamRecord.data?.message,
+  );
+}
 function getNestedUpstreamData(upstreamBody: UpstreamInjeBody): Record<string, unknown> | null {
   if (typeof upstreamBody.data !== 'object' || upstreamBody.data === null || Array.isArray(upstreamBody.data)) {
     return null;
