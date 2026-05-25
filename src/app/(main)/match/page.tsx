@@ -26,6 +26,14 @@ const MATCH_NOTIFICATION_STORAGE_PREFIX = 'injeuri:match-notifications:';
 const INTEREST_HIDDEN_USER_IDS_KEY = 'interest:hidden-user-ids';
 const INTEREST_CHAT_STARTED_USER_IDS_KEY = 'interest:chat-started-user-ids';
 const MATCH_HEADER_HINT_STEP_MS = 2500;
+const UPDATE_NOTICE_NOTIFICATION: MatchNotification = {
+  id: 'notice-2026-05-25-now-woori-update',
+  href: '/my/notice',
+  title: '새로운 업데이트가 있어요',
+  description: '지금우리 피드와 닉네임 변경 신청 안내를 확인해보세요.',
+  createdAt: new Date('2026-05-25T20:00:00+09:00'),
+  unread: true,
+};
 
 type MatchHeaderHint = 'heart' | 'notification';
 
@@ -632,7 +640,7 @@ function MatchPageContent() {
       unread: !interest.isRead,
     }));
 
-    return [...items, ...feedReactionNotifications, ...receivedHeartNotifications]
+    return [UPDATE_NOTICE_NOTIFICATION, ...items, ...feedReactionNotifications, ...receivedHeartNotifications]
       .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime());
   }, [chats, currentUser?.id, feedReactionItems, notificationNow, pendingReceivedInterests]);
   const notifications = useMemo(

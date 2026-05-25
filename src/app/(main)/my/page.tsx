@@ -36,7 +36,7 @@ const menuItems: MenuItem[] = [
     id: 'notice',
     label: '공지사항',
     description: '인제우리의 새로운 소식과 안내를 확인해요.',
-    comingSoonMessage: '공지사항 화면은 준비 중이에요.',
+    href: '/my/notice',
     icon: (
       <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
