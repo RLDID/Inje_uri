@@ -37,6 +37,7 @@ import {
 type UpstreamInjeBody = {
   status?: unknown;
   message?: unknown;
+  data?: unknown;
 };
 
 type InjeCheckSuccessResponse = {
@@ -260,6 +261,44 @@ function normalizeUpstreamMessage(message: unknown): string {
   return String(message).replace(/\\\//g, '/').trim();
 }
 
+function getNestedUpstreamData(upstreamBody: UpstreamInjeBody): Record<string, unknown> | null {
+  if (typeof upstreamBody.data !== 'object' || upstreamBody.data === null || Array.isArray(upstreamBody.data)) {
+    return null;
+  }
+
+  return upstreamBody.data as Record<string, unknown>;
+}
+
+function getFirstNormalizedUpstreamValue(
+  candidates: unknown[],
+  normalize: (value: unknown) => string,
+): string {
+  for (const candidate of candidates) {
+    const normalized = normalize(candidate);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return '';
+}
+
+function getNormalizedInjeStatus(upstreamBody: UpstreamInjeBody): string {
+  const nestedData = getNestedUpstreamData(upstreamBody);
+  return getFirstNormalizedUpstreamValue(
+    [upstreamBody.status, nestedData?.status],
+    normalizeUpstreamStatus,
+  );
+}
+
+function getNormalizedInjeMessage(upstreamBody: UpstreamInjeBody): string {
+  const nestedData = getNestedUpstreamData(upstreamBody);
+  return getFirstNormalizedUpstreamValue(
+    [upstreamBody.message, nestedData?.message],
+    normalizeUpstreamMessage,
+  );
+}
+
 function parseInjeCheckSuccessAllowlistJson(rawValue: string): InjeCheckSuccessResponse[] {
   let parsed: unknown;
 
@@ -306,8 +345,8 @@ function isAllowedInjeCheckSuccessResponse(upstreamBody: UpstreamInjeBody): bool
     return false;
   }
 
-  const upstreamStatus = normalizeUpstreamStatus(upstreamBody.status);
-  const upstreamMessage = normalizeUpstreamMessage(upstreamBody.message);
+  const upstreamStatus = getNormalizedInjeStatus(upstreamBody);
+  const upstreamMessage = getNormalizedInjeMessage(upstreamBody);
 
   return allowlist.some((allowed) => (
     allowed.status === upstreamStatus && allowed.message === upstreamMessage
@@ -341,14 +380,14 @@ export async function verifyInjeStudent(studentNumber: string, birth: string) {
     throw new Error('인증 응답을 처리하지 못했습니다. 잠시 후 다시 시도해주세요.');
   }
 
-  const upstreamMessage = normalizeUpstreamMessage(upstreamBody.message);
+  const upstreamMessage = getNormalizedInjeMessage(upstreamBody);
   if (upstreamMessage === normalizeUpstreamMessage(INJE_CHECK_FAIL_MESSAGE)) {
     throw new ApiError(ERROR.INVALID_CREDENTIALS, '입력한 정보를 찾을수 없습니다.');
   }
 
   if (!isAllowedInjeCheckSuccessResponse(upstreamBody)) {
     console.warn('[POST /api/auth/inje-check] rejected non-allowlisted upstream response', {
-      status: normalizeUpstreamStatus(upstreamBody.status),
+      status: getNormalizedInjeStatus(upstreamBody),
       message: upstreamMessage,
     });
     throw new ApiError(ERROR.INVALID_CREDENTIALS, '입력한 정보를 찾을수 없습니다.');
