@@ -342,7 +342,7 @@ function MyPageContent() {
               </svg>
             </span>
             <span className="whitespace-nowrap text-[13px] font-semibold text-[var(--color-text-secondary)]">
-              반응한 피드
+              좋아요한 피드
             </span>
           </Link>
 

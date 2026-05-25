@@ -467,7 +467,7 @@ export function MyStoriesView({
                     : 'text-[var(--color-text-secondary)]'
                 }`}
               >
-                반응한 피드
+                좋아요한 피드
               </button>
             </div>
           </div>
@@ -670,7 +670,7 @@ export function MyStoriesView({
                   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
                 </svg>
               </div>
-              <p className="text-[var(--color-text-secondary)]">아직 반응한 피드가 없어요.</p>
+              <p className="text-[var(--color-text-secondary)]">아직 좋아요한 피드가 없어요.</p>
               <Link
                 href="/self-date"
                 className="mt-4 inline-flex items-center gap-2 rounded-full bg-[var(--color-action-primary)] px-5 py-2.5 text-sm font-medium text-white"
