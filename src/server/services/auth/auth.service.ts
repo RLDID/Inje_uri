@@ -10,7 +10,9 @@ import { PROFILE_CATEGORY_CODES, type KeywordSelectionPayload, type ProfileCateg
 import {
   createUserSession,
   hashBirth,
+  hashStudentNumber,
   issueAccountRecoveryToken,
+  isBirthHashMatch,
   verifyAccountRecoveryToken,
   issuePreSignupVerification,
   SUSPENDED_USER_STATUS,
@@ -343,7 +345,7 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
   }
 
   const inputBirthHash = hashBirth(input.birth);
-  if (preSignup.birthHash !== inputBirthHash) {
+  if (!isBirthHashMatch(preSignup.birthHash, input.birth)) {
     throw new ApiError(ERROR.INVALID_VERIFICATION, '인증 정보와 생년월일이 일치하지 않습니다.');
   }
 
@@ -365,6 +367,7 @@ export async function register(input: RegisterInput, preSignupToken: string | nu
     department: input.department,
     student_year: input.studentYear,
     student_number: preSignup.studentNumber,
+    student_number_hash: hashStudentNumber(preSignup.studentNumber),
     onboarding_completed: true,
     ...(defaultProfileImageUrl
       ? {
@@ -433,7 +436,7 @@ export async function verifyAccountRecoveryIdentity(input: {
   }
 
   const user = await findUserForAccountRecovery(studentNumber);
-  if (!user || !user.login_id || !user.birth_hash || user.birth_hash !== hashBirth(birth)) {
+  if (!user || !user.login_id || !isBirthHashMatch(user.birth_hash, birth)) {
     throw new ApiError(ERROR.INVALID_VERIFICATION, '입력한 정보와 일치하는 계정을 찾을 수 없습니다.');
   }
 

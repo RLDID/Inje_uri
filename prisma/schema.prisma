@@ -87,7 +87,8 @@ model User {
   university                 String                    @db.VarChar(100)
   department                 String                    @db.VarChar(100)
   student_year               Int
-  student_number             String?                   @db.VarChar(30)
+  student_number             String?                   @db.Text
+  student_number_hash        String?                   @unique @db.VarChar(255)
   bio                        String?                   @db.VarChar(500)
   onboarding_completed       Boolean                   @default(false)
   status                     user_status               @default(active)
@@ -135,14 +136,32 @@ model AuthSession {
   @@map("auth_sessions")
 }
 
+model AuthRateLimit {
+  id                Int       @id @default(autoincrement())
+  scope             String    @db.VarChar(80)
+  key_hash          String    @db.VarChar(255)
+  failed_count      Int       @default(0)
+  window_started_at DateTime  @db.Timestamptz(6)
+  last_failed_at    DateTime? @db.Timestamptz(6)
+  blocked_until     DateTime? @db.Timestamptz(6)
+  created_at        DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime  @updatedAt @db.Timestamptz(6)
+
+  @@unique([scope, key_hash])
+  @@index([blocked_until])
+  @@map("auth_rate_limits")
+}
+
 model PreSignupVerification {
-  token_hash     String   @id @db.VarChar(255)
-  student_number String   @db.VarChar(30)
-  birth_hash     String   @db.VarChar(255)
-  expires_at     DateTime @db.Timestamptz(6)
-  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  token_hash          String   @id @db.VarChar(255)
+  student_number      String   @db.Text
+  student_number_hash String?  @db.VarChar(255)
+  birth_hash          String   @db.VarChar(255)
+  expires_at          DateTime @db.Timestamptz(6)
+  created_at          DateTime @default(now()) @db.Timestamptz(6)
 
   @@index([expires_at])
+  @@index([student_number_hash])
   @@map("pre_signup_verifications")
 }
 

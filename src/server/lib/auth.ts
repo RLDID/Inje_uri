@@ -74,8 +74,26 @@ function hashValue(value: string): string {
   return createHash('sha256').update(value).digest('hex');
 }
 
+function hashValueWithSecret(value: string): string {
+  return createHmac('sha256', getPersonalDataHashSecret()).update(value).digest('hex');
+}
+
 function generateToken(): string {
   return randomBytes(32).toString('hex');
+}
+
+function getPersonalDataHashSecret(): string {
+  const secret = process.env.AUTH_HASH_SECRET ?? process.env.AUTH_SECRET ?? process.env.SESSION_SECRET;
+
+  if (secret) {
+    return secret;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('AUTH_HASH_SECRET or AUTH_SECRET is required for personal data HMAC hashes.');
+  }
+
+  return 'injeuri-personal-data-hash-development-secret';
 }
 
 function getAccountRecoverySecret(): string {
@@ -103,7 +121,19 @@ function safeCompare(left: string, right: string): boolean {
 }
 
 export function hashBirth(birth: string): string {
-  return hashValue(birth);
+  return hashValueWithSecret(birth);
+}
+
+export function hashStudentNumber(studentNumber: string): string {
+  return hashValueWithSecret(studentNumber);
+}
+
+export function isBirthHashMatch(storedHash: string | null | undefined, birth: string): boolean {
+  if (!storedHash) {
+    return false;
+  }
+
+  return safeCompare(storedHash, hashBirth(birth)) || safeCompare(storedHash, hashValue(birth));
 }
 
 export function hashSessionToken(token: string): string {
@@ -241,12 +271,14 @@ export async function issuePreSignupVerification(studentNumber: string, birth: s
   const token = generateToken();
   const tokenHash = hashValue(token);
   const birthHash = hashBirth(birth);
+  const studentNumberHash = hashStudentNumber(studentNumber);
   const expiresAt = new Date(Date.now() + PRE_SIGNUP_COOKIE_MAX_AGE_SECONDS * 1000);
 
-  await prunePreSignupVerifications(studentNumber);
+  await prunePreSignupVerifications({ studentNumber, studentNumberHash });
   await createPreSignupVerification({
     tokenHash,
     studentNumber,
+    studentNumberHash,
     birthHash,
     expiresAt,
   });

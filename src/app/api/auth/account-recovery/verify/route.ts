@@ -3,9 +3,15 @@ import {
   attachAccountRecoveryCookie,
   clearAccountRecoveryCookie,
 } from '@/server/lib/auth';
-import { ApiError } from '@/server/lib/errors';
+import { ApiError, ERROR } from '@/server/lib/errors';
 import { fail, ok } from '@/server/lib/response';
 import { verifyAccountRecoveryIdentity } from '@/server/services/auth/auth.service';
+import {
+  assertAuthRateLimitAllowed,
+  buildAuthRateLimitSet,
+  clearAuthRateLimitFailures,
+  recordAuthRateLimitFailure,
+} from '@/server/services/auth/rate-limit.service';
 
 export const runtime = 'nodejs';
 
@@ -34,12 +40,28 @@ export async function POST(request: NextRequest) {
     }
 
     const mode = normalizeRecoveryMode(body.mode);
-    const result = await verifyAccountRecoveryIdentity({
+    const input = {
       mode,
       studentNumber: normalizeString(body.studentNumber),
       birth: normalizeString(body.birth),
       email: normalizeString(body.email).toLowerCase(),
-    });
+    };
+    const rateLimitSet = buildAuthRateLimitSet('account-recovery', request, input.studentNumber);
+    await assertAuthRateLimitAllowed(rateLimitSet.checkBuckets);
+
+    let result: Awaited<ReturnType<typeof verifyAccountRecoveryIdentity>>;
+    try {
+      result = await verifyAccountRecoveryIdentity(input);
+      await clearAuthRateLimitFailures(rateLimitSet.resetBuckets);
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ERROR.INVALID_VERIFICATION) {
+        await recordAuthRateLimitFailure(rateLimitSet.checkBuckets);
+        await assertAuthRateLimitAllowed(rateLimitSet.checkBuckets);
+      }
+
+      throw error;
+    }
+
     const response = ok({ loginId: result.loginId });
 
     if (result.token) {
@@ -50,7 +72,7 @@ export async function POST(request: NextRequest) {
     return response;
   } catch (error) {
     const response = error instanceof ApiError
-      ? fail(error.code, error.message)
+      ? fail(error.code, error.message, error.code === ERROR.RATE_LIMITED ? 429 : 400)
       : fail('INTERNAL_SERVER_ERROR', '계정 확인 중 오류가 발생했습니다.');
 
     if (!(error instanceof ApiError)) {

@@ -4,6 +4,12 @@ import {
 import { ApiError, ERROR } from '@/server/lib/errors';
 import { fail, ok } from '@/server/lib/response';
 import { verifyInjeStudent } from '@/server/services/auth/auth.service';
+import {
+  assertAuthRateLimitAllowed,
+  buildAuthRateLimitSet,
+  clearAuthRateLimitFailures,
+  recordAuthRateLimitFailure,
+} from '@/server/services/auth/rate-limit.service';
 
 export const runtime = 'nodejs';
 
@@ -37,7 +43,22 @@ export async function POST(request: Request) {
       throw new ApiError(ERROR.VALIDATION_ERROR, '생년월일 6자리를 입력해주세요.');
     }
 
-    const result = await verifyInjeStudent(studentNumber, birth);
+    const rateLimitSet = buildAuthRateLimitSet('inje-check', request, studentNumber);
+    await assertAuthRateLimitAllowed(rateLimitSet.checkBuckets);
+
+    let result: Awaited<ReturnType<typeof verifyInjeStudent>>;
+    try {
+      result = await verifyInjeStudent(studentNumber, birth);
+      await clearAuthRateLimitFailures(rateLimitSet.resetBuckets);
+    } catch (error) {
+      if (error instanceof ApiError && error.code === ERROR.INVALID_CREDENTIALS) {
+        await recordAuthRateLimitFailure(rateLimitSet.checkBuckets);
+        await assertAuthRateLimitAllowed(rateLimitSet.checkBuckets);
+      }
+
+      throw error;
+    }
+
     const response = ok(result.data);
     attachPreSignupCookie(response, result.token);
     return response;
@@ -49,7 +70,7 @@ export async function POST(request: Request) {
       return fail('INTERNAL_ERROR', error.message);
     }
     if (error instanceof ApiError) {
-      return fail(error.code, error.message);
+      return fail(error.code, error.message, error.code === ERROR.RATE_LIMITED ? 429 : 400);
     }
     console.error('[POST /api/auth/inje-check]', error);
     return fail('INTERNAL_SERVER_ERROR', '인제 학생 인증 처리 중 오류가 발생했습니다.');
