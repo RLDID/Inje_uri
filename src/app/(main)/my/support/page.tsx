@@ -41,6 +41,7 @@ const tabs: Array<{ id: SupportTab; label: string }> = [
 
 const inquiryCategories = [
   '로그인/계정',
+  '닉네임 변경',
   '학번 인증',
   '프로필/사진',
   '오늘우리 추천',

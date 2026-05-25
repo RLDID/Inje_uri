@@ -93,6 +93,9 @@ const feedForUpdateSelect = {
   text: true,
   status: true,
   expires_at: true,
+  images: {
+    select: { id: true },
+  },
 } satisfies Prisma.SelfDateFeedSelect;
 
 const feedForViewSelect = {

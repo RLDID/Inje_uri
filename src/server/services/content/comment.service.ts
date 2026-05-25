@@ -17,6 +17,20 @@ import type {
 } from "@/server/repositories/feed/comment.repository";
 
 const repo = new CommentRepository(prisma);
+const MAX_FEED_COMMENT_CONTENT_LENGTH = 50;
+
+function normalizeCommentContent(content: string): string {
+  const trimmedContent = content.trim();
+  if (!trimmedContent) {
+    throw new AppError("INVALID_CONTENT", "피드 반응 메시지는 빈 값이 아닌 문자열이어야 합니다.");
+  }
+
+  if (trimmedContent.length > MAX_FEED_COMMENT_CONTENT_LENGTH) {
+    throw new AppError("INVALID_CONTENT", `피드 반응 메시지는 ${MAX_FEED_COMMENT_CONTENT_LENGTH}자 이하로 입력해주세요.`);
+  }
+
+  return trimmedContent;
+}
 
 function toCommentListItemDto(row: CommentListRow): CommentListItemDto {
   return {
@@ -70,6 +84,7 @@ export async function createComment(
   feedId: number,
   content: string,
 ): Promise<CreateCommentResultDto> {
+  const normalizedContent = normalizeCommentContent(content);
   const feed = await repo.findFeedForComment(feedId);
 
   if (!feed) {
@@ -98,7 +113,7 @@ export async function createComment(
     throw new AppError("COMMENT_ALREADY_EXISTS", "이미 이 피드에 댓글을 작성했습니다.");
   }
 
-  const comment = await repo.createComment(feedId, currentUserId, content.trim());
+  const comment = await repo.createComment(feedId, currentUserId, normalizedContent);
   return { commentId: comment.id };
 }
 

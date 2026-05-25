@@ -485,18 +485,33 @@ function InquiryStatusBadge({ status }: { status: AdminInquiryStatus }) {
 function InquiryItem({
   item,
   draftStatus,
+  nicknameDraft,
   isUpdating,
+  isUpdatingNickname,
   onDraftChange,
+  onNicknameDraftChange,
   onApply,
+  onNicknameApply,
 }: {
   item: AdminSupportInquiryDto;
   draftStatus: AdminInquiryStatus;
+  nicknameDraft: string;
   isUpdating: boolean;
+  isUpdatingNickname: boolean;
   onDraftChange: (status: AdminInquiryStatus) => void;
+  onNicknameDraftChange: (nickname: string) => void;
   onApply: () => void;
+  onNicknameApply: () => void;
 }) {
   const isChanged = draftStatus !== item.status;
   const canApply = isChanged && draftStatus !== 'received';
+  const trimmedNicknameDraft = nicknameDraft.trim();
+  const currentNickname = item.user?.nickname ?? '';
+  const canApplyNickname = Boolean(item.user)
+    && trimmedNicknameDraft.length >= 2
+    && trimmedNicknameDraft.length <= 50
+    && trimmedNicknameDraft !== currentNickname
+    && !isUpdating;
 
   return (
     <article className="rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-[0_3px_10px_rgba(34,34,34,0.045)]">
@@ -518,7 +533,7 @@ function InquiryItem({
               </option>
             ))}
           </select>
-          <Button type="button" size="sm" variant="secondary" loading={isUpdating} disabled={!canApply} onClick={onApply}>
+          <Button type="button" size="sm" variant="secondary" loading={isUpdating} disabled={!canApply || isUpdatingNickname} onClick={onApply}>
             적용
           </Button>
         </div>
@@ -536,6 +551,34 @@ function InquiryItem({
           <p className="mt-1 break-all text-xs text-[var(--color-text-secondary)]">
             {item.email ?? '회신 이메일 없음'}
           </p>
+          <div className="mt-3 grid gap-2">
+            <label htmlFor={`inquiry-nickname-${item.id}`} className="text-xs font-semibold text-[var(--color-text-tertiary)]">
+              닉네임 변경
+            </label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                id={`inquiry-nickname-${item.id}`}
+                value={nicknameDraft}
+                onChange={(event) => onNicknameDraftChange(event.target.value.slice(0, 50))}
+                disabled={!item.user || isUpdatingNickname}
+                placeholder="새 닉네임"
+                className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-medium text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/15 disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)]"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={isUpdatingNickname}
+                disabled={!canApplyNickname}
+                onClick={onNicknameApply}
+              >
+                변경
+              </Button>
+            </div>
+            <p className="text-[11px] leading-4 text-[var(--color-text-tertiary)]">
+              2~50자, 중복 닉네임은 저장되지 않습니다.
+            </p>
+          </div>
         </div>
 
         <div>
@@ -576,7 +619,9 @@ export default function AdminPage() {
   const [inquiries, setInquiries] = useState<AdminSupportInquiryDto[]>([]);
   const [inquiryTotal, setInquiryTotal] = useState(0);
   const [inquiryDraftStatuses, setInquiryDraftStatuses] = useState<Record<number, AdminInquiryStatus>>({});
+  const [inquiryNicknameDrafts, setInquiryNicknameDrafts] = useState<Record<number, string>>({});
   const [updatingInquiryId, setUpdatingInquiryId] = useState<number | null>(null);
+  const [updatingNicknameInquiryId, setUpdatingNicknameInquiryId] = useState<number | null>(null);
   const [isLoadingInquiries, setIsLoadingInquiries] = useState(false);
   const [inquiryLoadError, setInquiryLoadError] = useState('');
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false);
@@ -624,6 +669,7 @@ export default function AdminPage() {
       setInquiries(data.items);
       setInquiryTotal(data.total);
       setInquiryDraftStatuses(Object.fromEntries(data.items.map((item) => [item.id, item.status])));
+      setInquiryNicknameDrafts(Object.fromEntries(data.items.map((item) => [item.id, item.user?.nickname ?? ''])));
       setIsAuthenticated(true);
       setLoginError('');
     } catch (error) {
@@ -641,6 +687,7 @@ export default function AdminPage() {
       setInquiries([]);
       setInquiryTotal(0);
       setInquiryDraftStatuses({});
+      setInquiryNicknameDrafts({});
       setInquiryLoadError(error instanceof Error ? error.message : '문의 목록을 불러오지 못했어요.');
     } finally {
       setIsLoadingInquiries(false);
@@ -708,7 +755,9 @@ export default function AdminPage() {
     setInquiries([]);
     setInquiryTotal(0);
     setInquiryDraftStatuses({});
+    setInquiryNicknameDrafts({});
     setUpdatingInquiryId(null);
+    setUpdatingNicknameInquiryId(null);
     setInquiryLoadError('');
     setIsResetConfirmOpen(false);
     setIsResettingRecommendations(false);
@@ -797,6 +846,43 @@ export default function AdminPage() {
       showToast(error instanceof Error ? error.message : '문의 상태를 변경하지 못했어요.', 'error');
     } finally {
       setUpdatingInquiryId(null);
+    }
+  };
+
+  const handleApplyInquiryNickname = async (item: AdminSupportInquiryDto) => {
+    const nextNickname = (inquiryNicknameDrafts[item.id] ?? '').trim();
+
+    if (!item.user) {
+      showToast('문의자 계정을 찾을 수 없어요.', 'error');
+      return;
+    }
+
+    if (nextNickname.length < 2 || nextNickname.length > 50) {
+      showToast('닉네임은 2자 이상 50자 이하여야 합니다.', 'error');
+      return;
+    }
+
+    if (nextNickname === item.user.nickname) {
+      return;
+    }
+
+    setUpdatingNicknameInquiryId(item.id);
+
+    try {
+      const data = await adminRequest<AdminSupportInquiryDto>(`/api/admin/support-inquiries/${item.id}/nickname`, {
+        method: 'PATCH',
+        body: JSON.stringify({ nickname: nextNickname }),
+      });
+
+      setInquiries((prevInquiries) => prevInquiries.map((inquiry) => (
+        inquiry.id === item.id ? data : inquiry
+      )));
+      setInquiryNicknameDrafts((prev) => ({ ...prev, [item.id]: data.user?.nickname ?? nextNickname }));
+      showToast('닉네임을 변경했어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '닉네임을 변경하지 못했어요.', 'error');
+    } finally {
+      setUpdatingNicknameInquiryId(null);
     }
   };
 
@@ -1021,9 +1107,13 @@ export default function AdminPage() {
                       key={item.id}
                       item={item}
                       draftStatus={inquiryDraftStatuses[item.id] ?? item.status}
+                      nicknameDraft={inquiryNicknameDrafts[item.id] ?? item.user?.nickname ?? ''}
                       isUpdating={updatingInquiryId === item.id}
+                      isUpdatingNickname={updatingNicknameInquiryId === item.id}
                       onDraftChange={(status) => setInquiryDraftStatuses((prev) => ({ ...prev, [item.id]: status }))}
+                      onNicknameDraftChange={(nickname) => setInquiryNicknameDrafts((prev) => ({ ...prev, [item.id]: nickname }))}
                       onApply={() => void handleApplyInquiryStatus(item)}
+                      onNicknameApply={() => void handleApplyInquiryNickname(item)}
                     />
                   ))
                 )}

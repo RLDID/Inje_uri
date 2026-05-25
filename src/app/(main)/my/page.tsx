@@ -447,7 +447,6 @@ function MyPageContent() {
           >
             로그아웃
           </button>
-          <p className="text-xs text-[var(--color-text-tertiary)]">인제우리 v0.3.0</p>
           <div className="mt-3 flex justify-center gap-4 text-xs text-[var(--color-text-tertiary)]">
             <Link href="/my/terms" className="transition-colors hover:text-[var(--color-text-secondary)]">이용약관</Link>
             <span className="text-[var(--color-border)]">|</span>

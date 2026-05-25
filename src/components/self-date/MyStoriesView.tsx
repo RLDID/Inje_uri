@@ -52,7 +52,7 @@ function getStoryCategoryList(story: Story): FeedCategory[] {
   return story.category ? [story.category] : [];
 }
 
-function LikedFeedSkeletonList() {
+function FeedSkeletonList() {
   return (
     <div className="content-stack" aria-hidden="true">
       {[1, 2, 3].map((item) => (
@@ -526,7 +526,9 @@ export function MyStoriesView({
         )}
 
         {activeTab === 'mine' ? (
-          myStories.length === 0 ? (
+          isLoadingStories ? (
+            <FeedSkeletonList />
+          ) : myStories.length === 0 ? (
             <div className="rounded-[24px] bg-[var(--color-surface-secondary)] px-6 py-10 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">
                 <svg className="h-8 w-8 text-[var(--color-text-tertiary)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -716,7 +718,7 @@ export function MyStoriesView({
           )
         ) : (
           isLoadingStories ? (
-            <LikedFeedSkeletonList />
+            <FeedSkeletonList />
           ) : likedStories.length === 0 ? (
             <div className="rounded-[24px] bg-[var(--color-surface-secondary)] px-6 py-10 text-center">
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-white">

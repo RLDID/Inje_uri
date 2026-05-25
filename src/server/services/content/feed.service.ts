@@ -19,6 +19,8 @@ import type {
 } from "@/lib/types/feed";
 
 const FEED_PAGE_SIZE = 20;
+const MAX_FEED_TEXT_LENGTH = 200;
+const MAX_FEED_IMAGES = 4;
 
 const repo = new FeedRepository(prisma);
 
@@ -26,6 +28,25 @@ type FeedKeywordInput = {
   ids?: number[] | null;
   codes?: string[] | null;
 };
+
+function normalizeFeedText(text: string): string {
+  const trimmedText = text.trim();
+  if (!trimmedText) {
+    throw new AppError("INVALID_TEXT", "피드 본문은 빈 값이 아닌 문자열이어야 합니다.");
+  }
+
+  if (trimmedText.length > MAX_FEED_TEXT_LENGTH) {
+    throw new AppError("INVALID_TEXT", `피드 본문은 ${MAX_FEED_TEXT_LENGTH}자 이하로 입력해주세요.`);
+  }
+
+  return trimmedText;
+}
+
+function assertFeedImageCount(imageCount: number) {
+  if (imageCount > MAX_FEED_IMAGES) {
+    throw new AppError("INVALID_INPUT", `이미지는 최대 ${MAX_FEED_IMAGES}개까지 등록할 수 있습니다.`);
+  }
+}
 
 function toFeedListItemDto(row: FeedListRow): FeedListItemDto {
   return {
@@ -210,6 +231,8 @@ export async function createFeed(
   images: File[] = [],
 ): Promise<CreateFeedResultDto> {
   const now = new Date();
+  const normalizedText = normalizeFeedText(text);
+  assertFeedImageCount(images.length);
 
   const existing = await repo.findActiveFeedByUser(authorUserId, now);
   if (existing) {
@@ -229,7 +252,7 @@ export async function createFeed(
   const imageUrls = await Promise.all(images.map((image) => saveFeedImageFile(image)));
 
   const feed = await prisma.$transaction(async (tx) => {
-    const createdFeed = await repo.createFeedWithKeywords(tx, { authorUserId, text: text.trim(), expiresAt }, feedKeywordIds);
+    const createdFeed = await repo.createFeedWithKeywords(tx, { authorUserId, text: normalizedText, expiresAt }, feedKeywordIds);
     await repo.createFeedImages(
       tx,
       createdFeed.id,
@@ -304,13 +327,19 @@ export async function updateFeed(
     throw new AppError("FEED_NOT_AVAILABLE", "만료된 피드는 수정할 수 없습니다.");
   }
 
+  const normalizedText = text === undefined ? undefined : normalizeFeedText(text);
+  const deleteImageIdSet = new Set(deleteImageIds);
+  const existingImageIds = new Set(feed.images.map((image) => image.id));
+  const deletedExistingImageCount = [...deleteImageIdSet].filter((imageId) => existingImageIds.has(imageId)).length;
+  assertFeedImageCount(feed.images.length - deletedExistingImageCount + images.length);
+
   const feedKeywordIds = feedKeywordInput ? await resolveFeedKeywordIds(feedKeywordInput) : undefined;
 
   const imageUrls = await Promise.all(images.map((image) => saveFeedImageFile(image)));
   const deletedImageUrls: string[] = [];
 
   await prisma.$transaction(async (tx) => {
-    const nextText = text?.trim() ?? feed.text;
+    const nextText = normalizedText ?? feed.text;
     await repo.updateFeedText(tx, feedId, nextText, now);
     if (feedKeywordIds) await repo.replaceFeedKeywords(tx, feedId, feedKeywordIds);
 
