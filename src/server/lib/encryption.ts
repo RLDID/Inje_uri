@@ -6,7 +6,8 @@ const AUTH_TAG_LENGTH_BYTES = 16;
 const KEY_LENGTH_BYTES = 32;
 
 const encryptedFieldsByModel = {
-  User: ["real_name", "birth"],
+  User: ["real_name", "birth", "student_number"],
+  PreSignupVerification: ["student_number"],
   Message: ["content"],
   FeedComment: ["content"],
   UserContact: ["contact_name", "phone_number_e164"],

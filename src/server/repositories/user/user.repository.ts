@@ -1,5 +1,6 @@
 import type { Prisma } from '@/generated/prisma/client';
 import { prisma } from '@/server/db/prisma';
+import { hashStudentNumber } from '@/server/lib/auth';
 
 export type UserUpdateData = Partial<{
   nickname: string;
@@ -52,9 +53,14 @@ export async function findUserByNickname(nickname: string, excludeUserId?: numbe
 }
 
 export async function findUserByStudentNumber(studentNumber: string) {
+  const studentNumberHash = hashStudentNumber(studentNumber);
+
   return prisma.user.findFirst({
     where: {
-      student_number: studentNumber,
+      OR: [
+        { student_number_hash: studentNumberHash },
+        { student_number: studentNumber },
+      ],
       login_id: { not: null },
       birth_hash: { not: null },
     },
@@ -63,9 +69,14 @@ export async function findUserByStudentNumber(studentNumber: string) {
 }
 
 export async function findUserForAccountRecovery(studentNumber: string): Promise<AccountRecoveryUser | null> {
+  const studentNumberHash = hashStudentNumber(studentNumber);
+
   return prisma.user.findFirst({
     where: {
-      student_number: studentNumber,
+      OR: [
+        { student_number_hash: studentNumberHash },
+        { student_number: studentNumber },
+      ],
       login_id: { not: null },
       birth_hash: { not: null },
     },
