@@ -8,6 +8,7 @@ export const ACCOUNT_RECOVERY_COOKIE_NAME = 'injeuri_account_recovery';
 export const PRE_SIGNUP_COOKIE_MAX_AGE_SECONDS = 60 * 10;
 export const PRE_AUTH_CREDENTIALS_STORAGE_KEY = 'injeuri_pre_auth_credentials';
 export const INJE_CHECK_FAIL_MESSAGE = '입력한 정보를 찾을수 없습니다.';
+export const INJE_CHECK_ALREADY_REGISTERED_MESSAGE = '이미 등록된 학번/사번입니다.';
 
 const PROTECTED_APP_PATH_PREFIXES = [
   '/match',

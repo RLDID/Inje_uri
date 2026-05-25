@@ -24,6 +24,13 @@ export type AccountRecoveryUser = {
   deleted_at: Date | null;
 };
 
+export type StudentVerificationUser = {
+  id: number;
+  birth_hash: string | null;
+  status: string;
+  deleted_at: Date | null;
+};
+
 export async function findUserById(id: number) {
   return prisma.user.findUnique({
     where: { id },
@@ -66,6 +73,27 @@ export async function findUserByStudentNumber(studentNumber: string) {
       birth_hash: { not: null },
     },
     select: { id: true },
+  });
+}
+
+export async function findUserForStudentVerification(studentNumber: string): Promise<StudentVerificationUser | null> {
+  const studentNumberHash = hashStudentNumber(studentNumber);
+
+  return prisma.user.findFirst({
+    where: {
+      OR: [
+        { student_number_hash: studentNumberHash },
+        { student_number: studentNumber },
+      ],
+      login_id: { not: null },
+      birth_hash: { not: null },
+    },
+    select: {
+      id: true,
+      birth_hash: true,
+      status: true,
+      deleted_at: true,
+    },
   });
 }
 
