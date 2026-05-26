@@ -1430,7 +1430,12 @@
           required: ["studentNumber", "birth"],
           properties: {
             studentNumber: { type: "string", example: "20201234" },
-            birth: { type: "string", pattern: "^\\d{6}$", example: "990101" },
+            birth: {
+              type: "string",
+              pattern: "^\\d{6}$",
+              description: "현재 연도 기준 20세부터 35세까지의 실제 날짜(YYMMDD)만 허용됩니다.",
+              example: "990101",
+            },
           },
         },
         InjeCheckResponse: {

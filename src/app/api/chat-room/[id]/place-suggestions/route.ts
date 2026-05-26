@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params;
     const roomId = Number(id);
-    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다");
+    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다", 404);
 
     const body = await req.json();
     const { placeId, triggeredKeyword } = body;
@@ -22,8 +22,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     if ("error" in result) {
         if (result.error === ERROR.ROOM_NOT_ACTIVE) return fail(ERROR.ROOM_NOT_ACTIVE, "활성 채팅방이 아닙니다");
-        if (result.error === ERROR.FORBIDDEN) return fail(ERROR.FORBIDDEN, "접근 권한이 없습니다");
-        return fail(ERROR.NOT_FOUND, "찾을 수 없습니다");
+        return fail(ERROR.NOT_FOUND, "찾을 수 없습니다", 404);
     }
 
     return ok(result, 201);
@@ -34,13 +33,12 @@ export async function GET(req: NextRequest,{ params }: { params: Promise<{ id: s
 
     const { id } = await params;
     const roomId = Number(id);
-    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다");
+    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다", 404);
 
     const result = await placeService.getSuggestionsStatus(roomId, user.id);
 
     if ("error" in result) {
-        if (result.error === ERROR.FORBIDDEN) return fail(ERROR.FORBIDDEN, "접근 권한이 없습니다");
-        return fail(ERROR.NOT_FOUND, "찾을 수 없습니다");
+        return fail(ERROR.NOT_FOUND, "찾을 수 없습니다", 404);
     }
     return ok(result);
 }

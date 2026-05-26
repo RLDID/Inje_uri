@@ -365,7 +365,6 @@ export async function getUserProfileDetail(currentUserId: number, targetUserId: 
     user: {
       id: user.id,
       nickname: user.nickname,
-      age: user.age,
       gender: user.gender,
       university: user.university,
       department: user.department,

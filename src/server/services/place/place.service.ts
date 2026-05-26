@@ -16,8 +16,8 @@ export async function createPlaceSuggestion( //'인제우리'
     const room = await chatRoomRepo.findRoomById(roomId);
     if (!room) return { error: ERROR.NOT_FOUND } as const;
 
-    const isParticipant = room.participants.some((p) => p.user_id === userId);
-    if (!isParticipant) return { error: ERROR.FORBIDDEN } as const;
+    const participant = room.participants.find((p) => p.user_id === userId);
+    if (!participant || participant.left_at !== null) return { error: ERROR.NOT_FOUND } as const;
     if (room.status !== "active") return { error: ERROR.ROOM_NOT_ACTIVE } as const;
 
     const place = await placeRepo.findPlaceById(placeId);
@@ -41,8 +41,8 @@ export async function updateSuggestionStatus(
     const room = await chatRoomRepo.findRoomById(roomId);
     if (!room) return { error: ERROR.NOT_FOUND } as const;
 
-    const isParticipant = room.participants.some((p) => p.user_id === userId);
-    if (!isParticipant) return { error: ERROR.FORBIDDEN } as const;
+    const participant = room.participants.find((p) => p.user_id === userId);
+    if (!participant || participant.left_at !== null) return { error: ERROR.NOT_FOUND } as const;
 
     const suggestion = await placeSuggestionRepo.findSuggestionById(suggestionId);
     if (!suggestion || suggestion.chat_room_id !== roomId)
@@ -59,8 +59,8 @@ export async function getSuggestionsStatus(roomId: number, userId: number) {
     const room = await chatRoomRepo.findRoomById(roomId);                                                        
     if (!room) return { error: ERROR.NOT_FOUND } as const;                                                     
 
-    const isParticipant = room.participants.some((p) => p.user_id === userId);
-    if (!isParticipant) return { error: ERROR.FORBIDDEN } as const;
+    const participant = room.participants.find((p) => p.user_id === userId);
+    if (!participant || participant.left_at !== null) return { error: ERROR.NOT_FOUND } as const;
 
     const suggestions = await placeSuggestionRepo.findSuggestionsByRoomId(roomId);
     return { suggestions };

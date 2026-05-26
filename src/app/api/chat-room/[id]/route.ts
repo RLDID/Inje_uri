@@ -10,14 +10,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     // const user = {id:1} as any;
     const { id } = await params;
     const roomId = Number(id);
-    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾지 못했습니다.");
+    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾지 못했습니다.", 404);
 
     const result = await chatRoomService.getChatRoom(roomId, user.id);
 
     if ("error" in result) {
-        const err = result.error!;
-        if (err === ERROR.FORBIDDEN) return fail(err, "접근 권한이 없습니다.");
-        return fail(err, "찾지 못했습니다");
+        return fail(ERROR.NOT_FOUND, "찾지 못했습니다.", 404);
     }
     return ok(result);
 }

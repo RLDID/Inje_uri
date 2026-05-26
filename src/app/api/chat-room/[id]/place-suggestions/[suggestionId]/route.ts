@@ -11,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const { id, suggestionId } = await params;
     const roomId = Number(id);
     const sgId = Number(suggestionId);
-    if (isNaN(roomId) || isNaN(sgId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다");
+    if (isNaN(roomId) || isNaN(sgId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다", 404);
 
     const body = await req.json();
     const { status } = body;
@@ -23,8 +23,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     if ("error" in result) {
         if (result.error === ERROR.ALREADY_PROCESSED) return fail(ERROR.ALREADY_PROCESSED, "이미 처리된추천입니다");
-        if (result.error === ERROR.FORBIDDEN) return fail(ERROR.FORBIDDEN, "접근 권한이 없습니다");
-        return fail(ERROR.NOT_FOUND, "찾을 수 없습니다");
+        return fail(ERROR.NOT_FOUND, "찾을 수 없습니다", 404);
     }
 
     return ok(result);

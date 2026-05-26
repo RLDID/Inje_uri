@@ -199,14 +199,14 @@ export async function sendMessage(
   /**
    * 메시지 목록 조회 + 읽음 자동 갱신.
    *
-   * - 만료/나간 방도 읽기는 허용 (쓰기만 차단)
+   * - 만료된 방 읽기는 허용하되, 이미 나간 참여자는 읽기도 차단
    * - 조회 성공 시 가장 최신 메시지 id로 last_read_message_id 갱신
    * - cursor 없으면 최신 30건, cursor 있으면 그 이전 30건
    */
 export async function getMessages(roomId: number, userId: number, cursor?: number, limit: number = 30) {
   const participant = await
   participantRepo.findParticipant(roomId, userId);
-  if (!participant) return { error: ERROR.FORBIDDEN } as const;
+  if (!participant || participant.left_at !== null) return { error: ERROR.NOT_FOUND } as const;
 
   const room = await chatRoomRepo.findRoomById(roomId);
   if (!room) return { error: ERROR.NOT_FOUND } as const;
@@ -249,7 +249,7 @@ export async function getMessages(roomId: number, userId: number, cursor?: numbe
    */
 export async function markAsRead(roomId: number, userId: number, upToMessageId: number) {
   const participant = await participantRepo.findParticipant(roomId, userId);
-  if (!participant) return { error: ERROR.FORBIDDEN } as const;
+  if (!participant || participant.left_at !== null) return { error: ERROR.NOT_FOUND } as const;
 
   const room = await chatRoomRepo.findRoomById(roomId);
   if (!room) return { error: ERROR.NOT_FOUND } as const;

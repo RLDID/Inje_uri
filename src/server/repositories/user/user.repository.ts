@@ -149,7 +149,6 @@ export async function findActiveUserProfileById(userId: number) {
       id: true,
       email: true,
       nickname: true,
-      age: true,
       gender: true,
       university: true,
       department: true,
