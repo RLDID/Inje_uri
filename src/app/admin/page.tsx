@@ -28,6 +28,11 @@ interface AdminRecommendationResetResultDto {
   };
 }
 
+interface AdminMaintenanceModeDto {
+  enabled: boolean;
+  updatedAt: string | null;
+}
+
 type AdminSection = 'reports' | 'support' | 'operator-feed' | 'operator-chat';
 type AdminInquiryStatus = 'received' | 'in_review' | 'answered';
 type AdminInquiryStatusFilter = 'all' | AdminInquiryStatus;
@@ -43,7 +48,12 @@ interface AdminSupportInquiryDto {
   status: AdminInquiryStatus;
   createdAt: string;
   updatedAt: string;
-  user: { id: number; nickname: string } | null;
+  user: {
+    id: number;
+    nickname: string;
+    status: string;
+    deletedAt: string | null;
+  } | null;
 }
 
 interface AdminSupportInquiryListDto {
@@ -575,30 +585,41 @@ function InquiryItem({
   nicknameDraft,
   isUpdating,
   isUpdatingNickname,
+  isWithdrawingUser,
   onDraftChange,
   onNicknameDraftChange,
   onApply,
   onNicknameApply,
+  onWithdrawUser,
 }: {
   item: AdminSupportInquiryDto;
   draftStatus: AdminInquiryStatus;
   nicknameDraft: string;
   isUpdating: boolean;
   isUpdatingNickname: boolean;
+  isWithdrawingUser: boolean;
   onDraftChange: (status: AdminInquiryStatus) => void;
   onNicknameDraftChange: (nickname: string) => void;
   onApply: () => void;
   onNicknameApply: () => void;
+  onWithdrawUser: () => void;
 }) {
   const isChanged = draftStatus !== item.status;
   const canApply = isChanged && draftStatus !== 'received';
   const trimmedNicknameDraft = nicknameDraft.trim();
   const currentNickname = item.user?.nickname ?? '';
+  const isWithdrawnUser = item.user?.status === 'withdrawn' || Boolean(item.user?.deletedAt);
   const canApplyNickname = Boolean(item.user)
     && trimmedNicknameDraft.length >= 2
     && trimmedNicknameDraft.length <= 50
     && trimmedNicknameDraft !== currentNickname
-    && !isUpdating;
+    && !isUpdating
+    && !isWithdrawingUser;
+  const canWithdrawUser = Boolean(item.user)
+    && !isWithdrawnUser
+    && !isUpdating
+    && !isUpdatingNickname
+    && !isWithdrawingUser;
 
   return (
     <article className="rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface)] shadow-[0_3px_10px_rgba(34,34,34,0.045)]">
@@ -612,6 +633,7 @@ function InquiryItem({
           <select
             value={draftStatus}
             onChange={(event) => onDraftChange(event.target.value as AdminInquiryStatus)}
+            disabled={isUpdating || isUpdatingNickname || isWithdrawingUser}
             className="h-9 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-semibold text-[var(--color-text-primary)] outline-none focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/15"
           >
             {INQUIRY_STATUSES.map((status) => (
@@ -620,7 +642,7 @@ function InquiryItem({
               </option>
             ))}
           </select>
-          <Button type="button" size="sm" variant="secondary" loading={isUpdating} disabled={!canApply || isUpdatingNickname} onClick={onApply}>
+          <Button type="button" size="sm" variant="secondary" loading={isUpdating} disabled={!canApply || isUpdatingNickname || isWithdrawingUser} onClick={onApply}>
             적용
           </Button>
         </div>
@@ -638,6 +660,11 @@ function InquiryItem({
           <p className="mt-1 break-all text-xs text-[var(--color-text-secondary)]">
             {item.email ?? '회신 이메일 없음'}
           </p>
+          {item.user && (
+            <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">
+              계정 상태: {isWithdrawnUser ? `탈퇴 처리됨${item.user.deletedAt ? ` · ${formatDateTime(item.user.deletedAt)}` : ''}` : item.user.status}
+            </p>
+          )}
           <div className="mt-3 grid gap-2">
             <label htmlFor={`inquiry-nickname-${item.id}`} className="text-xs font-semibold text-[var(--color-text-tertiary)]">
               닉네임 변경
@@ -647,7 +674,7 @@ function InquiryItem({
                 id={`inquiry-nickname-${item.id}`}
                 value={nicknameDraft}
                 onChange={(event) => onNicknameDraftChange(event.target.value.slice(0, 50))}
-                disabled={!item.user || isUpdatingNickname}
+                disabled={!item.user || isUpdatingNickname || isWithdrawingUser}
                 placeholder="새 닉네임"
                 className="h-9 min-w-0 flex-1 rounded-lg border border-[var(--color-border)] bg-white px-3 text-sm font-medium text-[var(--color-text-primary)] outline-none transition focus:border-[var(--color-focus)] focus:ring-2 focus:ring-[var(--color-focus)]/15 disabled:bg-[var(--color-surface-secondary)] disabled:text-[var(--color-text-tertiary)]"
               />
@@ -665,6 +692,24 @@ function InquiryItem({
             <p className="text-[11px] leading-4 text-[var(--color-text-tertiary)]">
               2~50자, 중복 닉네임은 저장되지 않습니다.
             </p>
+          </div>
+          <div className="mt-4 rounded-lg border border-[var(--color-border-light)] bg-[var(--color-surface-secondary)] p-3">
+            <p className="text-xs font-semibold text-[var(--color-text-tertiary)]">계정 탈퇴 처리</p>
+            <p className="mt-1 break-keep text-[11px] leading-4 text-[var(--color-text-secondary)]">
+              이 문의에 연결된 사용자만 soft delete 처리합니다.
+            </p>
+            <Button
+              type="button"
+              size="sm"
+              variant="danger"
+              fullWidth
+              className="mt-3"
+              loading={isWithdrawingUser}
+              disabled={!canWithdrawUser}
+              onClick={onWithdrawUser}
+            >
+              {isWithdrawnUser ? '탈퇴 처리됨' : '문의자 탈퇴 처리'}
+            </Button>
           </div>
         </div>
 
@@ -694,6 +739,9 @@ export default function AdminPage() {
   const [loginError, setLoginError] = useState('');
   const [isLoginSubmitting, setIsLoginSubmitting] = useState(false);
   const [activeSection, setActiveSection] = useState<AdminSection>('reports');
+  const [maintenanceMode, setMaintenanceMode] = useState<AdminMaintenanceModeDto | null>(null);
+  const [isLoadingMaintenanceMode, setIsLoadingMaintenanceMode] = useState(false);
+  const [isUpdatingMaintenanceMode, setIsUpdatingMaintenanceMode] = useState(false);
   const [filterStatus, setFilterStatus] = useState<AdminReportStatusFilter>('pending');
   const [reports, setReports] = useState<AdminReportListItemDto[]>([]);
   const [summary, setSummary] = useState<AdminReportListDto['summary'] | null>(null);
@@ -709,6 +757,8 @@ export default function AdminPage() {
   const [inquiryNicknameDrafts, setInquiryNicknameDrafts] = useState<Record<number, string>>({});
   const [updatingInquiryId, setUpdatingInquiryId] = useState<number | null>(null);
   const [updatingNicknameInquiryId, setUpdatingNicknameInquiryId] = useState<number | null>(null);
+  const [withdrawingInquiryId, setWithdrawingInquiryId] = useState<number | null>(null);
+  const [withdrawalTarget, setWithdrawalTarget] = useState<AdminSupportInquiryDto | null>(null);
   const [isLoadingInquiries, setIsLoadingInquiries] = useState(false);
   const [inquiryLoadError, setInquiryLoadError] = useState('');
   const [operatorFeedKeywords, setOperatorFeedKeywords] = useState<KeywordListDto['items']>([]);
@@ -758,6 +808,32 @@ export default function AdminPage() {
       showToast(error instanceof Error ? error.message : '신고 목록을 불러오지 못했어요.', 'error');
     } finally {
       setIsLoadingReports(false);
+    }
+  }, [showToast]);
+
+  const loadMaintenanceMode = useCallback(async (options: { silent?: boolean } = {}) => {
+    if (!options.silent) {
+      setIsLoadingMaintenanceMode(true);
+    }
+
+    try {
+      const data = await adminRequest<AdminMaintenanceModeDto>('/api/admin/maintenance');
+      setMaintenanceMode(data);
+      setIsAuthenticated(true);
+      setLoginError('');
+    } catch (error) {
+      if (error instanceof AdminApiError && error.status === 401) {
+        setIsAuthenticated(false);
+        return;
+      }
+
+      if (!options.silent) {
+        showToast(error instanceof Error ? error.message : '점검 모드 상태를 불러오지 못했어요.', 'error');
+      }
+    } finally {
+      if (!options.silent) {
+        setIsLoadingMaintenanceMode(false);
+      }
     }
   }, [showToast]);
 
@@ -889,6 +965,12 @@ export default function AdminPage() {
   }, [activeSection, loadOperatorChats]);
 
   useEffect(() => {
+    if (isAuthenticated === true) {
+      void loadMaintenanceMode();
+    }
+  }, [isAuthenticated, loadMaintenanceMode]);
+
+  useEffect(() => {
     if (activeSection !== 'operator-chat' || isAuthenticated !== true) {
       return;
     }
@@ -934,6 +1016,8 @@ export default function AdminPage() {
         : isLoadingReports;
 
   const refreshActiveSection = () => {
+    void loadMaintenanceMode({ silent: true });
+
     if (activeSection === 'support') {
       void loadInquiries(inquiryFilterStatus);
       return;
@@ -994,6 +1078,9 @@ export default function AdminPage() {
     setInquiryNicknameDrafts({});
     setUpdatingInquiryId(null);
     setUpdatingNicknameInquiryId(null);
+    setMaintenanceMode(null);
+    setIsLoadingMaintenanceMode(false);
+    setIsUpdatingMaintenanceMode(false);
     setInquiryLoadError('');
     setOperatorFeedKeywords([]);
     setOperatorFeedText('');
@@ -1138,6 +1225,39 @@ export default function AdminPage() {
       showToast(error instanceof Error ? error.message : '닉네임을 변경하지 못했어요.', 'error');
     } finally {
       setUpdatingNicknameInquiryId(null);
+    }
+  };
+
+  const handleWithdrawInquiryUser = async (item: AdminSupportInquiryDto) => {
+    if (!item.user) {
+      showToast('문의자 계정을 찾을 수 없어요.', 'error');
+      return;
+    }
+
+    if (item.user.status === 'withdrawn' || item.user.deletedAt) {
+      showToast('이미 탈퇴 처리된 계정입니다.', 'info');
+      return;
+    }
+
+    setWithdrawingInquiryId(item.id);
+
+    try {
+      const data = await adminRequest<AdminSupportInquiryDto>(`/api/admin/support-inquiries/${item.id}/withdraw-user`, {
+        method: 'PATCH',
+      });
+
+      setInquiries((prevInquiries) => prevInquiries.map((inquiry) => (
+        inquiry.id === item.id ? data : inquiry
+      )));
+      setInquiryNicknameDrafts((prev) => ({ ...prev, [item.id]: data.user?.nickname ?? '' }));
+      setInquiryDraftStatuses((prev) => ({ ...prev, [item.id]: data.status }));
+      await loadInquiries(inquiryFilterStatus);
+      showToast('문의자 계정을 탈퇴 처리했어요.', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : '문의자 계정을 탈퇴 처리하지 못했어요.', 'error');
+    } finally {
+      setWithdrawingInquiryId(null);
+      setWithdrawalTarget(null);
     }
   };
 
@@ -1313,6 +1433,30 @@ export default function AdminPage() {
     }
   };
 
+  const handleToggleMaintenanceMode = async () => {
+    const nextEnabled = !(maintenanceMode?.enabled ?? false);
+    setIsUpdatingMaintenanceMode(true);
+
+    try {
+      const data = await adminRequest<AdminMaintenanceModeDto>('/api/admin/maintenance', {
+        method: 'PATCH',
+        body: JSON.stringify({ enabled: nextEnabled }),
+      });
+
+      setMaintenanceMode(data);
+      showToast(nextEnabled ? '서버 점검 화면을 켰어요.' : '서버 점검 화면을 껐어요.', 'success');
+    } catch (error) {
+      if (error instanceof AdminApiError && error.status === 401) {
+        setIsAuthenticated(false);
+        return;
+      }
+
+      showToast(error instanceof Error ? error.message : '점검 모드를 변경하지 못했어요.', 'error');
+    } finally {
+      setIsUpdatingMaintenanceMode(false);
+    }
+  };
+
   if (isAuthenticated === null) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[var(--color-surface-secondary)]">
@@ -1342,6 +1486,22 @@ export default function AdminPage() {
             <h1 className="mt-1 text-2xl font-bold text-[var(--color-text-primary)]">운영 관리</h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span className={`inline-flex min-h-9 items-center rounded-2xl border px-3 text-sm font-bold ${
+              maintenanceMode?.enabled
+                ? 'border-[color-mix(in_srgb,var(--color-pink-cta)_36%,var(--color-border))] bg-[var(--color-error-bg)] text-[var(--color-error)]'
+                : 'border-[var(--color-border)] bg-[var(--color-chip-background)] text-[var(--color-text-secondary)]'
+            }`}>
+              {maintenanceMode?.enabled ? '점검 ON' : '점검 OFF'}
+            </span>
+            <Button
+              type="button"
+              variant={maintenanceMode?.enabled ? 'danger' : 'secondary'}
+              size="sm"
+              loading={isLoadingMaintenanceMode || isUpdatingMaintenanceMode}
+              onClick={() => void handleToggleMaintenanceMode()}
+            >
+              {maintenanceMode?.enabled ? '서버점검 끄기' : '서버점검 켜기'}
+            </Button>
             {SHOW_RECOMMENDATION_RESET_BUTTON && (
               <Button
                 type="button"
@@ -1570,9 +1730,9 @@ export default function AdminPage() {
                 <p className="mt-2 text-sm text-[var(--color-text-secondary)]">{operatorChatLoadError}</p>
               </div>
             ) : (
-              <div className="grid gap-4 p-4 lg:grid-cols-[340px_1fr]">
-                <div className="space-y-4">
-                  <section className="rounded-lg border border-[var(--color-border-light)]">
+              <div className="grid min-w-0 gap-4 p-4 lg:grid-cols-[340px_minmax(0,1fr)]">
+                <div className="min-w-0 space-y-4">
+                  <section className="min-w-0 overflow-hidden rounded-lg border border-[var(--color-border-light)]">
                     <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] px-3 py-2">
                       <h3 className="text-sm font-bold text-[var(--color-text-primary)]">새 문의 반응</h3>
                       <span className="text-xs font-semibold text-[var(--color-text-tertiary)]">{unresolvedOperatorReactions.length}건</span>
@@ -1587,7 +1747,7 @@ export default function AdminPage() {
                         </div>
                       ) : (
                         unresolvedOperatorReactions.map((reaction) => (
-                          <article key={reaction.commentId} className="rounded-lg bg-[var(--color-surface-secondary)] p-3">
+                          <article key={reaction.commentId} className="min-w-0 rounded-lg bg-[var(--color-surface-secondary)] p-3">
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <p className="truncate text-sm font-bold text-[var(--color-text-primary)]">{reaction.commenter.nickname}</p>
@@ -1605,7 +1765,7 @@ export default function AdminPage() {
                             <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6 text-[var(--color-text-primary)]">
                               {reaction.content.trim() || '하트 반응'}
                             </p>
-                            <p className="mt-2 line-clamp-2 text-xs leading-5 text-[var(--color-text-secondary)]">
+                            <p className="mt-2 line-clamp-2 break-words text-xs leading-5 text-[var(--color-text-secondary)]">
                               피드: {reaction.feed.text}
                             </p>
                           </article>
@@ -1614,7 +1774,7 @@ export default function AdminPage() {
                     </div>
                   </section>
 
-                  <section className="rounded-lg border border-[var(--color-border-light)]">
+                  <section className="min-w-0 overflow-hidden rounded-lg border border-[var(--color-border-light)]">
                     <div className="flex items-center justify-between gap-2 border-b border-[var(--color-border-light)] px-3 py-2">
                       <h3 className="text-sm font-bold text-[var(--color-text-primary)]">채팅방</h3>
                       <span className="text-xs font-semibold text-[var(--color-text-tertiary)]">{operatorChatRooms.length}개</span>
@@ -1642,7 +1802,7 @@ export default function AdminPage() {
                               key={room.roomId}
                               type="button"
                               onClick={() => void handleSelectOperatorChatRoom(room.roomId)}
-                              className={`w-full rounded-lg border p-3 text-left transition ${
+                              className={`block w-full min-w-0 overflow-hidden rounded-lg border p-3 text-left transition ${
                                 isSelected
                                   ? 'border-[var(--color-pink-cta)] bg-[var(--color-brand-pink)]'
                                   : 'border-[var(--color-border-light)] bg-white hover:border-[var(--color-border)]'
@@ -1658,7 +1818,7 @@ export default function AdminPage() {
                                   </span>
                                 )}
                               </div>
-                              <p className="mt-1 truncate text-xs text-[var(--color-text-secondary)]">{preview}</p>
+                              <p className="mt-1 line-clamp-2 min-w-0 break-words text-xs leading-5 text-[var(--color-text-secondary)]">{preview}</p>
                               <p className="mt-2 text-[11px] text-[var(--color-text-tertiary)]">
                                 {isClosed ? '닫힘' : '만료'} {formatDateTime(room.expiresAt)}
                               </p>
@@ -1670,7 +1830,7 @@ export default function AdminPage() {
                   </section>
                 </div>
 
-                <div className="flex min-h-[560px] flex-col rounded-lg border border-[var(--color-border-light)]">
+                <div className="flex min-h-[560px] min-w-0 flex-col overflow-hidden rounded-lg border border-[var(--color-border-light)]">
                   {selectedOperatorChatRoom ? (
                     <>
                       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border-light)] px-4 py-3">
@@ -1819,10 +1979,12 @@ export default function AdminPage() {
                       nicknameDraft={inquiryNicknameDrafts[item.id] ?? item.user?.nickname ?? ''}
                       isUpdating={updatingInquiryId === item.id}
                       isUpdatingNickname={updatingNicknameInquiryId === item.id}
+                      isWithdrawingUser={withdrawingInquiryId === item.id}
                       onDraftChange={(status) => setInquiryDraftStatuses((prev) => ({ ...prev, [item.id]: status }))}
                       onNicknameDraftChange={(nickname) => setInquiryNicknameDrafts((prev) => ({ ...prev, [item.id]: nickname }))}
                       onApply={() => void handleApplyInquiryStatus(item)}
                       onNicknameApply={() => void handleApplyInquiryNickname(item)}
+                      onWithdrawUser={() => setWithdrawalTarget(item)}
                     />
                   ))
                 )}
@@ -1831,6 +1993,25 @@ export default function AdminPage() {
           </>
         )}
       </div>
+
+      <ConfirmSheet
+        isOpen={withdrawalTarget !== null}
+        onClose={() => {
+          if (withdrawingInquiryId === null) {
+            setWithdrawalTarget(null);
+          }
+        }}
+        onConfirm={() => {
+          if (withdrawalTarget) {
+            void handleWithdrawInquiryUser(withdrawalTarget);
+          }
+        }}
+        title="문의자 계정을 탈퇴 처리할까요?"
+        description={withdrawalTarget?.user ? `${withdrawalTarget.user.nickname} 계정은 withdrawn 상태가 되고 현재 세션이 삭제됩니다. DB 행은 보관됩니다.` : '문의자 계정을 찾을 수 없습니다.'}
+        confirmText="탈퇴 처리"
+        cancelText="취소"
+        destructive
+      />
 
       <ConfirmSheet
         isOpen={SHOW_RECOMMENDATION_RESET_BUTTON && isResetConfirmOpen}

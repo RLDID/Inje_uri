@@ -215,3 +215,27 @@ export async function updateUserPasswordHash(userId: number, passwordHash: strin
     data: { password_hash: passwordHash },
   });
 }
+
+export async function softDeleteUserById(userId: number, deletedAt = new Date()) {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: {
+        status: 'withdrawn',
+        deleted_at: deletedAt,
+      },
+      select: {
+        id: true,
+        nickname: true,
+        status: true,
+        deleted_at: true,
+      },
+    });
+
+    await tx.authSession.deleteMany({
+      where: { user_id: userId },
+    });
+
+    return user;
+  });
+}

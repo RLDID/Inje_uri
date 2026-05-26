@@ -1,4 +1,4 @@
-import type { support_inquiry_status } from "@/generated/prisma/client";
+import type { support_inquiry_status, user_status } from "@/generated/prisma/client";
 import type { PrismaDbClient } from "@/server/db/prisma";
 
 type SupportRepositoryDb = Pick<PrismaDbClient, "supportInquiry">;
@@ -17,7 +17,12 @@ export type SupportInquiryRow = {
 };
 
 export type SupportInquiryWithUserRow = SupportInquiryRow & {
-  user: { id: number; nickname: string } | null;
+  user: {
+    id: number;
+    nickname: string;
+    status: user_status;
+    deleted_at: Date | null;
+  } | null;
 };
 
 const inquirySelect = {
@@ -39,6 +44,8 @@ const inquiryWithUserSelect = {
     select: {
       id: true,
       nickname: true,
+      status: true,
+      deleted_at: true,
     },
   },
 } as const;

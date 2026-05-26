@@ -613,7 +613,7 @@ export function MyStoriesView({
                         </div>
                       )}
 
-                      <p data-clarity-mask className="mt-3 leading-7 text-[var(--color-text-primary)]">
+                      <p data-clarity-mask className="mt-3 whitespace-pre-wrap break-words leading-7 text-[var(--color-text-primary)]">
                         {story.content.text}
                       </p>
 

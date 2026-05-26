@@ -882,7 +882,7 @@ function SelfDateDetailPageContent() {
       )}
 
       {previewImage && (
-        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 px-4 py-8">
+        <div className="fixed inset-0 z-[160] flex items-center justify-center bg-black/90 px-4 py-8">
           <button
             type="button"
             className="absolute inset-0"
