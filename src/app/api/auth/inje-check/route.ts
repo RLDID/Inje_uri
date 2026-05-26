@@ -18,8 +18,47 @@ interface InjeCheckBody {
   birth?: unknown;
 }
 
+const MIN_ALLOWED_STUDENT_AGE = 20;
+const MAX_ALLOWED_STUDENT_AGE = 35;
+const INVALID_INJE_CHECK_MESSAGE = '입력한 정보를 찾을수 없습니다.';
+
 function normalizeValue(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function isRealCalendarDate(year: number, month: number, day: number): boolean {
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return (
+    date.getUTCFullYear() === year
+    && date.getUTCMonth() === month - 1
+    && date.getUTCDate() === day
+  );
+}
+
+function resolveAllowedBirthYear(birth: string, referenceYear: number): number | null {
+  const twoDigitYear = Number(birth.slice(0, 2));
+  const candidates = [1900 + twoDigitYear, 2000 + twoDigitYear];
+
+  return candidates.find((candidateYear) => {
+    const age = referenceYear - candidateYear;
+    return age >= MIN_ALLOWED_STUDENT_AGE && age <= MAX_ALLOWED_STUDENT_AGE;
+  }) ?? null;
+}
+
+function validateStudentBirth(birth: string, referenceDate = new Date()): string | null {
+  if (!/^\d{6}$/.test(birth)) {
+    return INVALID_INJE_CHECK_MESSAGE;
+  }
+
+  const month = Number(birth.slice(2, 4));
+  const day = Number(birth.slice(4, 6));
+  const birthYear = resolveAllowedBirthYear(birth, referenceDate.getFullYear());
+
+  if (!birthYear || !isRealCalendarDate(birthYear, month, day)) {
+    return INVALID_INJE_CHECK_MESSAGE;
+  }
+
+  return null;
 }
 
 export async function POST(request: Request) {
@@ -39,15 +78,16 @@ export async function POST(request: Request) {
       throw new ApiError(ERROR.VALIDATION_ERROR, '학번을 입력해주세요.');
     }
 
-    if (!/^\d{6}$/.test(birth)) {
-      throw new ApiError(ERROR.VALIDATION_ERROR, '생년월일 6자리를 입력해주세요.');
-    }
-
     const rateLimitSet = buildAuthRateLimitSet('inje-check', request, studentNumber);
     await assertAuthRateLimitAllowed(rateLimitSet.checkBuckets);
 
     let result: Awaited<ReturnType<typeof verifyInjeStudent>>;
     try {
+      const birthValidationError = validateStudentBirth(birth);
+      if (birthValidationError) {
+        throw new ApiError(ERROR.INVALID_CREDENTIALS, birthValidationError);
+      }
+
       result = await verifyInjeStudent(studentNumber, birth);
       await clearAuthRateLimitFailures(rateLimitSet.resetBuckets);
     } catch (error) {

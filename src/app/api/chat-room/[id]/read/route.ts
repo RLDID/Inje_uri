@@ -10,7 +10,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // const user = {id:1} as any;
     const { id } = await params;
     const roomId = Number(id);
-    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾지 못했습니다.");
+    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾지 못했습니다.", 404);
 
     const body = await req.json();
     const upToMessageId = body.upToMessageId ?? body.lastReadMessageId;
@@ -22,7 +22,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const result = await messageService.markAsRead(roomId, user.id, Number(upToMessageId));
 
     if ("error" in result) {
-        return fail(result.error!, "접근 권한이 없습니다.");
+        if (result.error === ERROR.INVALID_CURSOR) {
+            return fail(ERROR.INVALID_CURSOR, "유효하지 않은 커서 값입니다.");
+        }
+        return fail(ERROR.NOT_FOUND, "찾지 못했습니다.", 404);
     }
 
     return ok(result);
