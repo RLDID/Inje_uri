@@ -25,6 +25,12 @@ interface LoginApiResponse {
   };
 }
 
+const STUDENT_NUMBER_LENGTH = 8;
+
+function normalizeStudentNumberInput(value: string): string {
+  return value.replace(/\D/g, '').slice(0, STUDENT_NUMBER_LENGTH);
+}
+
 function resolveNextQuery(nextPath: string | null): string {
   if (!nextPath || !nextPath.startsWith('/') || nextPath.startsWith('//')) {
     return '';
@@ -78,10 +84,17 @@ export function InjeCheckPageClient() {
   const handleVerifySubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const normalizedStudentNumber = studentNumber.trim();
+    const normalizedStudentNumber = normalizeStudentNumberInput(studentNumber);
     const normalizedBirth = birth.trim();
     if (!normalizedStudentNumber || !normalizedBirth) {
       const message = '학번과 생년월일을 모두 입력해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+      return;
+    }
+
+    if (!/^\d{8}$/.test(normalizedStudentNumber)) {
+      const message = '학번은 8자리 숫자로 입력해주세요.';
       setErrorMessage(message);
       showToast(message, 'error');
       return;
@@ -240,15 +253,19 @@ export function InjeCheckPageClient() {
             <form className="space-y-4" onSubmit={handleVerifySubmit}>
               <div>
                 <label htmlFor="studentNumber" className="mb-2 block text-sm font-semibold text-[var(--color-text-primary)]">
-                  학번
+                  학번 (8자리)
                 </label>
                 <input
                   id="studentNumber"
                   name="studentNumber"
                   type="text"
                   inputMode="numeric"
+                  minLength={STUDENT_NUMBER_LENGTH}
+                  maxLength={STUDENT_NUMBER_LENGTH}
+                  pattern="\d{8}"
+                  title="학번은 8자리 숫자로 입력해주세요."
                   value={studentNumber}
-                  onChange={(event) => setStudentNumber(event.target.value)}
+                  onChange={(event) => setStudentNumber(normalizeStudentNumberInput(event.target.value))}
                   placeholder="예: 20231234"
                   className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:border-[var(--color-focus)] focus:outline-none focus:ring-2 focus:ring-[var(--color-focus)]/20"
                   disabled={isSubmitting}
