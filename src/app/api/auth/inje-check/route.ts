@@ -20,6 +20,9 @@ interface InjeCheckBody {
 
 const MIN_ALLOWED_STUDENT_AGE = 20;
 const MAX_ALLOWED_STUDENT_AGE = 35;
+const STUDENT_NUMBER_LENGTH = 8;
+const STUDENT_NUMBER_PATTERN = new RegExp(`^\\d{${STUDENT_NUMBER_LENGTH}}$`);
+const INVALID_STUDENT_NUMBER_MESSAGE = '학번은 8자리 숫자로 입력해주세요.';
 const INVALID_INJE_CHECK_MESSAGE = '입력한 정보를 찾을수 없습니다.';
 
 function normalizeValue(value: unknown): string {
@@ -76,6 +79,10 @@ export async function POST(request: Request) {
 
     if (!studentNumber) {
       throw new ApiError(ERROR.VALIDATION_ERROR, '학번을 입력해주세요.');
+    }
+
+    if (!STUDENT_NUMBER_PATTERN.test(studentNumber)) {
+      throw new ApiError(ERROR.VALIDATION_ERROR, INVALID_STUDENT_NUMBER_MESSAGE);
     }
 
     const rateLimitSet = buildAuthRateLimitSet('inje-check', request, studentNumber);

@@ -66,6 +66,8 @@ const INITIAL_FORM_STATE: RegisterFormState = {
 const PASSWORD_SPECIAL_CHARACTER_PATTERN = /[^\p{L}\p{N}\s]/u;
 const AGE_OPTIONS = Array.from({ length: 11 }, (_, index) => String(index + 20));
 const STUDENT_YEAR_OPTIONS = Array.from({ length: 8 }, (_, index) => String(index + 1));
+const STUDENT_NUMBER_LENGTH = 8;
+const STUDENT_NUMBER_PATTERN = new RegExp(`^\\d{${STUDENT_NUMBER_LENGTH}}$`);
 const WHEEL_ITEM_HEIGHT = 48;
 const WHEEL_VISIBLE_ITEMS = 5;
 const WHEEL_SETTLE_TIMEOUT_MS = 850;
@@ -88,6 +90,10 @@ const ALL_CONSENTS: Record<ConsentKey, boolean> = {
   profileDisclosure: true,
   adult: true,
 };
+
+function normalizeStudentNumberInput(value: string): string {
+  return value.replace(/\D/g, '').slice(0, STUDENT_NUMBER_LENGTH);
+}
 
 const AGREEMENT_DOCUMENTS: Record<AgreementKey, { title: string; label: string; summary: string; body: string }> = {
   terms: {
@@ -886,10 +892,17 @@ export function RegisterPageClient() {
   const handleVerifySubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    const normalizedStudentNumber = studentNumber.trim();
+    const normalizedStudentNumber = normalizeStudentNumberInput(studentNumber);
     const normalizedBirth = verifyBirth.trim();
     if (!normalizedStudentNumber || !normalizedBirth) {
       const message = '학번과 생년월일을 모두 입력해주세요.';
+      setErrorMessage(message);
+      showToast(message, 'error');
+      return;
+    }
+
+    if (!STUDENT_NUMBER_PATTERN.test(normalizedStudentNumber)) {
+      const message = '학번은 8자리 숫자로 입력해주세요.';
       setErrorMessage(message);
       showToast(message, 'error');
       return;
@@ -1340,7 +1353,7 @@ export function RegisterPageClient() {
               <div className="space-y-2">
                 <div className="flex min-h-14 items-center gap-3 border-b border-[var(--color-border)] py-2 focus-within:border-[var(--color-focus)]">
                   <label htmlFor="studentNumber" className="sr-only">
-                    학번
+                    학번 8자리
                   </label>
                   <span className="flex h-8 w-8 shrink-0 items-center justify-center text-sm font-semibold text-[var(--color-text-secondary)]">
                     ID
@@ -1351,9 +1364,13 @@ export function RegisterPageClient() {
                     type="text"
                     inputMode="numeric"
                     autoComplete="off"
+                    minLength={STUDENT_NUMBER_LENGTH}
+                    maxLength={STUDENT_NUMBER_LENGTH}
+                    pattern="\d{8}"
+                    title="학번은 8자리 숫자로 입력해주세요."
                     value={studentNumber}
-                    onChange={(event) => setStudentNumber(event.target.value)}
-                    placeholder="학번"
+                    onChange={(event) => setStudentNumber(normalizeStudentNumberInput(event.target.value))}
+                    placeholder="학번 8자리"
                     className="min-w-0 flex-1 bg-transparent text-base text-[var(--color-text-primary)] placeholder:text-[var(--color-text-tertiary)] focus:outline-none disabled:cursor-not-allowed"
                     disabled={isBusy}
                   />
