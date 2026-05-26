@@ -337,7 +337,7 @@ export async function getChatRooms(
         break;
       }
     }
-    if (!me || me.left_at !== null) return { error: ERROR.FORBIDDEN } as
+    if (!me || me.left_at !== null) return { error: ERROR.NOT_FOUND } as
   const;
 
     const other = room.participants.find((participant) => participant.user_id !== userId);

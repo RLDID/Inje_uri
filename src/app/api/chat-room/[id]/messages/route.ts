@@ -12,7 +12,7 @@ export async function GET(req: NextRequest,{ params }: { params: Promise<{ id: s
     // const user = {id:1}as any;
     const { id } = await params;
     const roomId = Number(id);
-    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND,  "찾을 수 없습니다." );
+    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND,  "찾을 수 없습니다.", 404 );
 
     const { searchParams } = new URL(req.url);
     const cursor = searchParams.get("cursor") ? Number(searchParams.get("cursor")) :
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest,{ params }: { params: Promise<{ id: s
     const result = await messageService.getMessages(roomId, user.id, cursor, limit);
 
     if ("error" in result) {
-        return fail(result.error!, "접근 권한이 없습니다.");
+        return fail(ERROR.NOT_FOUND, "찾을 수 없습니다.", 404);
     }
 
     return ok(result);
@@ -35,7 +35,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { id } = await params;
     const roomId = Number(id);
-    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다.");
+    if (isNaN(roomId)) return fail(ERROR.NOT_FOUND, "찾을 수 없습니다.", 404);
 
     const body = await req.json();
     const { content, type, suppressPlaceTrigger } = body;
@@ -62,7 +62,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         const err = result.error!;
         if (err === ERROR.ROOM_EXPIRED) return fail(err, "만료된 채팅방입니다.");
         if (err === ERROR.ROOM_NOT_ACTIVE) return fail(err, "비활성화된 채팅방입니다.");
-        if (err === ERROR.FORBIDDEN) return fail(err,  "접근 권한이 없습니다.");
+        if (err === ERROR.FORBIDDEN || err === ERROR.NOT_FOUND) {
+          return fail(ERROR.NOT_FOUND, "채팅방을 찾을 수 없습니다.", 404);
+        }
         return fail(err, "채팅방을 찾을 수 없습니다.");
     }
 
