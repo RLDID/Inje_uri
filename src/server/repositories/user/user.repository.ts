@@ -153,6 +153,7 @@ export async function findActiveUserProfileById(userId: number) {
       university: true,
       department: true,
       student_year: true,
+      student_number: true,
       bio: true,
       last_active_at: true,
       userProfileImages: {
@@ -213,5 +214,29 @@ export async function updateUserPasswordHash(userId: number, passwordHash: strin
   return prisma.user.update({
     where: { id: userId },
     data: { password_hash: passwordHash },
+  });
+}
+
+export async function softDeleteUserById(userId: number, deletedAt = new Date()) {
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.update({
+      where: { id: userId },
+      data: {
+        status: 'withdrawn',
+        deleted_at: deletedAt,
+      },
+      select: {
+        id: true,
+        nickname: true,
+        status: true,
+        deleted_at: true,
+      },
+    });
+
+    await tx.authSession.deleteMany({
+      where: { user_id: userId },
+    });
+
+    return user;
   });
 }

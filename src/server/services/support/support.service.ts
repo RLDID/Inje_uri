@@ -4,7 +4,7 @@ import { AppError } from "@/server/lib/app-error";
 import { ERROR } from "@/server/lib/errors";
 import { SupportRepository } from "@/server/repositories/support/support.repository";
 import type { SupportInquiryRow, SupportInquiryWithUserRow } from "@/server/repositories/support/support.repository";
-import { findUserByNickname, updateUser } from "@/server/repositories/user/user.repository";
+import { findUserByNickname, softDeleteUserById, updateUser } from "@/server/repositories/user/user.repository";
 
 const repo = new SupportRepository(prisma);
 const MIN_NICKNAME_LENGTH = 2;
@@ -24,7 +24,12 @@ export type SupportInquiryDto = {
 };
 
 export type SupportInquiryWithUserDto = SupportInquiryDto & {
-  user: { id: number; nickname: string } | null;
+  user: {
+    id: number;
+    nickname: string;
+    status: string;
+    deletedAt: string | null;
+  } | null;
 };
 
 export type PaginatedSupportInquiriesDto = {
@@ -53,7 +58,14 @@ function toDto(row: SupportInquiryRow): SupportInquiryDto {
 function toDtoWithUser(row: SupportInquiryWithUserRow): SupportInquiryWithUserDto {
   return {
     ...toDto(row),
-    user: row.user ?? null,
+    user: row.user
+      ? {
+          id: row.user.id,
+          nickname: row.user.nickname,
+          status: row.user.status,
+          deletedAt: row.user.deleted_at?.toISOString() ?? null,
+        }
+      : null,
   };
 }
 
@@ -257,6 +269,37 @@ export async function updateAdminSupportInquiryUserNickname(
         throw new AppError(ERROR.NICKNAME_ALREADY_EXISTS, "이미 사용 중인 닉네임입니다.");
       }
 
+      if (hasPrismaErrorCode(error, "P2025")) {
+        throw new AppError(ERROR.USER_NOT_FOUND, "문의자 계정을 찾을 수 없습니다.", 404);
+      }
+
+      throw error;
+    }
+  }
+
+  const updated = await repo.findByIdForAdmin(id);
+  if (!updated) {
+    throw new AppError(ERROR.NOT_FOUND, "문의를 찾을 수 없습니다.", 404);
+  }
+
+  return toDtoWithUser(updated);
+}
+
+export async function withdrawAdminSupportInquiryUser(id: number): Promise<SupportInquiryWithUserDto> {
+  const existing = await repo.findByIdForAdmin(id);
+
+  if (!existing) {
+    throw new AppError(ERROR.NOT_FOUND, "문의를 찾을 수 없습니다.", 404);
+  }
+
+  if (!existing.user) {
+    throw new AppError(ERROR.USER_NOT_FOUND, "문의자 계정을 찾을 수 없습니다.", 404);
+  }
+
+  if (existing.user.status !== "withdrawn" || existing.user.deleted_at === null) {
+    try {
+      await softDeleteUserById(existing.user.id);
+    } catch (error) {
       if (hasPrismaErrorCode(error, "P2025")) {
         throw new AppError(ERROR.USER_NOT_FOUND, "문의자 계정을 찾을 수 없습니다.", 404);
       }
