@@ -36,6 +36,7 @@ const INITIAL_IMAGE_CROP: FeedImageCrop = {
   offsetY: 0,
   zoom: 1,
 };
+const VISIBLE_SELFDATE_KEYWORD_OPTIONS = SELFDATE_KEYWORD_OPTIONS.filter((option) => !isFestivalFeedCategory(option.id));
 
 async function feedImageAssetToFile(asset: FeedImageAsset, index: number): Promise<File> {
   const response = await fetch(asset.previewUrl);
@@ -615,7 +616,7 @@ function CreateStoryPageContent() {
           </div>
 
           <div className="chip-wrap">
-            {SELFDATE_KEYWORD_OPTIONS.map((option) => {
+            {VISIBLE_SELFDATE_KEYWORD_OPTIONS.map((option) => {
               const isSelected = selectedCategories.includes(option.id);
 
               return (
