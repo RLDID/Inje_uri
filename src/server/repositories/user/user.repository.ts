@@ -153,6 +153,7 @@ export async function findActiveUserProfileById(userId: number) {
       university: true,
       department: true,
       student_year: true,
+      student_number: true,
       bio: true,
       last_active_at: true,
       userProfileImages: {

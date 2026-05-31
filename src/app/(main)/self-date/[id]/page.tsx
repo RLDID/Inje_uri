@@ -415,9 +415,10 @@ function SelfDateDetailPageContent() {
                         {timeRemaining.formatted}
                       </span>
                     </div>
-                    <p className="text-sm text-[var(--color-text-secondary)]">
-                      {getUserAcademicLabel(author)}
-                    </p>
+                    <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-sm text-[var(--color-text-secondary)]">
+                      <span className="min-w-0 truncate">{getUserAcademicLabel(author)}</span>
+                      <span className="shrink-0 text-[12px] text-[var(--color-text-tertiary)]">· 조회 {story.viewCount}</span>
+                    </div>
                   </div>
 
                   {!isMyFeed && (
@@ -425,10 +426,10 @@ function SelfDateDetailPageContent() {
                       type="button"
                       onClick={openInterestSheet}
                       disabled={isHeartDisabled}
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[var(--color-brand-pink)] transition-all active:scale-95 disabled:cursor-default ${
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center transition-all active:scale-95 disabled:cursor-default ${
                         isInterestSent
                           ? 'text-[var(--color-pink-cta)] opacity-60'
-                          : 'text-[var(--color-pink-cta)]'
+                          : 'text-[var(--color-text-tertiary)] hover:text-[var(--color-pink-cta)]'
                       }`}
                       aria-label={
                         isInterestSent
@@ -438,11 +439,13 @@ function SelfDateDetailPageContent() {
                       aria-pressed={isInterestSent}
                     >
                       <svg
-                        className="h-[18px] w-[18px]"
+                        className="h-6 w-6"
                         viewBox="0 0 24 24"
-                        fill="currentColor"
+                        fill={isInterestSent ? 'currentColor' : 'none'}
                         stroke="currentColor"
-                        strokeWidth={0}
+                        strokeWidth={isInterestSent ? 0 : 2}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                         aria-hidden="true"
                       >
                         <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
@@ -776,13 +779,6 @@ function SelfDateDetailPageContent() {
             </div>
           )}
 
-          <div className="hidden">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-            <span>{story.viewCount}명이 확인했어요</span>
-          </div>
         </section>
       </PageContent>
 

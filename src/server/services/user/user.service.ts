@@ -70,6 +70,19 @@ function toOptionalCode(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function toPublicStudentNumber(studentNumber?: string | null): string | null {
+  if (!studentNumber) {
+    return null;
+  }
+
+  const digits = studentNumber.replace(/\D/g, '');
+  if (!digits) {
+    return null;
+  }
+
+  return digits.length >= 4 ? digits.slice(2, 4) : digits.slice(-2).padStart(2, '0');
+}
+
 function groupSelectionsByCategory(
   selections: Array<{
     category_id: number;
@@ -369,6 +382,7 @@ export async function getUserProfileDetail(currentUserId: number, targetUserId: 
       university: user.university,
       department: user.department,
       studentYear: user.student_year,
+      studentNumber: toPublicStudentNumber(user.student_number),
       bio: user.bio,
       profileImages: user.userProfileImages.map((image: any) => ({
         id: image.id,

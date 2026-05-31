@@ -36,6 +36,8 @@ const MAIN_ACTION_HINT_STEP_MS = 2500;
 
 type MainActionHint = 'create' | 'myFeeds' | 'filter';
 
+const VISIBLE_FEED_FILTER_CATEGORIES = FEED_FILTER_CATEGORIES.filter((category) => !isFestivalFeedCategory(category.id));
+
 interface SelfDateViewState {
   selectedFilter: FeedFilterCategoryId;
   shownIds: string[];
@@ -44,7 +46,7 @@ interface SelfDateViewState {
 }
 
 function isValidFilter(filter: string | null): filter is FeedFilterCategoryId {
-  return !!filter && FEED_FILTER_CATEGORIES.some((category) => category.id === filter);
+  return !!filter && VISIBLE_FEED_FILTER_CATEGORIES.some((category) => category.id === filter);
 }
 
 const FEED_FILTER_KEYWORD_CODES: Record<Exclude<FeedFilterCategoryId, 'all'>, string[]> = {
@@ -676,7 +678,7 @@ function SelfDatePageContent() {
         aria-hidden={!isFilterOpen}
       >
         <div className="flex gap-2 overflow-x-auto px-5 py-2.5 scrollbar-hide">
-          {FEED_FILTER_CATEGORIES.map((category) => (
+          {VISIBLE_FEED_FILTER_CATEGORIES.map((category) => (
             <button
               key={category.id}
               type="button"
